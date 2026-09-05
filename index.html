@@ -351,13 +351,13 @@ function init() {
     return;
   }
   gapi.load('client', async () => {
-    await gapi.client.init({ discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'] });
+    // Skip discoveryDocs — avoids network stall; Drive calls use fetch() directly
+    await gapi.client.init({});
     tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID, scope: SCOPES,
       callback: (resp) => {
         if (resp.error) return;
         accessToken = resp.access_token;
-        gapi.client.setToken({ access_token: accessToken });
         onSignedIn();
       }
     });
@@ -365,7 +365,6 @@ function init() {
     const existing = sessionStorage.getItem('fp_access_token');
     if (existing) {
       accessToken = existing;
-      gapi.client.setToken({ access_token: existing });
       onSignedIn();
       return;
     }
@@ -416,8 +415,12 @@ let data = JSON.parse(JSON.stringify(DEFAULT_DATA));
 
 async function loadFromDrive() {
   try {
-    const res = await gapi.client.drive.files.list({ q: `name='${DRIVE_FILE}' and trashed=false`, fields: 'files(id,name)' });
-    const files = res.result.files;
+    const q = encodeURIComponent(`name='${DRIVE_FILE}' and trashed=false`);
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const json = await res.json();
+    const files = json.files || [];
     if (files.length > 0) {
       driveFileId = files[0].id;
       const dl = await fetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`, {
