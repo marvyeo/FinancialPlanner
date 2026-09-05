@@ -387,7 +387,7 @@ async function handleSignIn() {
 
 async function onSignedIn() {
   sessionStorage.setItem('fp_access_token', accessToken);
-  await loadFromDrive();
+  await Promise.all([loadFromDrive(), loadMerchantsDB()]);
   document.getElementById('auth-overlay').style.display = 'none';
   setDriveStatus(true);
   render();
@@ -571,10 +571,10 @@ function navigate(view, sub) {
   else if (view === 'profile') {
     const idx = { marvin: 1, wife: 2, cobae: 3, joint: 4 }[currentProfile];
     navItems[idx]?.classList.add('active');
-  } else if (view === 'smartspend') navItems[4]?.classList.add('active');
-  else if (view === 'cards') navItems[5]?.classList.add('active');
-  else if (view === 'merchants') navItems[6]?.classList.add('active');
-  else if (view === 'settings') navItems[7]?.classList.add('active');
+  } else if (view === 'smartspend') navItems[5]?.classList.add('active');
+  else if (view === 'cards') navItems[6]?.classList.add('active');
+  else if (view === 'merchants') navItems[7]?.classList.add('active');
+  else if (view === 'settings') navItems[8]?.classList.add('active');
   // Mobile nav
   document.querySelectorAll('.mob-nav-btn').forEach(el=>el.classList.remove('active'));
   if (view === 'dashboard') document.getElementById('mobnav-dashboard')?.classList.add('active');
@@ -707,8 +707,9 @@ function renderProfile(profile) {
 
   const billRows = bills.length ? bills.map((b,i) => {
     const st = billStatus(b);
+    const billingTag = b._isBillingReminder ? `<span style="font-size:10px;background:#1A2040;color:#7B9FD4;border-radius:3px;padding:1px 5px;margin-left:6px;">billing</span>` : '';
     return `<tr>
-      <td>${b.name}</td>
+      <td>${b.name}${billingTag}</td>
       <td class="tabnum">$${fmtAmt(b.amount)}</td>
       <td>${b.dueDate||'—'}</td>
       <td>${b.recurrence||'monthly'}</td>
@@ -762,8 +763,104 @@ function renderProfile(profile) {
       </table>
     </div>
 
-    <div class="section-header"><h2>Cards</h2></div>
-    <div style="margin-bottom:24px;">${cardChips}</div>`;
+    <div class="section-header"><h2>Cards &amp; Cap Status</h2></div>
+    <div style="margin-bottom:24px;" id="profile-caps-${profile}"></div>`;
+  setTimeout(() => renderProfileCaps(profile), 0);
+}
+
+
+function renderProfileCaps(profile) {
+  const el = document.getElementById('profile-caps-' + profile);
+  if (!el) return;
+  const profCards = data.cards.filter(c => c.profile === profile);
+  if (!profCards.length) {
+    el.innerHTML = '<span class="text-muted" style="font-size:13px;">No cards for this profile yet</span>';
+    return;
+  }
+  const cycleLabels = {transaction:'by transaction date',posting:'by posting date',calendar:'calendar month',statement:'statement month'};
+  el.innerHTML = profCards.map(card => {
+    const rules = (card.bonusRules||[]).filter(r => r.monthlyCap);
+    const today3 = new Date();
+    const cycleDay = parseInt(card.cycleDate)||22;
+    let resetDate = new Date(today3.getFullYear(), today3.getMonth(), cycleDay);
+    if (resetDate <= today3) resetDate.setMonth(resetDate.getMonth()+1);
+    const daysLeft = Math.ceil((resetDate - today3) / 86400000);
+    const daysColor = daysLeft<=3 ? '#EF4444' : daysLeft<=7 ? '#F59E0B' : '#00C896';
+    const cycleLabel = cycleLabels[card.cycleType||'calendar'] || 'calendar month';
+    const capBarsHtml = rules.map(rule => {
+      const pct = Math.min(1, (Number(rule.currentSpend)||0)/Number(rule.monthlyCap));
+      const cls = pct >= 0.95 ? 'danger' : pct >= 0.8 ? 'warn' : '';
+      const remaining = Math.max(0, Number(rule.monthlyCap) - Number(rule.currentSpend||0));
+      const warnCls = pct >= 0.8 ? 'cap-warn' : '';
+      return [
+        '<div class="cap-bar-item">',
+          '<div class="cap-bar-label">',
+            '<span>' + (rule.category||'Bonus') + '</span>',
+            '<span class="tabnum ' + warnCls + '">' + Math.round(pct*100) + '% — $' + fmtAmt(remaining) + ' left</span>',
+          '</div>',
+          '<div class="cap-bar-track"><div class="cap-bar-fill ' + cls + '" style="width:' + Math.round(pct*100) + '%"></div></div>',
+        '</div>'
+      ].join('');
+    }).join('');
+    const safeCardName = card.name.replace(/'/g, '&#39;');
+    return [
+      '<div class="card-tile" style="margin-bottom:12px;">',
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:' + (rules.length?'12px':'0') + ';">',
+          '<div>',
+            '<div style="font-weight:700;font-size:14px;">' + card.name + '</div>',
+            '<div style="font-size:12px;color:#4A6580;margin-top:2px;">' + (card.issuer||'') +
+              ' · Resets in <strong style="color:' + daysColor + '">' + daysLeft + ' day' + (daysLeft!==1?'s':'') + '</strong>' +
+              ' · <span style="color:#4A6580;">' + cycleLabel + '</span>' +
+            '</div>',
+          '</div>',
+          '<button class="btn-secondary" style="font-size:11px;padding:5px 12px;"',
+            ' onclick="generateBillingReminders(this.dataset.card,this.dataset.profile)"',
+            ' data-card="' + safeCardName + '" data-profile="' + profile + '">Generate 12-mo bills</button>',
+        '</div>',
+        capBarsHtml ? '<div class="cap-bars">' + capBarsHtml + '</div>' : '<span style="font-size:12px;color:#2A4A6B;">No capped bonus categories</span>',
+      '</div>'
+    ].join('');
+  }).join('');
+}
+
+
+
+function generateBillingReminders(cardName, profile) {
+  const card = data.cards.find(c => c.name === cardName);
+  if (!card) return;
+  const cycleDay = parseInt(card.cycleDate)||22;
+  const profileBills = data.profiles[profile].bills;
+  const today3 = new Date();
+  let generated = 0, skipped = 0;
+  for (let m = 0; m < 12; m++) {
+    const yr = today3.getMonth() + m >= 12
+      ? today3.getFullYear() + Math.floor((today3.getMonth() + m) / 12)
+      : today3.getFullYear();
+    const mo = (today3.getMonth() + m) % 12;
+    const dueDate = new Date(yr, mo, Math.min(cycleDay, new Date(yr, mo+1, 0).getDate()));
+    const dueDateStr = dueDate.toISOString().slice(0,10);
+    const dueMo = dueDateStr.slice(0,7); // YYYY-MM
+    // Check if any bill for this card already exists in this month
+    const exists = profileBills.some(b => b._cardRef === cardName && b.dueDate && b.dueDate.slice(0,7) === dueMo);
+    if (exists) { skipped++; continue; }
+    profileBills.push({
+      id: uid(),
+      name: cardName + ' billing',
+      amount: 0,
+      dueDate: dueDateStr,
+      recurrence: 'monthly',
+      category: 'Credit Card',
+      paymentMethod: 'Bank Transfer',
+      status: 'upcoming',
+      _cardRef: cardName,
+      _isBillingReminder: true,
+      createdAt: today()
+    });
+    generated++;
+  }
+  saveToDrive();
+  render();
+  setTimeout(() => alert('Generated ' + generated + ' billing reminder' + (generated!==1?'s':'') + (skipped?' ('+skipped+' months already had an entry)':'') + ' for ' + cardName + '.'), 300);
 }
 
 function markPaid(profile, type, idx) {
@@ -833,28 +930,64 @@ function saveBill(type) {
 }
 
 /* =================== SMART SPEND =================== */
+// SG merchant database — loaded from merchants.json at runtime
+let SG_MERCHANTS = [];
+
+async function loadMerchantsDB() {
+  // Load merchants.json from Google Drive (same Drive scope as main data file)
+  try {
+    const q = encodeURIComponent("name='merchants.json' and trashed=false");
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const json = await res.json();
+    if (json.files && json.files.length > 0) {
+      const fileId = json.files[0].id;
+      const dl = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      const db = await dl.json();
+      SG_MERCHANTS = db.merchants || [];
+      console.log('Loaded ' + SG_MERCHANTS.length + ' merchants from Drive merchants.json');
+    } else {
+      console.warn('merchants.json not found in Drive — upload it via Settings > Upload merchant DB');
+    }
+  } catch(e) {
+    console.warn('Drive merchants.json load failed', e);
+  }
+}
 function renderSmartSpend() {
+  const allMerchants = [...SG_MERCHANTS, ...data.merchants];
+  const merchantRows = data.merchants.map((m,i) => `
+    <tr>
+      <td style="font-weight:600;">${m.name}</td>
+      <td class="tabnum text-muted">${m.mcc||'—'}</td>
+      <td>${m.category||'—'}</td>
+      <td style="color:#8AABBF;font-size:12px;">${m.notes||'—'}</td>
+      <td><button class="btn-danger" onclick="deleteMerchant(${i})">✕</button></td>
+    </tr>`).join('');
+
   return `
-    <div class="section-header"><h2>Recommendation engine</h2></div>
+    <p style="font-size:13px;color:#8AABBF;margin-bottom:20px;line-height:1.6;">
+      Smart Spend answers one question: <strong style="color:#F0F4F8;">which card should I use right now?</strong>
+      Type a merchant name, service type, or MCC — it searches ${SG_MERCHANTS.length} SG merchants in the database plus your saved merchants, finds the right MCC, then ranks your cards by effective ¢/$ value after miles transfer.
+      Merchants with multiple MCCs (e.g. GrabCar vs GrabFood) appear as separate entries — pick the right service.
+      The <a href="#" onclick="navigate('merchants')" style="color:#00C896;">Merchants page</a> is where you add new merchants to the database.
+    </p>
+    <div class="section-header"><h2>Card recommendation</h2></div>
     <div class="smart-spend-box">
       <div class="smart-search">
-        <input type="text" id="ss-search" placeholder="Merchant name or MCC code…" oninput="ssSearch()" />
-        <button class="btn-primary" onclick="ssSearch()">Get recommendations</button>
+        <input type="text" id="ss-search" placeholder="e.g. Cold Storage, Netflix, Grab, MCC 5411…" oninput="ssSearch()" />
+        <button class="btn-primary" onclick="ssSearch()">Find best card</button>
       </div>
       <div id="ss-output" style="margin-top:16px;"></div>
     </div>
-    <div class="section-header" style="margin-top:8px;"><h2>Merchant repository</h2><button class="btn-primary" onclick="openMerchantModal()">+ Add merchant</button></div>
+    <div class="section-header" style="margin-top:8px;"><h2>Your saved merchants</h2><button class="btn-primary" onclick="openMerchantModal()">+ Add merchant</button></div>
+    <p style="font-size:12px;color:#4A6580;margin-bottom:12px;">Add merchants not already in the built-in SG database, or to override a category/MCC.</p>
     <div class="table-wrap">
       <table class="data-table">
         <thead><tr><th>Merchant</th><th>MCC</th><th>Category</th><th>Notes</th><th></th></tr></thead>
-        <tbody>${data.merchants.length ? data.merchants.map((m,i)=>`
-          <tr>
-            <td style="font-weight:600;">${m.name}</td>
-            <td class="tabnum text-muted">${m.mcc||'—'}</td>
-            <td>${m.category||'—'}</td>
-            <td style="color:#8AABBF;font-size:12px;">${m.notes||'—'}</td>
-            <td><button class="btn-danger" onclick="deleteMerchant(${i})">✕</button></td>
-          </tr>`).join('') : `<tr><td colspan="5"><div class="empty"><div class="icon">◈</div>No merchants saved yet</div></td></tr>`}
+        <tbody>${merchantRows || `<tr><td colspan="5"><div class="empty"><div class="icon">◈</div>No custom merchants yet — the SG database covers most common merchants already</div></td></tr>`}
         </tbody>
       </table>
     </div>`;
@@ -868,16 +1001,10 @@ function ssSearch() {
   out.innerHTML = buildRecommendations(q);
 }
 
-function buildRecommendations(q) {
-  if (!data.cards.length) return `<div class="empty" style="padding:20px;"><div class="icon">▤</div>No cards added yet — add cards in the Cards view first.</div>`;
-  // Find matching merchant
-  const merchant = data.merchants.find(m =>
-    m.name.toLowerCase().includes(q) || (m.mcc && m.mcc.includes(q)) || (m.category||'').toLowerCase().includes(q)
-  );
+function buildRecsForMerchant(merchant, q) {
   const targetMCC = merchant?.mcc || '';
   const targetCat = merchant?.category?.toLowerCase() || q;
 
-  // Score each card
   const recs = data.cards.map(card => {
     let earnRate = Number(card.baseRate) || 1;
     let matchedRule = null;
@@ -892,11 +1019,7 @@ function buildRecommendations(q) {
         }
       });
     }
-    // Best transfer partner
     let bestMiles = 0, bestPartner = null, bestRatio = 1;
-    if (card.transferPartners && card.settings) {
-      // Use data.settings
-    }
     if (card.transferPartners) {
       card.transferPartners.forEach(tp => {
         const valuation = data.settings.mile_valuations[tp.partner] || 0;
@@ -919,7 +1042,9 @@ function buildRecommendations(q) {
   recs.sort((a,b) => b.bestMiles - a.bestMiles || b.earnRate - a.earnRate);
   if (!recs.length) return `<div class="empty" style="padding:16px;">No matching cards found.</div>`;
 
-  return recs.slice(0,5).map((r,i) => {
+  const merchantLabel = merchant ? `<div style="font-size:12px;color:#4A6580;margin-bottom:12px;">Matched: <strong style="color:#8AABBF;">${merchant.service||merchant.name}</strong> · MCC ${merchant.mcc} · ${merchant.category}${merchant.notes?'<br><span style="color:#2A4A6B;">'+merchant.notes+'</span>':''}</div>` : '';
+
+  return merchantLabel + recs.slice(0,5).map((r,i) => {
     const isCapped = r.capRemaining !== null && r.capRemaining <= 0;
     const capWarn = r.capPct >= 0.8;
     const milesLine = r.bestPartner
@@ -945,15 +1070,75 @@ function buildRecommendations(q) {
   }).join('');
 }
 
+function buildRecommendations(q) {
+  if (!data.cards.length) return `<div class="empty" style="padding:20px;"><div class="icon">▤</div>No cards added yet — add cards in the Cards view first.</div>`;
+  // If multiple merchants match (multi-MCC), show disambiguation
+  if (matchedMerchants.length > 1) {
+    const disambig = matchedMerchants.map(m =>
+      `<button class="btn-secondary" style="margin:3px;font-size:12px;" onclick="document.getElementById('ss-search').value='${m.mcc}';ssSearch()">
+        ${m.service||m.name} — MCC ${m.mcc} (${m.category})
+      </button>`
+    ).join('');
+    return `<div style="margin-bottom:14px;padding:12px 14px;background:#0D1B2A;border:1px solid #2A4A6B;border-radius:8px;">
+      <div style="font-size:12px;color:#8AABBF;margin-bottom:8px;">Multiple services found — select one for precise recommendations:</div>
+      ${disambig}
+    </div>` + buildRecsForMerchant(merchant, q);
+  }
+  return buildRecsForMerchant(merchant, q);
+}
+
 /* =================== CARDS =================== */
+function cardImgUrl(name) {
+  // Map card names to representative logo images via Clearbit/logo.dev fallback
+  const imgs = {
+    'AMEX Platinum Credit Card': 'https://logo.clearbit.com/americanexpress.com',
+    'AMEX KrisFlyer Credit Card': 'https://logo.clearbit.com/singaporeair.com',
+    'DBS Altitude VISA': 'https://logo.clearbit.com/dbs.com',
+    "DBS Woman's World Mastercard": 'https://logo.clearbit.com/dbs.com',
+    'DBS Yuu VISA': 'https://logo.clearbit.com/dbs.com',
+    'UOB Preferred VISA': 'https://logo.clearbit.com/uob.com.sg',
+    'UOB Visa Signature': 'https://logo.clearbit.com/uob.com.sg',
+    "UOB Lady's Mastercard (Marvin)": 'https://logo.clearbit.com/uob.com.sg',
+    "UOB Lady's Mastercard (Caroline)": 'https://logo.clearbit.com/uob.com.sg',
+    'UOB Preferred VISA (Caroline)': 'https://logo.clearbit.com/uob.com.sg',
+    'UOB Visa Signature (Caroline)': 'https://logo.clearbit.com/uob.com.sg',
+    'OCBC Rewards Mastercard': 'https://logo.clearbit.com/ocbc.com',
+    'Citi Rewards Mastercard': 'https://logo.clearbit.com/citibank.com.sg',
+    'CIMB Visa Signature': 'https://logo.clearbit.com/cimb.com.sg',
+    'CIMB Visa Infinite': 'https://logo.clearbit.com/cimb.com.sg',
+    'HSBC Revolution VISA': 'https://logo.clearbit.com/hsbc.com.sg',
+  };
+  // Try exact match, then partial
+  const key = Object.keys(imgs).find(k => name && name.toLowerCase().includes(k.toLowerCase().split(' ')[0]));
+  return imgs[name] || (key ? imgs[key] : 'https://logo.clearbit.com/visa.com');
+}
+
 function renderCards() {
+  const profiles = ['marvin','wife','cobae','joint'];
+  const groups = profiles.map(p => ({
+    profile: p,
+    cards: data.cards.filter(c => c.profile === p).map((card, localIdx) => ({
+      card, ci: data.cards.indexOf(card)
+    }))
+  })).filter(g => g.cards.length > 0);
+
+  const noCards = data.cards.length === 0;
+
   return `
     <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
       <button class="btn-primary" onclick="openCardModal()">+ Add card</button>
       <button class="btn-secondary" onclick="openCardImport()">↑ Import card JSON</button>
     </div>
-    ${data.cards.length ? data.cards.map((card,ci)=>renderCardTile(card,ci)).join('') :
-      `<div class="empty"><div class="icon">▤</div>No cards added yet</div>`}`;
+    ${noCards ? `<div class="empty"><div class="icon">▤</div>No cards added yet</div>` :
+      groups.map(g => `
+        <div style="margin-bottom:32px;">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid #1C2F45;">
+            <span style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#4A6580;">${profileLabel(g.profile)}</span>
+            <span style="font-size:12px;color:#2A4A6B;">${g.cards.length} card${g.cards.length!==1?'s':''}</span>
+          </div>
+          ${g.cards.map(({card,ci}) => renderCardTile(card,ci)).join('')}
+        </div>`).join('')
+    }`;
 }
 
 function renderCardTile(card, ci) {
@@ -972,15 +1157,24 @@ function renderCardTile(card, ci) {
 
   const hasExpiredPromo = (card.currentPromotions||[]).some(p => p.expiry && new Date(p.expiry) < new Date());
 
+  const cycleTypeLabel = { calendar: 'Calendar month', statement: 'Statement month', transaction: 'Transaction date', posting: 'Posting date' }[card.cycleType||'calendar'] || 'Calendar month';
+  const logoUrl = cardImgUrl(card.name);
   return `<div class="card-tile">
     <div class="card-top">
-      <div>
-        <div class="card-name">${card.name} ${hasExpiredPromo?'<span class="badge badge-overdue">Promo expired</span>':''}</div>
-        <div class="card-meta">${card.issuer||'—'} · ${profileLabel(card.profile)} · Cycle day ${card.cycleDate||'—'}</div>
-        <div style="margin-top:6px;font-size:12px;color:#8AABBF;">Base rate: <strong style="color:#F0F4F8;">${card.baseRate||0} pts/$</strong>${card.pointsCurrency?' &nbsp;·&nbsp; <span style="color:#4A6580;">'+card.pointsCurrency+'</span>':''}</div>
-        ${partners ? `<div style="margin-top:8px;">${partners}</div>` : ''}
+      <div style="display:flex;align-items:flex-start;gap:14px;flex:1;">
+        <img src="${logoUrl}" style="width:40px;height:40px;border-radius:8px;object-fit:contain;background:#1C2F45;padding:4px;flex-shrink:0;" onerror="this.style.display='none'">
+        <div style="flex:1;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <div class="card-name">${card.name}</div>
+            <span style="background:#1C3A52;color:#00C896;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:0.04em;">${profileLabel(card.profile)}</span>
+            ${hasExpiredPromo?'<span class="badge badge-overdue">Promo expired</span>':''}
+          </div>
+          <div class="card-meta">${card.issuer||'—'} · ${cycleTypeLabel} · Resets day ${card.cycleDate||'?'} · Tracked on ${{'transaction':'transaction date','posting':'posting date','calendar':'calendar month','statement':'statement month'}[card.cycleType||'calendar']||'calendar month'}</div>
+          <div style="margin-top:6px;font-size:12px;color:#8AABBF;">Base rate: <strong style="color:#F0F4F8;">${card.baseRate||0} pts/$</strong>${card.pointsCurrency?' &nbsp;·&nbsp; <span style="color:#4A6580;">'+card.pointsCurrency+'</span>':''}</div>
+          ${partners ? `<div style="margin-top:8px;">${partners}</div>` : ''}
+        </div>
       </div>
-      <div style="display:flex;gap:8px;">
+      <div style="display:flex;gap:8px;flex-shrink:0;">
         <button class="btn-secondary" style="font-size:12px;padding:6px 12px;" onclick="openCardEditModal(${ci})">Edit</button>
         <button class="btn-danger" onclick="deleteCard(${ci})">✕</button>
       </div>
@@ -1008,7 +1202,18 @@ function openCardModal(prefill) {
       <div class="form-row"><label>Base earn rate (pts/$)</label><input id="c-base" type="number" step="0.1" value="${prefill?.baseRate||'1'}" /></div>
       <div class="form-row"><label>Points currency</label><input id="c-pts" type="text" value="${prefill?.pointsCurrency||''}" placeholder="DBS Points" /></div>
     </div>
-    <div class="form-row"><label>Source / T&amp;C URL</label><input id="c-url" type="url" value="${prefill?.sourceUrl||''}" /></div>
+    <div class="form-grid">
+      <div class="form-row">
+        <label>Cycle type <span style="color:#4A6580;font-weight:400;">(how transactions are tracked)</span></label>
+        <select id="c-cycletype">
+          <option value="calendar" ${(prefill?.cycleType||'calendar')==='calendar'?'selected':''}>Calendar month (1st–last)</option>
+          <option value="statement" ${(prefill?.cycleType)==='statement'?'selected':''}>Statement month (custom date)</option>
+          <option value="transaction" ${(prefill?.cycleType)==='transaction'?'selected':''}>Transaction date</option>
+          <option value="posting" ${(prefill?.cycleType)==='posting'?'selected':''}>Posting date</option>
+        </select>
+      </div>
+      <div class="form-row"><label>Source / T&amp;C URL</label><input id="c-url" type="url" value="${prefill?.sourceUrl||''}" /></div>
+    </div>
     <p style="font-size:12px;color:#4A6580;margin:16px 0 4px;">Bonus rules, transfer partners, and promotions can be added after saving, or via card JSON import.</p>
     <div class="modal-footer">
       <button class="btn-secondary" onclick="closeModal()">Cancel</button>
@@ -1029,6 +1234,7 @@ function saveCard(mode, ci) {
     cycleDate: document.getElementById('c-cycle').value,
     baseRate: parseFloat(document.getElementById('c-base').value)||1,
     pointsCurrency: document.getElementById('c-pts').value,
+    cycleType: document.getElementById('c-cycletype').value,
     sourceUrl: document.getElementById('c-url').value,
   };
   if (mode === 'edit' && ci !== null) {
@@ -1091,31 +1297,124 @@ function doCardImport() {
 
 /* =================== MERCHANTS =================== */
 function renderMerchants() {
+  const dbRows = SG_MERCHANTS.slice(0,200).map(m => `
+    <tr style="opacity:0.7;">
+      <td style="font-weight:600;">${m.name}</td>
+      <td style="font-size:11.5px;color:#4A6580;">${m.service||'—'}</td>
+      <td class="tabnum text-muted">${m.mcc||'—'}</td>
+      <td>${m.category||'—'}</td>
+      <td style="color:#4A6580;font-size:11.5px;">${m.notes||'—'}</td>
+      <td style="color:#2A4A6B;font-size:11px;">DB</td>
+    </tr>`).join('');
+
+  const customRows = data.merchants.map((m,i) => `
+    <tr>
+      <td style="font-weight:600;">${m.name}</td>
+      <td style="font-size:11.5px;color:#8AABBF;">${m.service||'—'}</td>
+      <td class="tabnum text-muted">${m.mcc||'—'}</td>
+      <td>${m.category||'—'}</td>
+      <td style="color:#8AABBF;font-size:11.5px;">${m.notes||'—'}</td>
+      <td><button class="btn-danger" onclick="deleteMerchant(${i})">✕</button></td>
+    </tr>`).join('');
+
   return `
-    <div style="margin-bottom:20px;"><button class="btn-primary" onclick="openMerchantModal()">+ Add merchant</button></div>
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+      <button class="btn-primary" onclick="openMerchantModal()">+ Add merchant</button>
+      <button class="btn-secondary" onclick="downloadMerchantsDB()">↓ Download merchants.json</button>
+      <button class="btn-secondary" onclick="saveMerchantsDB()">↑ Save to Drive</button>
+      <span style="font-size:12px;color:#4A6580;margin-left:4px;">${SG_MERCHANTS.length} merchants in DB · ${data.merchants.length} custom</span>
+    </div>
+    <p style="font-size:12px;color:#4A6580;margin-bottom:16px;">
+      Merchants marked <strong style="color:#2A4A6B;">DB</strong> are from the shared <code style="background:#1C2F45;padding:1px 5px;border-radius:3px;">merchants.json</code> database.
+      Add new entries and click <em>Save merchant DB to Drive</em> to persist them for all sessions.
+    </p>
     <div class="table-wrap">
       <table class="data-table">
-        <thead><tr><th>Merchant</th><th>MCC</th><th>Category</th><th>Notes</th><th></th></tr></thead>
-        <tbody>${data.merchants.length ? data.merchants.map((m,i)=>`
-          <tr>
-            <td style="font-weight:600;">${m.name}</td>
-            <td class="tabnum text-muted">${m.mcc||'—'}</td>
-            <td>${m.category||'—'}</td>
-            <td style="color:#8AABBF;font-size:12px;">${m.notes||'—'}</td>
-            <td><button class="btn-danger" onclick="deleteMerchant(${i})">✕</button></td>
-          </tr>`).join('') : `<tr><td colspan="5"><div class="empty"><div class="icon">◈</div>Add merchants you frequent to enable Smart Spend lookup</div></td></tr>`}
+        <thead><tr><th>Name</th><th>Service</th><th>MCC</th><th>Category</th><th>Notes</th><th></th></tr></thead>
+        <tbody>
+          ${customRows || ''}
+          ${dbRows}
+          ${!customRows && !dbRows ? `<tr><td colspan="6"><div class="empty"><div class="icon">◈</div>No merchants loaded</div></td></tr>` : ''}
         </tbody>
       </table>
     </div>`;
 }
 
+function downloadMerchantsDB() {
+  const allEntries = [...SG_MERCHANTS];
+  data.merchants.forEach(m => {
+    if (!allEntries.find(e => e.id === m.id || (e.name === m.name && e.mcc === m.mcc))) {
+      allEntries.push({ ...m, id: m.id || uid() });
+    }
+  });
+  const db = {
+    _meta: { version: '1.0', lastUpdated: today(), source: 'Financial Planner — user-maintained', notes: 'MCCs are indicative. Multi-service merchants have one entry per MCC.' },
+    merchants: allEntries
+  };
+  const blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'merchants.json';
+  a.click();
+}
+
+async function saveMerchantsDB() {
+  // Merge custom merchants into the DB and save as merchants.json on Drive
+  const allEntries = [...SG_MERCHANTS];
+  data.merchants.forEach(m => {
+    if (!allEntries.find(e => e.id === m.id || (e.name === m.name && e.mcc === m.mcc))) {
+      allEntries.push({ ...m, id: m.id || uid() });
+    }
+  });
+  const dbJson = JSON.stringify({
+    _meta: {
+      version: "1.0",
+      lastUpdated: today(),
+      source: "Financial Planner — user-maintained",
+      notes: "MCCs are indicative. Multi-service merchants have one entry per MCC."
+    },
+    merchants: allEntries
+  }, null, 2);
+
+  try {
+    // Check if merchants.json already exists
+    const q = encodeURIComponent("name='merchants.json' and trashed=false");
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const json = await res.json();
+    const meta = { name: 'merchants.json', mimeType: 'application/json' };
+    if (json.files && json.files.length > 0) {
+      const fileId = json.files[0].id;
+      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'multipart/related; boundary=bound' },
+        body: `--bound\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(meta)}\r\n--bound\r\nContent-Type: application/json\r\n\r\n${dbJson}\r\n--bound--`
+      });
+    } else {
+      await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'multipart/related; boundary=bound' },
+        body: `--bound\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(meta)}\r\n--bound\r\nContent-Type: application/json\r\n\r\n${dbJson}\r\n--bound--`
+      });
+    }
+    SG_MERCHANTS = allEntries;
+    data.merchants = []; // Moved to DB — clear custom list
+    saveToDrive();
+    render();
+    setTimeout(() => alert(`Saved ${allEntries.length} merchants to Drive merchants.json`), 300);
+  } catch(e) { alert('Save failed: ' + e.message); }
+}
+
 function openMerchantModal() {
   showModal(`
     <h3>Add Merchant</h3>
-    <div class="form-row"><label>Merchant name</label><input id="mer-name" type="text" placeholder="Cold Storage" /></div>
+    <p style="font-size:12px;color:#4A6580;margin-bottom:14px;">If a merchant has multiple services with different MCCs (e.g. GrabCar vs GrabFood), add one entry per service.</p>
+    <div class="form-row"><label>Merchant name</label><input id="mer-name" type="text" placeholder="Grab" /></div>
+    <div class="form-row"><label>Service / variant <span style="color:#4A6580;font-weight:400;">(optional — use for multi-MCC merchants)</span></label><input id="mer-service" type="text" placeholder="GrabFood" /></div>
     <div class="form-grid">
-      <div class="form-row"><label>MCC code</label><input id="mer-mcc" type="text" placeholder="5411" /></div>
-      <div class="form-row"><label>Category</label><input id="mer-cat" type="text" placeholder="Grocery" /></div>
+      <div class="form-row"><label>MCC code</label><input id="mer-mcc" type="text" placeholder="5812" /></div>
+      <div class="form-row"><label>Category</label><input id="mer-cat" type="text" placeholder="Food Delivery" /></div>
     </div>
     <div class="form-row"><label>Notes</label><input id="mer-notes" type="text" placeholder="Optional notes…" /></div>
     <div class="modal-footer">
@@ -1129,6 +1428,7 @@ function saveMerchant() {
   data.merchants.push({
     id: uid(),
     name: document.getElementById('mer-name').value,
+    service: document.getElementById('mer-service').value,
     mcc: document.getElementById('mer-mcc').value,
     category: document.getElementById('mer-cat').value,
     notes: document.getElementById('mer-notes').value,
@@ -1162,8 +1462,15 @@ function renderSettings() {
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
       <button class="btn-secondary" onclick="exportData()">↓ Export JSON</button>
       <button class="btn-secondary" onclick="triggerImport()">↑ Import JSON</button>
+      <button class="btn-secondary" onclick="triggerMerchantsUpload()">↑ Upload merchants.json to Drive</button>
     </div>
-    <input type="file" id="file-import" accept=".json" style="display:none" onchange="handleImport(event)">`;
+    <p style="font-size:12px;color:#4A6580;margin-top:10px;">
+      <strong style="color:#8AABBF;">merchants.json</strong> lives on Google Drive and is loaded at sign-in.
+      Download the latest version from the Merchants page, edit it, then re-upload here.
+      Currently loaded: <strong style="color:#F0F4F8;" id="merchants-db-count">${SG_MERCHANTS.length} merchants</strong>
+    </p>
+    <input type="file" id="file-import" accept=".json" style="display:none" onchange="handleImport(event)">
+    <input type="file" id="file-merchants-upload" accept=".json" style="display:none" onchange="handleMerchantsUpload(event)">`;
 }
 
 function openValuationModal(prefill) {
@@ -1201,6 +1508,47 @@ function exportData() {
 }
 
 function triggerImport() { document.getElementById('file-import')?.click(); }
+
+function triggerMerchantsUpload() { document.getElementById('file-merchants-upload')?.click(); }
+
+async function handleMerchantsUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async ev => {
+    try {
+      const db = JSON.parse(ev.target.result);
+      if (!db.merchants) throw new Error('Invalid merchants.json — missing merchants array');
+      // Upload to Drive
+      const meta = { name: 'merchants.json', mimeType: 'application/json' };
+      const body = ev.target.result;
+      const q = encodeURIComponent("name='merchants.json' and trashed=false");
+      const checkRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      const checkJson = await checkRes.json();
+      const boundary = 'bound';
+      const multipart = '--' + boundary + '\r\nContent-Type: application/json\r\n\r\n' + JSON.stringify(meta) + '\r\n--' + boundary + '\r\nContent-Type: application/json\r\n\r\n' + body + '\r\n--' + boundary + '--';
+      if (checkJson.files && checkJson.files.length > 0) {
+        await fetch('https://www.googleapis.com/upload/drive/v3/files/' + checkJson.files[0].id + '?uploadType=multipart', {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'multipart/related; boundary=' + boundary },
+          body: multipart
+        });
+      } else {
+        await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'multipart/related; boundary=' + boundary },
+          body: multipart
+        });
+      }
+      SG_MERCHANTS = db.merchants;
+      alert('Uploaded ' + SG_MERCHANTS.length + ' merchants to Drive. Active for this session.');
+      render();
+    } catch(err) { alert('Upload failed: ' + err.message); }
+  };
+  reader.readAsText(file);
+}
 
 function handleImport(e) {
   const file = e.target.files[0];
