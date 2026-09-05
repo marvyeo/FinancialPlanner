@@ -8,6 +8,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://apis.google.com/js/api.js"></script>
+<script src="https://accounts.google.com/gsi/client" async></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -278,9 +280,9 @@
     <div style="font-size:32px;margin-bottom:12px;">💳</div>
     <h2>Financial Planner</h2>
     <p>Connect to Google Drive to load your data across all profiles.</p>
-    <button class="btn-primary" id="sign-in-btn" onclick="handleSignIn()">
+    <button class="btn-primary" id="sign-in-btn" onclick="handleSignIn()" disabled style="opacity:0.5;cursor:not-allowed;">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
-      Sign in with Google
+      <span id="sign-in-label">Loading…</span>
     </button>
     <p style="margin-top:16px;font-size:11.5px;color:#2A4A6B;">drive.file scope only — accesses financialplanner-data.json</p>
   </div>
@@ -336,14 +338,18 @@
 
 <script>
 /* =================== GOOGLE OAUTH =================== */
-const CLIENT_ID = '507327711793-k6g167a6gr3abl7t3e8npehvrtphuk6o.apps.googleusercontent.com';
+const CLIENT_ID = '669494100250-gvromuq72r7j0djmkd4vdbdq5damncj7.apps.googleusercontent.com';
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 const DRIVE_FILE = 'financialplanner-data.json';
 const GITHUB_URL = 'https://marvyeo.github.io/FinancialPlanner/';
 
 let tokenClient, accessToken = null, driveFileId = null;
 
-function gapiInit() {
+function init() {
+  if (typeof gapi === 'undefined' || typeof google === 'undefined') {
+    setTimeout(init, 100);
+    return;
+  }
   gapi.load('client', async () => {
     await gapi.client.init({ discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'] });
     tokenClient = google.accounts.oauth2.initTokenClient({
@@ -355,22 +361,27 @@ function gapiInit() {
         onSignedIn();
       }
     });
-    // Poll for token restoration
-    initPoll();
+    // Try restoring session token
+    const existing = sessionStorage.getItem('fp_access_token');
+    if (existing) {
+      accessToken = existing;
+      gapi.client.setToken({ access_token: existing });
+      onSignedIn();
+      return;
+    }
+    // Ready — enable button
+    const btn = document.getElementById('sign-in-btn');
+    const lbl = document.getElementById('sign-in-label');
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.style.cursor = 'pointer';
+    lbl.textContent = 'Sign in with Google';
   });
 }
 
-function initPoll() {
-  const existing = sessionStorage.getItem('fp_access_token');
-  if (existing) {
-    accessToken = existing;
-    gapi.client.setToken({ access_token: existing });
-    onSignedIn();
-  }
-}
-
 async function handleSignIn() {
-  document.getElementById('sign-in-btn').textContent = 'Connecting…';
+  const lbl = document.getElementById('sign-in-label');
+  lbl.textContent = 'Connecting…';
   tokenClient.requestAccessToken({ prompt: 'consent' });
 }
 
@@ -1195,16 +1206,7 @@ function closeModal() {
 }
 
 /* =================== INIT =================== */
-window.onload = () => {
-  const gapi_script = document.createElement('script');
-  gapi_script.src = 'https://apis.google.com/js/api.js';
-  gapi_script.onload = gapiInit;
-  document.head.appendChild(gapi_script);
-
-  const gsi_script = document.createElement('script');
-  gsi_script.src = 'https://accounts.google.com/gsi/client';
-  document.head.appendChild(gsi_script);
-};
+window.onload = () => { init(); };
 </script>
 </body>
 </html>
