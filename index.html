@@ -595,7 +595,7 @@ function render() {
     currentView === 'profile' ? profileLabel(currentProfile) : titles[currentView] || '';
   const content = document.getElementById('page-content');
   if (currentView === 'dashboard') content.innerHTML = renderDashboard();
-  else if (currentView === 'profile') content.innerHTML = renderProfile(currentProfile);
+  else if (currentView === 'profile') { content.innerHTML = renderProfile(currentProfile); renderProfileCaps(currentProfile); }
   else if (currentView === 'smartspend') content.innerHTML = renderSmartSpend();
   else if (currentView === 'cards') content.innerHTML = renderCards();
   else if (currentView === 'merchants') content.innerHTML = renderMerchants();
@@ -765,7 +765,6 @@ function renderProfile(profile) {
 
     <div class="section-header"><h2>Cards &amp; Cap Status</h2></div>
     <div style="margin-bottom:24px;" id="profile-caps-${profile}"></div>`;
-  setTimeout(() => renderProfileCaps(profile), 0);
 }
 
 
@@ -787,6 +786,8 @@ function renderProfileCaps(profile) {
     const daysLeft = Math.ceil((resetDate - today3) / 86400000);
     const daysColor = daysLeft<=3 ? '#EF4444' : daysLeft<=7 ? '#F59E0B' : '#00C896';
     const cycleLabel = cycleLabels[card.cycleType||'calendar'] || 'calendar month';
+    // Include threshold rules (no monthlyCap but have threshold)
+    const thresholdRules = (card.bonusRules||[]).filter(r => r.threshold && !r.monthlyCap);
     const capBarsHtml = rules.map(rule => {
       const pct = Math.min(1, (Number(rule.currentSpend)||0)/Number(rule.monthlyCap));
       const cls = pct >= 0.95 ? 'danger' : pct >= 0.8 ? 'warn' : '';
@@ -799,6 +800,35 @@ function renderProfileCaps(profile) {
             '<span class="tabnum ' + warnCls + '">' + Math.round(pct*100) + '% — $' + fmtAmt(remaining) + ' left</span>',
           '</div>',
           '<div class="cap-bar-track"><div class="cap-bar-fill ' + cls + '" style="width:' + Math.round(pct*100) + '%"></div></div>',
+        '</div>'
+      ].join('');
+    }).join('') + thresholdRules.map(rule => {
+      const t = rule.threshold;
+      const spendPct = Math.min(1, (Number(rule.monthlyTotalSpend)||0) / t.minMonthlySpend);
+      const merchantPct = Math.min(1, (Number(rule.distinctMerchantCount)||0) / t.minDistinctMerchants);
+      const bothMet = spendPct >= 1 && merchantPct >= 1;
+      const spendCls = spendPct >= 1 ? '' : spendPct >= 0.7 ? 'warn' : 'danger';
+      const mchCls = merchantPct >= 1 ? '' : 'warn';
+      return [
+        '<div style="background:#0D1B2A;border:1px solid #1C2F45;border-radius:8px;padding:10px 12px;margin-top:8px;">',
+          '<div style="font-size:11px;font-weight:600;color:#4A6580;margin-bottom:8px;letter-spacing:0.04em;">THRESHOLD MECHANICS</div>',
+          '<div class="cap-bar-item" style="margin-bottom:6px;">',
+            '<div class="cap-bar-label">',
+              '<span>Monthly spend</span>',
+              '<span class="tabnum ' + (spendPct>=1?'text-green':'cap-warn') + '">$' + fmtAmt(rule.monthlyTotalSpend||0) + ' / $' + fmtAmt(t.minMonthlySpend) + (spendPct>=1?' ✓':''  ) + '</span>',
+            '</div>',
+            '<div class="cap-bar-track"><div class="cap-bar-fill ' + spendCls + '" style="width:' + Math.round(spendPct*100) + '%"></div></div>',
+          '</div>',
+          '<div class="cap-bar-item">',
+            '<div class="cap-bar-label">',
+              '<span>Distinct merchants</span>',
+              '<span class="tabnum ' + (merchantPct>=1?'text-green':'cap-warn') + '">' + (rule.distinctMerchantCount||0) + ' / ' + t.minDistinctMerchants + (merchantPct>=1?' ✓':'') + '</span>',
+            '</div>',
+            '<div class="cap-bar-track"><div class="cap-bar-fill ' + mchCls + '" style="width:' + Math.round(merchantPct*100) + '%"></div></div>',
+          '</div>',
+          '<div style="font-size:11px;color:' + (bothMet?'#00C896':'#F59E0B') + ';margin-top:8px;font-weight:600;">',
+            bothMet ? '✓ 10 mpd unlocked this month' : '⚠ Both conditions needed to unlock 10 mpd — currently earning base rate',
+          '</div>',
         '</div>'
       ].join('');
     }).join('');
@@ -1047,12 +1077,21 @@ function buildRecsForMerchant(merchant, q) {
   return merchantLabel + recs.slice(0,5).map((r,i) => {
     const isCapped = r.capRemaining !== null && r.capRemaining <= 0;
     const capWarn = r.capPct >= 0.8;
+    const threshold = r.matchedRule?.threshold;
+    const thresholdMet = !threshold || (
+      (r.matchedRule.monthlyTotalSpend||0) >= threshold.minMonthlySpend &&
+      (r.matchedRule.distinctMerchantCount||0) >= threshold.minDistinctMerchants
+    );
+    const effectiveRate = (threshold && !thresholdMet) ? r.card.baseRate : r.earnRate;
     const milesLine = r.bestPartner
-      ? `${r.earnRate} pts/$ → ${(r.earnRate/r.bestRatio).toFixed(2)} ${r.bestPartner} miles/$`
-      : `${r.earnRate} pts/$`;
-    const effLine = r.bestMiles
+      ? `${effectiveRate} pts/$ → ${(effectiveRate/r.bestRatio).toFixed(2)} ${r.bestPartner} miles/$`
+      : `${effectiveRate} pts/$`;
+    const thresholdNote = threshold && !thresholdMet
+      ? `<span class="text-amber"> ⚠ Threshold not yet met ($${fmtAmt(r.matchedRule.monthlyTotalSpend||0)}/$${fmtAmt(threshold.minMonthlySpend)} spend, ${r.matchedRule.distinctMerchantCount||0}/${threshold.minDistinctMerchants} merchants)</span>`
+      : (threshold ? '<span class="text-green"> ✓ Threshold met</span>' : '');
+    const effLine = r.bestMiles && thresholdMet
       ? `~${(r.bestMiles * 100).toFixed(2)}¢/$`
-      : `${r.earnRate} pts/$`;
+      : `${effectiveRate} pts/$`;
     const capLine = r.capRemaining !== null
       ? `<div class="cap ${capWarn?'cap-warn':''}">Cap remaining: $${fmtAmt(r.capRemaining)}</div>`
       : '';
@@ -1060,7 +1099,7 @@ function buildRecsForMerchant(merchant, q) {
       <div class="rec-rank ${i===0?'gold':''}">${i+1}</div>
       <div class="rec-body">
         <div class="rec-card-name">${r.card.name} <span style="font-size:11px;color:#4A6580;font-weight:400;">(${profileLabel(r.card.profile)})</span></div>
-        <div class="rec-detail">${milesLine}${isCapped?' — <span class="text-red">Cap reached</span>':''}</div>
+        <div class="rec-detail">${milesLine}${isCapped?' — <span class="text-red">Cap reached</span>':''}${thresholdNote||''}</div>
       </div>
       <div class="rec-value">
         <div class="eff">${effLine}</div>
