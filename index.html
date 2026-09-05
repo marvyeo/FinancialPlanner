@@ -1,0 +1,1210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Financial Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #0D1B2A;
+    color: #F0F4F8;
+    margin: 0;
+    min-height: 100vh;
+  }
+  .tabnum { font-variant-numeric: tabular-nums; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: #0D1B2A; }
+  ::-webkit-scrollbar-thumb { background: #2A4A6B; border-radius: 3px; }
+
+  /* Sidebar */
+  #sidebar {
+    position: fixed; top: 0; left: 0; width: 220px; height: 100vh;
+    background: #0A1520; border-right: 1px solid #1C2F45;
+    display: flex; flex-direction: column; z-index: 100;
+    transition: transform .25s ease;
+  }
+  #sidebar .logo {
+    padding: 20px 20px 16px;
+    font-size: 13px; font-weight: 700; letter-spacing: 0.04em;
+    color: #00C896; border-bottom: 1px solid #1C2F45;
+  }
+  #sidebar .logo span { color: #F0F4F8; font-weight: 400; }
+  .nav-section { padding: 14px 12px 6px; font-size: 10px; font-weight: 600; color: #4A6580; letter-spacing: 0.08em; text-transform: uppercase; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px; margin: 1px 4px; border-radius: 6px;
+    font-size: 13.5px; font-weight: 500; color: #8AABBF;
+    cursor: pointer; transition: background .15s, color .15s;
+  }
+  .nav-item:hover { background: #1C2F45; color: #F0F4F8; }
+  .nav-item.active { background: #1C3A52; color: #00C896; }
+  .nav-item .icon { width: 16px; text-align: center; font-size: 14px; flex-shrink: 0; }
+  #sidebar .drive-status {
+    margin-top: auto; padding: 14px 16px; border-top: 1px solid #1C2F45;
+    font-size: 12px; color: #4A6580;
+  }
+  #sidebar .drive-status .dot {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: #4A6580; margin-right: 6px; vertical-align: middle;
+  }
+  #sidebar .drive-status.connected .dot { background: #00C896; }
+  #sidebar .drive-status.connected { color: #8AABBF; }
+
+  /* Main content */
+  #main { margin-left: 220px; min-height: 100vh; }
+  .topbar {
+    height: 56px; background: #0A1520; border-bottom: 1px solid #1C2F45;
+    display: flex; align-items: center; padding: 0 28px; gap: 16px;
+    position: sticky; top: 0; z-index: 50;
+  }
+  .topbar h1 { font-size: 15px; font-weight: 600; color: #F0F4F8; margin: 0; }
+  .topbar .breadcrumb { font-size: 13px; color: #4A6580; }
+  .page { padding: 28px; max-width: 1100px; }
+
+  /* Auth overlay */
+  #auth-overlay {
+    position: fixed; inset: 0; background: #0D1B2A;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 200; flex-direction: column; gap: 20px;
+  }
+  #auth-overlay .auth-card {
+    background: #0A1520; border: 1px solid #1C2F45; border-radius: 12px;
+    padding: 40px 48px; text-align: center; max-width: 380px; width: 90%;
+  }
+  #auth-overlay h2 { font-size: 20px; font-weight: 700; margin: 0 0 6px; }
+  #auth-overlay p { font-size: 13.5px; color: #8AABBF; margin: 0 0 24px; }
+
+  /* Buttons */
+  .btn-primary {
+    background: #00C896; color: #0D1B2A; font-weight: 700; font-size: 13.5px;
+    padding: 10px 20px; border-radius: 7px; border: none; cursor: pointer;
+    transition: background .15s; display: inline-flex; align-items: center; gap: 7px;
+  }
+  .btn-primary:hover { background: #00e0a8; }
+  .btn-secondary {
+    background: transparent; color: #8AABBF; font-weight: 500; font-size: 13px;
+    padding: 8px 16px; border-radius: 7px; border: 1px solid #2A4A6B; cursor: pointer;
+    transition: all .15s; display: inline-flex; align-items: center; gap: 7px;
+  }
+  .btn-secondary:hover { border-color: #4A6580; color: #F0F4F8; }
+  .btn-danger {
+    background: transparent; color: #EF4444; font-size: 12px; font-weight: 500;
+    padding: 5px 10px; border-radius: 5px; border: 1px solid #3A2020; cursor: pointer;
+    transition: all .15s;
+  }
+  .btn-danger:hover { background: #3A2020; }
+
+  /* Stat cards */
+  .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 28px; }
+  .stat-card {
+    background: #0A1520; border: 1px solid #1C2F45; border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .stat-card .label { font-size: 11.5px; font-weight: 500; color: #4A6580; margin-bottom: 6px; }
+  .stat-card .value { font-size: 26px; font-weight: 700; tabular-nums; }
+  .stat-card .sub { font-size: 12px; color: #4A6580; margin-top: 3px; }
+  .text-green { color: #00C896; }
+  .text-amber { color: #F59E0B; }
+  .text-red { color: #EF4444; }
+  .text-muted { color: #4A6580; }
+
+  /* Section */
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .section-header h2 { font-size: 14px; font-weight: 600; color: #F0F4F8; margin: 0; }
+
+  /* Table / bill rows */
+  .data-table { width: 100%; border-collapse: collapse; }
+  .data-table th {
+    text-align: left; font-size: 11px; font-weight: 600; color: #4A6580;
+    padding: 0 14px 10px; letter-spacing: 0.04em; border-bottom: 1px solid #1C2F45;
+  }
+  .data-table td {
+    padding: 11px 14px; font-size: 13.5px; border-bottom: 1px solid #1C2F45;
+    vertical-align: middle;
+  }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: #111f2e; }
+  .table-wrap {
+    background: #0A1520; border: 1px solid #1C2F45; border-radius: 10px; overflow: hidden;
+    margin-bottom: 24px;
+  }
+
+  /* Status badges */
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 20px;
+    font-size: 11px; font-weight: 600; white-space: nowrap;
+  }
+  .badge-overdue { background: #3A1212; color: #EF4444; }
+  .badge-upcoming { background: #2D2A12; color: #F59E0B; }
+  .badge-paid { background: #0D2A1E; color: #00C896; }
+  .badge-sub { background: #1A2040; color: #7B9FD4; }
+
+  /* Modal */
+  .modal-bg {
+    position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 300;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(2px);
+  }
+  .modal {
+    background: #0A1520; border: 1px solid #1C2F45; border-radius: 12px;
+    padding: 28px 32px; width: 90%; max-width: 520px; max-height: 90vh; overflow-y: auto;
+  }
+  .modal h3 { font-size: 16px; font-weight: 700; margin: 0 0 20px; }
+  .form-row { margin-bottom: 14px; }
+  .form-row label { display: block; font-size: 12px; font-weight: 500; color: #8AABBF; margin-bottom: 5px; }
+  .form-row input, .form-row select, .form-row textarea {
+    width: 100%; background: #0D1B2A; border: 1px solid #2A4A6B; color: #F0F4F8;
+    border-radius: 7px; padding: 9px 12px; font-size: 13.5px; font-family: 'Inter', sans-serif;
+    outline: none; transition: border .15s;
+  }
+  .form-row input:focus, .form-row select:focus, .form-row textarea:focus { border-color: #00C896; }
+  .form-row select option { background: #0D1B2A; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 22px; }
+
+  /* Smart Spend */
+  .smart-spend-box {
+    background: #0A1520; border: 1px solid #1C2F45; border-radius: 10px;
+    padding: 20px 24px; margin-bottom: 24px;
+  }
+  .smart-search {
+    display: flex; gap: 10px; margin-bottom: 4px;
+  }
+  .smart-search input {
+    flex: 1; background: #0D1B2A; border: 1px solid #2A4A6B; color: #F0F4F8;
+    border-radius: 7px; padding: 11px 16px; font-size: 14px; font-family: 'Inter', sans-serif;
+    outline: none; transition: border .15s;
+  }
+  .smart-search input:focus { border-color: #00C896; }
+  .rec-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 0; border-bottom: 1px solid #1C2F45;
+  }
+  .rec-row:last-child { border-bottom: none; }
+  .rec-rank {
+    width: 26px; height: 26px; border-radius: 50%; background: #1C2F45;
+    font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .rec-rank.gold { background: #3A2D00; color: #F59E0B; }
+  .rec-body { flex: 1; }
+  .rec-card-name { font-size: 14px; font-weight: 600; }
+  .rec-detail { font-size: 12px; color: #8AABBF; margin-top: 2px; }
+  .rec-value { text-align: right; flex-shrink: 0; }
+  .rec-value .eff { font-size: 16px; font-weight: 700; color: #00C896; }
+  .rec-value .cap { font-size: 11px; color: #4A6580; margin-top: 1px; }
+  .cap-warn { color: #F59E0B; }
+
+  /* Card display */
+  .card-tile {
+    background: #0A1520; border: 1px solid #1C2F45; border-radius: 10px;
+    padding: 20px 22px; margin-bottom: 14px;
+  }
+  .card-tile .card-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; }
+  .card-tile .card-name { font-size: 15px; font-weight: 700; }
+  .card-tile .card-meta { font-size: 12px; color: #4A6580; margin-top: 2px; }
+  .cap-bars { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+  .cap-bar-item { flex: 1; min-width: 160px; }
+  .cap-bar-label { font-size: 11px; color: #8AABBF; display: flex; justify-content: space-between; margin-bottom: 4px; }
+  .cap-bar-track { height: 5px; background: #1C2F45; border-radius: 3px; overflow: hidden; }
+  .cap-bar-fill { height: 100%; border-radius: 3px; background: #00C896; transition: width .4s; }
+  .cap-bar-fill.warn { background: #F59E0B; }
+  .cap-bar-fill.danger { background: #EF4444; }
+
+  /* Profile tabs */
+  .profile-tabs { display: flex; gap: 4px; margin-bottom: 24px; }
+  .profile-tab {
+    padding: 8px 18px; border-radius: 7px; font-size: 13.5px; font-weight: 600;
+    cursor: pointer; color: #4A6580; transition: all .15s;
+  }
+  .profile-tab:hover { color: #8AABBF; background: #1C2F45; }
+  .profile-tab.active { background: #1C3A52; color: #00C896; }
+
+  /* Empty state */
+  .empty { text-align: center; padding: 48px 20px; color: #4A6580; font-size: 13.5px; }
+  .empty .icon { font-size: 28px; margin-bottom: 10px; }
+
+  /* Alert bar */
+  .alert-bar {
+    border-radius: 8px; padding: 12px 16px; margin-bottom: 14px;
+    font-size: 13px; display: flex; align-items: flex-start; gap: 10px;
+  }
+  .alert-bar.overdue { background: #3A1212; border: 1px solid #5A1A1A; color: #F87171; }
+  .alert-bar.upcoming { background: #2D2A12; border: 1px solid #5A4A12; color: #FCD34D; }
+
+  /* Mobile nav */
+  @media (max-width: 768px) {
+    #sidebar { transform: translateX(-100%); }
+    #sidebar.open { transform: translateX(0); }
+    #main { margin-left: 0; }
+    .topbar { padding: 0 16px; }
+    .page { padding: 16px; }
+    #mobile-nav {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+      background: #0A1520; border-top: 1px solid #1C2F45;
+      display: flex; justify-content: space-around; padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+    }
+    .mob-nav-btn {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      font-size: 10px; font-weight: 500; color: #4A6580; cursor: pointer;
+      padding: 4px 10px; border-radius: 8px; transition: color .15s;
+    }
+    .mob-nav-btn .icon { font-size: 18px; }
+    .mob-nav-btn.active { color: #00C896; }
+    #main { padding-bottom: 64px; }
+    .stat-row { grid-template-columns: 1fr 1fr; }
+    .form-grid { grid-template-columns: 1fr; }
+  }
+  @media (min-width: 769px) {
+    #mobile-nav { display: none; }
+  }
+  .hamburger { display: none; }
+  @media (max-width: 768px) { .hamburger { display: block; } }
+</style>
+</head>
+<body>
+
+<!-- Auth Overlay -->
+<div id="auth-overlay">
+  <div class="auth-card">
+    <div style="font-size:32px;margin-bottom:12px;">💳</div>
+    <h2>Financial Planner</h2>
+    <p>Connect to Google Drive to load your data across all profiles.</p>
+    <button class="btn-primary" id="sign-in-btn" onclick="handleSignIn()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+      Sign in with Google
+    </button>
+    <p style="margin-top:16px;font-size:11.5px;color:#2A4A6B;">drive.file scope only — accesses financialplanner-data.json</p>
+  </div>
+</div>
+
+<!-- Sidebar -->
+<nav id="sidebar">
+  <div class="logo">FP<span> / Financial Planner</span></div>
+  <div style="padding:8px 4px;">
+    <div class="nav-section">Overview</div>
+    <div class="nav-item active" onclick="navigate('dashboard')"><span class="icon">⊞</span> Dashboard</div>
+    <div class="nav-section">Profiles</div>
+    <div class="nav-item" onclick="navigate('profile','marvin')"><span class="icon">👤</span> Marvin</div>
+    <div class="nav-item" onclick="navigate('profile','wife')"><span class="icon">👤</span> Wife</div>
+    <div class="nav-item" onclick="navigate('profile','joint')"><span class="icon">🏠</span> Joint</div>
+    <div class="nav-section">Tools</div>
+    <div class="nav-item" onclick="navigate('smartspend')"><span class="icon">✦</span> Smart Spend</div>
+    <div class="nav-item" onclick="navigate('cards')"><span class="icon">▤</span> Cards</div>
+    <div class="nav-item" onclick="navigate('merchants')"><span class="icon">◈</span> Merchants</div>
+    <div class="nav-section">System</div>
+    <div class="nav-item" onclick="navigate('settings')"><span class="icon">⚙</span> Settings</div>
+  </div>
+  <div class="drive-status" id="drive-status-sidebar">
+    <span class="dot"></span><span id="drive-status-text">Not connected</span>
+  </div>
+</nav>
+
+<!-- Mobile nav -->
+<div id="mobile-nav">
+  <div class="mob-nav-btn active" onclick="navigate('dashboard')" id="mobnav-dashboard"><div class="icon">⊞</div>Home</div>
+  <div class="mob-nav-btn" onclick="navigate('profile','marvin')" id="mobnav-profile"><div class="icon">👤</div>Profile</div>
+  <div class="mob-nav-btn" onclick="navigate('smartspend')" id="mobnav-smartspend"><div class="icon">✦</div>Smart Spend</div>
+  <div class="mob-nav-btn" onclick="navigate('cards')" id="mobnav-cards"><div class="icon">▤</div>Cards</div>
+  <div class="mob-nav-btn" onclick="navigate('settings')" id="mobnav-settings"><div class="icon">⚙</div>Settings</div>
+</div>
+
+<!-- Main -->
+<div id="main">
+  <div class="topbar">
+    <button class="hamburger btn-secondary" style="padding:6px 10px;font-size:16px;border:none;background:none;color:#8AABBF;" onclick="toggleSidebar()">☰</button>
+    <h1 id="page-title">Dashboard</h1>
+    <div style="margin-left:auto;display:flex;gap:8px;">
+      <button class="btn-secondary" id="save-btn" onclick="saveToDrive()" style="font-size:12px;padding:6px 12px;">
+        <span id="save-icon">💾</span> Save
+      </button>
+    </div>
+  </div>
+  <div class="page" id="page-content"></div>
+</div>
+
+<!-- Modal container -->
+<div id="modal-container"></div>
+
+<script>
+/* =================== GOOGLE OAUTH =================== */
+const CLIENT_ID = '669494100250-gvromuq72r7j0djmkd4vdbdq5damncj7.apps.googleusercontent.com';
+const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+const DRIVE_FILE = 'financialplanner-data.json';
+const GITHUB_URL = 'https://marvyeo.github.io/FinancialPlanner/';
+
+let tokenClient, accessToken = null, driveFileId = null;
+
+function gapiInit() {
+  gapi.load('client', async () => {
+    await gapi.client.init({ discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'] });
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID, scope: SCOPES,
+      callback: (resp) => {
+        if (resp.error) return;
+        accessToken = resp.access_token;
+        gapi.client.setToken({ access_token: accessToken });
+        onSignedIn();
+      }
+    });
+    // Poll for token restoration
+    initPoll();
+  });
+}
+
+function initPoll() {
+  const existing = sessionStorage.getItem('fp_access_token');
+  if (existing) {
+    accessToken = existing;
+    gapi.client.setToken({ access_token: existing });
+    onSignedIn();
+  }
+}
+
+async function handleSignIn() {
+  document.getElementById('sign-in-btn').textContent = 'Connecting…';
+  tokenClient.requestAccessToken({ prompt: 'consent' });
+}
+
+async function onSignedIn() {
+  sessionStorage.setItem('fp_access_token', accessToken);
+  await loadFromDrive();
+  document.getElementById('auth-overlay').style.display = 'none';
+  setDriveStatus(true);
+  render();
+}
+
+function setDriveStatus(connected) {
+  const el = document.getElementById('drive-status-sidebar');
+  const txt = document.getElementById('drive-status-text');
+  if (connected) { el.classList.add('connected'); txt.textContent = 'Drive connected'; }
+  else { el.classList.remove('connected'); txt.textContent = 'Not connected'; }
+}
+
+/* =================== DATA LAYER =================== */
+const DEFAULT_DATA = {
+  profiles: {
+    marvin: { bills: [], subscriptions: [] },
+    wife: { bills: [], subscriptions: [] },
+    joint: { bills: [], subscriptions: [] }
+  },
+  cards: [],
+  merchants: [],
+  settings: { mile_valuations: { KrisFlyer: 1.5, 'Asia Miles': 1.4, ThankYou: 1.2, 'Membership Rewards': 1.3 } },
+  upcoming: []
+};
+let data = JSON.parse(JSON.stringify(DEFAULT_DATA));
+
+async function loadFromDrive() {
+  try {
+    const res = await gapi.client.drive.files.list({ q: `name='${DRIVE_FILE}' and trashed=false`, fields: 'files(id,name)' });
+    const files = res.result.files;
+    if (files.length > 0) {
+      driveFileId = files[0].id;
+      const dl = await fetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      data = await dl.json();
+      // Ensure structure
+      ['marvin','wife','joint'].forEach(p => {
+        if (!data.profiles[p]) data.profiles[p] = { bills: [], subscriptions: [] };
+        if (!data.profiles[p].bills) data.profiles[p].bills = [];
+        if (!data.profiles[p].subscriptions) data.profiles[p].subscriptions = [];
+      });
+      if (!data.cards) data.cards = [];
+      if (!data.merchants) data.merchants = [];
+      if (!data.settings) data.settings = DEFAULT_DATA.settings;
+      if (!data.settings.mile_valuations) data.settings.mile_valuations = DEFAULT_DATA.settings.mile_valuations;
+    }
+  } catch(e) { console.warn('Drive load failed', e); }
+}
+
+async function saveToDrive() {
+  computeUpcoming();
+  const icon = document.getElementById('save-icon');
+  icon.textContent = '⟳';
+  try {
+    const body = JSON.stringify(data, null, 2);
+    const meta = { name: DRIVE_FILE, mimeType: 'application/json' };
+    if (driveFileId) {
+      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=multipart`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'multipart/related; boundary=bound' },
+        body: `--bound\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(meta)}\r\n--bound\r\nContent-Type: application/json\r\n\r\n${body}\r\n--bound--`
+      });
+    } else {
+      const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'multipart/related; boundary=bound' },
+        body: `--bound\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(meta)}\r\n--bound\r\nContent-Type: application/json\r\n\r\n${body}\r\n--bound--`
+      });
+      const j = await res.json(); driveFileId = j.id;
+    }
+    icon.textContent = '✓';
+    setTimeout(() => { icon.textContent = '💾'; }, 1800);
+  } catch(e) { icon.textContent = '✗'; console.error(e); }
+}
+
+/* =================== UPCOMING ENGINE =================== */
+function computeUpcoming() {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const in30 = new Date(today); in30.setDate(today.getDate()+30);
+  const in7 = new Date(today); in7.setDate(today.getDate()+7);
+  const items = [];
+  const allBills = [
+    ...data.profiles.marvin.bills.map(b=>({...b,_profile:'marvin'})),
+    ...data.profiles.marvin.subscriptions.map(b=>({...b,_profile:'marvin',_sub:true})),
+    ...data.profiles.wife.bills.map(b=>({...b,_profile:'wife'})),
+    ...data.profiles.wife.subscriptions.map(b=>({...b,_profile:'wife',_sub:true})),
+    ...data.profiles.joint.bills.map(b=>({...b,_profile:'joint'})),
+    ...data.profiles.joint.subscriptions.map(b=>({...b,_profile:'joint',_sub:true})),
+  ];
+  allBills.forEach(b => {
+    if (!b.dueDate) return;
+    const d = new Date(b.dueDate); d.setHours(0,0,0,0);
+    const overdue = d < today && b.status !== 'paid';
+    const upcoming = d >= today && d <= in30;
+    if (overdue || upcoming) {
+      items.push({
+        label: `${b.name} — $${fmtAmt(b.amount)} due ${b.dueDate}`,
+        date: b.dueDate, type: 'bill-due', app: 'financialplanner',
+        priority: overdue ? 'high' : 'normal', url: GITHUB_URL
+      });
+    }
+  });
+  data.cards.forEach(card => {
+    if (!card.cycleDate) return;
+    const today2 = new Date();
+    const cycleDay = parseInt(card.cycleDate);
+    const billingDate = new Date(today2.getFullYear(), today2.getMonth(), cycleDay);
+    if (billingDate < today2) billingDate.setMonth(billingDate.getMonth()+1);
+    const diff = (billingDate - today2) / 86400000;
+    if (diff <= 7) {
+      items.push({
+        label: `${card.name} — billing cycle due ${billingDate.toISOString().slice(0,10)}`,
+        date: billingDate.toISOString().slice(0,10), type: 'due-date',
+        app: 'financialplanner', priority: 'normal', url: GITHUB_URL
+      });
+    }
+    // Cap alerts
+    if (card.bonusRules) {
+      card.bonusRules.forEach(rule => {
+        if (rule.monthlyCap && rule.currentSpend) {
+          const pct = rule.currentSpend / rule.monthlyCap;
+          if (pct >= 0.8) {
+            items.push({
+              label: `${card.name} ${rule.category} cap — ${Math.round(pct*100)}% used ($${fmtAmt(rule.currentSpend)}/$${fmtAmt(rule.monthlyCap)})`,
+              date: billingDate.toISOString().slice(0,10), type: 'cap-alert',
+              app: 'financialplanner', priority: pct >= 0.95 ? 'high' : 'normal', url: GITHUB_URL
+            });
+          }
+        }
+      });
+    }
+  });
+  data.upcoming = items;
+}
+
+/* =================== HELPERS =================== */
+function fmtAmt(n) { return Number(n||0).toLocaleString('en-SG',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function today() { return new Date().toISOString().slice(0,10); }
+function nextCycle(dateStr, recurrence) {
+  const d = new Date(dateStr);
+  if (recurrence === 'monthly') d.setMonth(d.getMonth()+1);
+  else if (recurrence === 'quarterly') d.setMonth(d.getMonth()+3);
+  else if (recurrence === 'annual') d.setFullYear(d.getFullYear()+1);
+  return d.toISOString().slice(0,10);
+}
+function billStatus(bill) {
+  if (bill.status === 'paid') return 'paid';
+  const d = new Date(bill.dueDate); d.setHours(0,0,0,0);
+  const t = new Date(); t.setHours(0,0,0,0);
+  if (d < t) return 'overdue';
+  const in7 = new Date(t); in7.setDate(t.getDate()+7);
+  if (d <= in7) return 'upcoming';
+  return 'upcoming';
+}
+function statusBadge(status) {
+  const map = { paid: 'badge-paid', overdue: 'badge-overdue', upcoming: 'badge-upcoming' };
+  const label = { paid: 'Paid', overdue: 'Overdue', upcoming: 'Upcoming' };
+  return `<span class="badge ${map[status]||'badge-upcoming'}">${label[status]||status}</span>`;
+}
+function profileLabel(p) { return p === 'marvin' ? 'Marvin' : p === 'wife' ? 'Wife' : 'Joint'; }
+
+/* =================== NAVIGATION =================== */
+let currentView = 'dashboard';
+let currentProfile = 'marvin';
+
+function navigate(view, sub) {
+  currentView = view;
+  if (sub) currentProfile = sub;
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  const map = { dashboard: 0, profile: [1,2,3], smartspend: 4, cards: 5, merchants: 6, settings: 7 };
+  const navItems = document.querySelectorAll('.nav-item');
+  if (view === 'dashboard') navItems[0]?.classList.add('active');
+  else if (view === 'profile') {
+    const idx = { marvin: 1, wife: 2, joint: 3 }[currentProfile];
+    navItems[idx]?.classList.add('active');
+  } else if (view === 'smartspend') navItems[4]?.classList.add('active');
+  else if (view === 'cards') navItems[5]?.classList.add('active');
+  else if (view === 'merchants') navItems[6]?.classList.add('active');
+  else if (view === 'settings') navItems[7]?.classList.add('active');
+  // Mobile nav
+  document.querySelectorAll('.mob-nav-btn').forEach(el=>el.classList.remove('active'));
+  if (view === 'dashboard') document.getElementById('mobnav-dashboard')?.classList.add('active');
+  else if (view === 'smartspend') document.getElementById('mobnav-smartspend')?.classList.add('active');
+  else if (view === 'cards') document.getElementById('mobnav-cards')?.classList.add('active');
+  else if (view === 'settings') document.getElementById('mobnav-settings')?.classList.add('active');
+  render();
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+}
+
+/* =================== RENDER DISPATCHER =================== */
+function render() {
+  const titles = { dashboard: 'Dashboard', smartspend: 'Smart Spend', cards: 'Cards', merchants: 'Merchants', settings: 'Settings' };
+  document.getElementById('page-title').textContent =
+    currentView === 'profile' ? profileLabel(currentProfile) : titles[currentView] || '';
+  const content = document.getElementById('page-content');
+  if (currentView === 'dashboard') content.innerHTML = renderDashboard();
+  else if (currentView === 'profile') content.innerHTML = renderProfile(currentProfile);
+  else if (currentView === 'smartspend') content.innerHTML = renderSmartSpend();
+  else if (currentView === 'cards') content.innerHTML = renderCards();
+  else if (currentView === 'merchants') content.innerHTML = renderMerchants();
+  else if (currentView === 'settings') content.innerHTML = renderSettings();
+}
+
+/* =================== DASHBOARD =================== */
+function renderDashboard() {
+  const allBills = [
+    ...data.profiles.marvin.bills, ...data.profiles.marvin.subscriptions,
+    ...data.profiles.wife.bills, ...data.profiles.wife.subscriptions,
+    ...data.profiles.joint.bills, ...data.profiles.joint.subscriptions
+  ];
+  const overdue = allBills.filter(b => billStatus(b) === 'overdue');
+  const thisMonth = allBills.filter(b => {
+    if (!b.dueDate) return false;
+    const d = new Date(b.dueDate);
+    const now = new Date();
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() && b.status !== 'paid';
+  });
+  const monthTotal = thisMonth.reduce((s,b) => s + Number(b.amount||0), 0);
+  const subCount = allBills.filter(b => b._isSub).length;
+  const monthSubs = [...data.profiles.marvin.subscriptions,...data.profiles.wife.subscriptions,...data.profiles.joint.subscriptions];
+  const subMonthly = monthSubs.reduce((s,b) => {
+    const a = Number(b.amount||0);
+    if (b.recurrence === 'monthly') return s + a;
+    if (b.recurrence === 'quarterly') return s + a/3;
+    if (b.recurrence === 'annual') return s + a/12;
+    return s + a;
+  }, 0);
+
+  let alerts = '';
+  overdue.forEach(b => {
+    alerts += `<div class="alert-bar overdue">⚠ <div><strong>${b.name}</strong> — $${fmtAmt(b.amount)} overdue since ${b.dueDate}</div></div>`;
+  });
+
+  // Upcoming 7-day bills
+  const today2 = new Date(); today2.setHours(0,0,0,0);
+  const in7 = new Date(today2); in7.setDate(today2.getDate()+7);
+  const soon = allBills.filter(b => {
+    if (!b.dueDate || b.status === 'paid') return false;
+    const d = new Date(b.dueDate); d.setHours(0,0,0,0);
+    return d >= today2 && d <= in7;
+  });
+  let soonRows = soon.length ? soon.map(b => `
+    <tr>
+      <td class="tabnum">${b.dueDate}</td>
+      <td>${b.name}</td>
+      <td class="tabnum">$${fmtAmt(b.amount)}</td>
+      <td>${statusBadge(billStatus(b))}</td>
+    </tr>`).join('') : `<tr><td colspan="4"><div class="empty" style="padding:24px">No bills due this week</div></td></tr>`;
+
+  return `
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="label">Due this month</div>
+        <div class="value tabnum text-amber">$${fmtAmt(monthTotal)}</div>
+        <div class="sub">${thisMonth.length} bill${thisMonth.length!==1?'s':''}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Overdue</div>
+        <div class="value tabnum ${overdue.length?'text-red':'text-green'}">${overdue.length}</div>
+        <div class="sub">${overdue.length ? 'Action required' : 'All clear'}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Subscriptions / mo</div>
+        <div class="value tabnum">$${fmtAmt(subMonthly)}</div>
+        <div class="sub">${monthSubs.length} active</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Cards tracked</div>
+        <div class="value tabnum text-green">${data.cards.length}</div>
+        <div class="sub">across all profiles</div>
+      </div>
+    </div>
+    ${alerts}
+    <div class="section-header"><h2>Smart Spend — quick lookup</h2></div>
+    <div class="smart-spend-box">
+      <div class="smart-search">
+        <input type="text" id="dash-merchant-search" placeholder="Type a merchant or MCC…" oninput="dashSmartSearch()" />
+        <button class="btn-primary" onclick="dashSmartSearch()">Find best card</button>
+      </div>
+      <div id="dash-rec-output" style="margin-top:8px;"></div>
+    </div>
+    <div class="section-header"><h2>Due this week</h2></div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Due</th><th>Bill</th><th>Amount</th><th>Status</th></tr></thead>
+        <tbody>${soonRows}</tbody>
+      </table>
+    </div>`;
+}
+
+function dashSmartSearch() {
+  const q = document.getElementById('dash-merchant-search')?.value?.toLowerCase() || '';
+  const out = document.getElementById('dash-rec-output');
+  if (!out) return;
+  if (!q) { out.innerHTML = ''; return; }
+  out.innerHTML = buildRecommendations(q);
+}
+
+/* =================== PROFILE VIEW =================== */
+function renderProfile(profile) {
+  const p = data.profiles[profile];
+  const bills = p.bills || [];
+  const subs = p.subscriptions || [];
+  const profCards = data.cards.filter(c => c.profile === profile);
+
+  const billRows = bills.length ? bills.map((b,i) => {
+    const st = billStatus(b);
+    return `<tr>
+      <td>${b.name}</td>
+      <td class="tabnum">$${fmtAmt(b.amount)}</td>
+      <td>${b.dueDate||'—'}</td>
+      <td>${b.recurrence||'monthly'}</td>
+      <td>${b.paymentMethod||'—'}</td>
+      <td>${statusBadge(st)}</td>
+      <td style="white-space:nowrap">
+        ${st!=='paid' ? `<button class="btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="markPaid('${profile}','bill',${i})">Mark paid</button>` : ''}
+        <button class="btn-danger" onclick="deleteBill('${profile}','bill',${i})">✕</button>
+      </td>
+    </tr>`;}).join('') : `<tr><td colspan="7"><div class="empty"><div class="icon">📋</div>No bills added yet</div></td></tr>`;
+
+  const subRows = subs.length ? subs.map((b,i) => {
+    const st = billStatus(b);
+    return `<tr>
+      <td>${b.name}</td>
+      <td class="tabnum">$${fmtAmt(b.amount)}</td>
+      <td>${b.recurrence||'monthly'}</td>
+      <td>${b.paymentMethod||'—'}</td>
+      <td>${b.category||'—'}</td>
+      <td>${statusBadge(st)}</td>
+      <td>
+        ${st!=='paid' ? `<button class="btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="markPaid('${profile}','sub',${i})">Mark paid</button>` : ''}
+        <button class="btn-danger" onclick="deleteBill('${profile}','sub',${i})">✕</button>
+      </td>
+    </tr>`;}).join('') : `<tr><td colspan="7"><div class="empty"><div class="icon">🔄</div>No subscriptions added yet</div></td></tr>`;
+
+  const cardChips = profCards.length ? profCards.map(c =>
+    `<div style="display:inline-block;background:#1C2F45;border-radius:6px;padding:6px 14px;margin:4px;font-size:13px;font-weight:600;">${c.name}</div>`
+  ).join('') : `<span class="text-muted" style="font-size:13px;">No cards for this profile yet</span>`;
+
+  return `
+    <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+      <button class="btn-primary" onclick="openBillModal('${profile}','bill')">+ Add bill</button>
+      <button class="btn-secondary" onclick="openBillModal('${profile}','sub')">+ Add subscription</button>
+      <button class="btn-secondary" onclick="navigate('cards')">Manage cards</button>
+    </div>
+
+    <div class="section-header"><h2>Bills</h2></div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Name</th><th>Amount</th><th>Due</th><th>Recurrence</th><th>Payment</th><th>Status</th><th></th></tr></thead>
+        <tbody>${billRows}</tbody>
+      </table>
+    </div>
+
+    <div class="section-header"><h2>Subscriptions</h2></div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Name</th><th>Amount</th><th>Recurrence</th><th>Payment</th><th>Category</th><th>Status</th><th></th></tr></thead>
+        <tbody>${subRows}</tbody>
+      </table>
+    </div>
+
+    <div class="section-header"><h2>Cards</h2></div>
+    <div style="margin-bottom:24px;">${cardChips}</div>`;
+}
+
+function markPaid(profile, type, idx) {
+  const list = type === 'bill' ? data.profiles[profile].bills : data.profiles[profile].subscriptions;
+  const bill = list[idx];
+  bill.status = 'paid';
+  bill.paidDate = today();
+  bill.dueDate = nextCycle(bill.dueDate, bill.recurrence || 'monthly');
+  bill.status = 'upcoming';
+  saveToDrive();
+  render();
+}
+
+function deleteBill(profile, type, idx) {
+  const list = type === 'bill' ? data.profiles[profile].bills : data.profiles[profile].subscriptions;
+  list.splice(idx, 1);
+  render();
+}
+
+/* =================== BILL MODAL =================== */
+function openBillModal(profile, type) {
+  const isSub = type === 'sub';
+  const cardOptions = data.cards.filter(c => c.profile === profile || c.profile === 'joint')
+    .map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+  const profileOptions = ['marvin','wife','joint'].map(p =>
+    `<option value="${p}" ${p===profile?'selected':''}>${profileLabel(p)}</option>`).join('');
+
+  showModal(`
+    <h3>Add ${isSub ? 'Subscription' : 'Bill'}</h3>
+    <div class="form-grid">
+      <div class="form-row"><label>Name</label><input id="m-name" type="text" placeholder="${isSub?'Netflix':'Electricity'}" /></div>
+      <div class="form-row"><label>Amount (SGD)</label><input id="m-amount" type="number" step="0.01" placeholder="0.00" /></div>
+    </div>
+    <div class="form-grid">
+      <div class="form-row"><label>Due date</label><input id="m-due" type="date" value="${today()}" /></div>
+      <div class="form-row"><label>Recurrence</label><select id="m-rec"><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annual">Annual</option></select></div>
+    </div>
+    <div class="form-grid">
+      <div class="form-row"><label>Category</label><input id="m-cat" type="text" placeholder="Utilities / Entertainment…" /></div>
+      <div class="form-row"><label>Profile</label><select id="m-profile">${profileOptions}</select></div>
+    </div>
+    <div class="form-row"><label>Payment method</label><select id="m-pay"><option value="Cash">Cash</option>${cardOptions}</select></div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveBill('${type}')">Add ${isSub?'subscription':'bill'}</button>
+    </div>
+  `);
+}
+
+function saveBill(type) {
+  const profile = document.getElementById('m-profile').value;
+  const bill = {
+    id: uid(),
+    name: document.getElementById('m-name').value,
+    amount: parseFloat(document.getElementById('m-amount').value)||0,
+    dueDate: document.getElementById('m-due').value,
+    recurrence: document.getElementById('m-rec').value,
+    category: document.getElementById('m-cat').value,
+    paymentMethod: document.getElementById('m-pay').value,
+    status: 'upcoming', createdAt: today()
+  };
+  if (type === 'sub') data.profiles[profile].subscriptions.push(bill);
+  else data.profiles[profile].bills.push(bill);
+  closeModal();
+  saveToDrive();
+  render();
+}
+
+/* =================== SMART SPEND =================== */
+function renderSmartSpend() {
+  return `
+    <div class="section-header"><h2>Recommendation engine</h2></div>
+    <div class="smart-spend-box">
+      <div class="smart-search">
+        <input type="text" id="ss-search" placeholder="Merchant name or MCC code…" oninput="ssSearch()" />
+        <button class="btn-primary" onclick="ssSearch()">Get recommendations</button>
+      </div>
+      <div id="ss-output" style="margin-top:16px;"></div>
+    </div>
+    <div class="section-header" style="margin-top:8px;"><h2>Merchant repository</h2><button class="btn-primary" onclick="openMerchantModal()">+ Add merchant</button></div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Merchant</th><th>MCC</th><th>Category</th><th>Notes</th><th></th></tr></thead>
+        <tbody>${data.merchants.length ? data.merchants.map((m,i)=>`
+          <tr>
+            <td style="font-weight:600;">${m.name}</td>
+            <td class="tabnum text-muted">${m.mcc||'—'}</td>
+            <td>${m.category||'—'}</td>
+            <td style="color:#8AABBF;font-size:12px;">${m.notes||'—'}</td>
+            <td><button class="btn-danger" onclick="deleteMerchant(${i})">✕</button></td>
+          </tr>`).join('') : `<tr><td colspan="5"><div class="empty"><div class="icon">◈</div>No merchants saved yet</div></td></tr>`}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function ssSearch() {
+  const q = (document.getElementById('ss-search')?.value||'').toLowerCase();
+  const out = document.getElementById('ss-output');
+  if (!out) return;
+  if (!q) { out.innerHTML = ''; return; }
+  out.innerHTML = buildRecommendations(q);
+}
+
+function buildRecommendations(q) {
+  if (!data.cards.length) return `<div class="empty" style="padding:20px;"><div class="icon">▤</div>No cards added yet — add cards in the Cards view first.</div>`;
+  // Find matching merchant
+  const merchant = data.merchants.find(m =>
+    m.name.toLowerCase().includes(q) || (m.mcc && m.mcc.includes(q)) || (m.category||'').toLowerCase().includes(q)
+  );
+  const targetMCC = merchant?.mcc || '';
+  const targetCat = merchant?.category?.toLowerCase() || q;
+
+  // Score each card
+  const recs = data.cards.map(card => {
+    let earnRate = Number(card.baseRate) || 1;
+    let matchedRule = null;
+    if (card.bonusRules) {
+      card.bonusRules.forEach(rule => {
+        if ((rule.mcc && targetMCC && rule.mcc === targetMCC) ||
+            (rule.category && rule.category.toLowerCase().includes(targetCat))) {
+          if (Number(rule.rate) > earnRate) {
+            earnRate = Number(rule.rate);
+            matchedRule = rule;
+          }
+        }
+      });
+    }
+    // Best transfer partner
+    let bestMiles = 0, bestPartner = null, bestRatio = 1;
+    if (card.transferPartners && card.settings) {
+      // Use data.settings
+    }
+    if (card.transferPartners) {
+      card.transferPartners.forEach(tp => {
+        const valuation = data.settings.mile_valuations[tp.partner] || 0;
+        const ratio = Number(tp.ratio) || 1;
+        const milesPerDollar = earnRate / ratio;
+        const sgdVal = milesPerDollar * valuation;
+        if (sgdVal > bestMiles) {
+          bestMiles = sgdVal;
+          bestPartner = tp.partner;
+          bestRatio = ratio;
+        }
+      });
+    }
+    const capRemaining = matchedRule?.monthlyCap ?
+      Math.max(0, Number(matchedRule.monthlyCap) - Number(matchedRule.currentSpend||0)) : null;
+    const capPct = matchedRule?.monthlyCap ? Number(matchedRule.currentSpend||0)/Number(matchedRule.monthlyCap) : 0;
+    return { card, earnRate, bestMiles, bestPartner, bestRatio, capRemaining, capPct, matchedRule };
+  });
+
+  recs.sort((a,b) => b.bestMiles - a.bestMiles || b.earnRate - a.earnRate);
+  if (!recs.length) return `<div class="empty" style="padding:16px;">No matching cards found.</div>`;
+
+  return recs.slice(0,5).map((r,i) => {
+    const isCapped = r.capRemaining !== null && r.capRemaining <= 0;
+    const capWarn = r.capPct >= 0.8;
+    const milesLine = r.bestPartner
+      ? `${r.earnRate} pts/$ → ${(r.earnRate/r.bestRatio).toFixed(2)} ${r.bestPartner} miles/$`
+      : `${r.earnRate} pts/$`;
+    const effLine = r.bestMiles
+      ? `~${(r.bestMiles * 100).toFixed(2)}¢/$`
+      : `${r.earnRate} pts/$`;
+    const capLine = r.capRemaining !== null
+      ? `<div class="cap ${capWarn?'cap-warn':''}">Cap remaining: $${fmtAmt(r.capRemaining)}</div>`
+      : '';
+    return `<div class="rec-row ${isCapped?'opacity-50':''}">
+      <div class="rec-rank ${i===0?'gold'':''}">${i+1}</div>
+      <div class="rec-body">
+        <div class="rec-card-name">${r.card.name} <span style="font-size:11px;color:#4A6580;font-weight:400;">(${profileLabel(r.card.profile)})</span></div>
+        <div class="rec-detail">${milesLine}${isCapped?' — <span class="text-red">Cap reached</span>':''}</div>
+      </div>
+      <div class="rec-value">
+        <div class="eff">${effLine}</div>
+        ${capLine}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* =================== CARDS =================== */
+function renderCards() {
+  return `
+    <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+      <button class="btn-primary" onclick="openCardModal()">+ Add card</button>
+      <button class="btn-secondary" onclick="openCardImport()">↑ Import card JSON</button>
+    </div>
+    ${data.cards.length ? data.cards.map((card,ci)=>renderCardTile(card,ci)).join('') :
+      `<div class="empty"><div class="icon">▤</div>No cards added yet</div>`}`;
+}
+
+function renderCardTile(card, ci) {
+  const capBars = (card.bonusRules||[]).filter(r=>r.monthlyCap).map(rule => {
+    const pct = Math.min(1, (Number(rule.currentSpend)||0)/Number(rule.monthlyCap));
+    const cls = pct >= 0.95 ? 'danger' : pct >= 0.8 ? 'warn' : '';
+    return `<div class="cap-bar-item">
+      <div class="cap-bar-label"><span>${rule.category||rule.mcc||'Bonus'}</span><span class="tabnum">$${fmtAmt(rule.currentSpend||0)} / $${fmtAmt(rule.monthlyCap)}</span></div>
+      <div class="cap-bar-track"><div class="cap-bar-fill ${cls}" style="width:${Math.round(pct*100)}%"></div></div>
+    </div>`;
+  }).join('');
+
+  const partners = (card.transferPartners||[]).map(tp =>
+    `<span style="background:#1C2F45;border-radius:4px;padding:2px 8px;font-size:11.5px;margin-right:4px;">${tp.partner} ${tp.ratio}:1</span>`
+  ).join('');
+
+  const hasExpiredPromo = (card.currentPromotions||[]).some(p => p.expiry && new Date(p.expiry) < new Date());
+
+  return `<div class="card-tile">
+    <div class="card-top">
+      <div>
+        <div class="card-name">${card.name} ${hasExpiredPromo?'<span class="badge badge-overdue">Promo expired</span>':''}</div>
+        <div class="card-meta">${card.issuer||'—'} · ${profileLabel(card.profile)} · Cycle day ${card.cycleDate||'—'}</div>
+        <div style="margin-top:6px;font-size:12px;color:#8AABBF;">Base rate: <strong style="color:#F0F4F8;">${card.baseRate||0} pts/$</strong>${card.pointsCurrency?' &nbsp;·&nbsp; <span style="color:#4A6580;">'+card.pointsCurrency+'</span>':''}</div>
+        ${partners ? `<div style="margin-top:8px;">${partners}</div>` : ''}
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-secondary" style="font-size:12px;padding:6px 12px;" onclick="openCardEditModal(${ci})">Edit</button>
+        <button class="btn-danger" onclick="deleteCard(${ci})">✕</button>
+      </div>
+    </div>
+    ${capBars ? `<div class="cap-bars">${capBars}</div>` : ''}
+    ${(card.currentPromotions||[]).length ? `<div style="margin-top:12px;font-size:12px;color:#8AABBF;">
+      Promos: ${card.currentPromotions.map(p=>`<span style="color:${new Date(p.expiry)<new Date()?'#EF4444':'#F59E0B'};">${p.name} (exp ${p.expiry})</span>`).join(', ')}
+    </div>` : ''}
+  </div>`;
+}
+
+function openCardModal(prefill) {
+  const profiles = ['marvin','wife','joint'].map(p=>`<option value="${p}" ${p===(prefill?.profile||'marvin')?'selected':''}>${profileLabel(p)}</option>`).join('');
+  showModal(`
+    <h3>${prefill?'Edit':'Add'} Card</h3>
+    <div class="form-grid">
+      <div class="form-row"><label>Card name</label><input id="c-name" type="text" value="${prefill?.name||''}" placeholder="DBS Altitude"/></div>
+      <div class="form-row"><label>Issuer</label><input id="c-issuer" type="text" value="${prefill?.issuer||''}" placeholder="DBS"/></div>
+    </div>
+    <div class="form-grid">
+      <div class="form-row"><label>Profile</label><select id="c-profile">${profiles}</select></div>
+      <div class="form-row"><label>Billing cycle day</label><input id="c-cycle" type="number" min="1" max="31" value="${prefill?.cycleDate||'22'}" /></div>
+    </div>
+    <div class="form-grid">
+      <div class="form-row"><label>Base earn rate (pts/$)</label><input id="c-base" type="number" step="0.1" value="${prefill?.baseRate||'1'}" /></div>
+      <div class="form-row"><label>Points currency</label><input id="c-pts" type="text" value="${prefill?.pointsCurrency||''}" placeholder="DBS Points" /></div>
+    </div>
+    <div class="form-row"><label>Source / T&amp;C URL</label><input id="c-url" type="url" value="${prefill?.sourceUrl||''}" /></div>
+    <p style="font-size:12px;color:#4A6580;margin:16px 0 4px;">Bonus rules, transfer partners, and promotions can be added after saving, or via card JSON import.</p>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveCard(${prefill?`'edit',${data.cards.indexOf(prefill)}`:'null,null'})">Save card</button>
+    </div>
+  `);
+}
+
+function openCardEditModal(ci) {
+  openCardModal(data.cards[ci]);
+}
+
+function saveCard(mode, ci) {
+  const card = {
+    name: document.getElementById('c-name').value,
+    issuer: document.getElementById('c-issuer').value,
+    profile: document.getElementById('c-profile').value,
+    cycleDate: document.getElementById('c-cycle').value,
+    baseRate: parseFloat(document.getElementById('c-base').value)||1,
+    pointsCurrency: document.getElementById('c-pts').value,
+    sourceUrl: document.getElementById('c-url').value,
+  };
+  if (mode === 'edit' && ci !== null) {
+    card.bonusRules = data.cards[ci].bonusRules || [];
+    card.transferPartners = data.cards[ci].transferPartners || [];
+    card.currentPromotions = data.cards[ci].currentPromotions || [];
+    card.lastUpdated = data.cards[ci].lastUpdated;
+    data.cards[ci] = card;
+  } else {
+    card.bonusRules = [];
+    card.transferPartners = [];
+    card.currentPromotions = [];
+    card.lastUpdated = today();
+    data.cards.push(card);
+  }
+  closeModal(); saveToDrive(); render();
+}
+
+function deleteCard(ci) { data.cards.splice(ci,1); render(); }
+
+function openCardImport() {
+  showModal(`
+    <h3>Import card JSON</h3>
+    <p style="font-size:13px;color:#8AABBF;margin-bottom:14px;">Paste a card JSON block (generated by the sync methodology). The app will merge it into the matching card by name, or add it as new.</p>
+    <div class="form-row"><label>Card JSON</label><textarea id="import-json" rows="10" style="font-family:monospace;font-size:12px;" placeholder='{"name":"DBS Altitude","bonusRules":[...],...}'></textarea></div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="doCardImport()">Import &amp; merge</button>
+    </div>
+  `);
+}
+
+function doCardImport() {
+  try {
+    const incoming = JSON.parse(document.getElementById('import-json').value);
+    if (!incoming.name) throw new Error('Missing card name');
+    const idx = data.cards.findIndex(c => c.name.toLowerCase() === incoming.name.toLowerCase());
+    if (idx >= 0) {
+      data.cards[idx] = { ...data.cards[idx], ...incoming, lastUpdated: today() };
+    } else {
+      data.cards.push({ ...incoming, lastUpdated: today(), bonusRules: incoming.bonusRules||[], transferPartners: incoming.transferPartners||[], currentPromotions: incoming.currentPromotions||[] });
+    }
+    closeModal(); saveToDrive(); render();
+  } catch(e) { alert('Invalid JSON: ' + e.message); }
+}
+
+/* =================== MERCHANTS =================== */
+function renderMerchants() {
+  return `
+    <div style="margin-bottom:20px;"><button class="btn-primary" onclick="openMerchantModal()">+ Add merchant</button></div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Merchant</th><th>MCC</th><th>Category</th><th>Notes</th><th></th></tr></thead>
+        <tbody>${data.merchants.length ? data.merchants.map((m,i)=>`
+          <tr>
+            <td style="font-weight:600;">${m.name}</td>
+            <td class="tabnum text-muted">${m.mcc||'—'}</td>
+            <td>${m.category||'—'}</td>
+            <td style="color:#8AABBF;font-size:12px;">${m.notes||'—'}</td>
+            <td><button class="btn-danger" onclick="deleteMerchant(${i})">✕</button></td>
+          </tr>`).join('') : `<tr><td colspan="5"><div class="empty"><div class="icon">◈</div>Add merchants you frequent to enable Smart Spend lookup</div></td></tr>`}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function openMerchantModal() {
+  showModal(`
+    <h3>Add Merchant</h3>
+    <div class="form-row"><label>Merchant name</label><input id="mer-name" type="text" placeholder="Cold Storage" /></div>
+    <div class="form-grid">
+      <div class="form-row"><label>MCC code</label><input id="mer-mcc" type="text" placeholder="5411" /></div>
+      <div class="form-row"><label>Category</label><input id="mer-cat" type="text" placeholder="Grocery" /></div>
+    </div>
+    <div class="form-row"><label>Notes</label><input id="mer-notes" type="text" placeholder="Optional notes…" /></div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveMerchant()">Add merchant</button>
+    </div>
+  `);
+}
+
+function saveMerchant() {
+  data.merchants.push({
+    id: uid(),
+    name: document.getElementById('mer-name').value,
+    mcc: document.getElementById('mer-mcc').value,
+    category: document.getElementById('mer-cat').value,
+    notes: document.getElementById('mer-notes').value,
+  });
+  closeModal(); saveToDrive(); render();
+}
+
+function deleteMerchant(i) { data.merchants.splice(i,1); render(); }
+
+/* =================== SETTINGS =================== */
+function renderSettings() {
+  const vals = data.settings.mile_valuations || {};
+  const rows = Object.entries(vals).map(([k,v],i) => `
+    <tr>
+      <td style="font-weight:600;">${k}</td>
+      <td class="tabnum">${v}¢ SGD</td>
+      <td><button class="btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="editValuation('${k}',${v})">Edit</button>
+          <button class="btn-danger" onclick="deleteValuation('${k}')">✕</button></td>
+    </tr>`).join('');
+
+  return `
+    <div class="section-header"><h2>Mile valuations</h2><button class="btn-primary" onclick="openValuationModal()">+ Add partner</button></div>
+    <p style="font-size:13px;color:#8AABBF;margin-bottom:16px;">Valuation in SGD cents per mile, used by the Smart Spend recommendation engine.</p>
+    <div class="table-wrap" style="margin-bottom:32px;">
+      <table class="data-table">
+        <thead><tr><th>Partner</th><th>Value (¢/mile)</th><th></th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="3"><div class="empty">No valuations set</div></td></tr>`}</tbody>
+      </table>
+    </div>
+    <div class="section-header"><h2>Data management</h2></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn-secondary" onclick="exportData()">↓ Export JSON</button>
+      <button class="btn-secondary" onclick="triggerImport()">↑ Import JSON</button>
+    </div>
+    <input type="file" id="file-import" accept=".json" style="display:none" onchange="handleImport(event)">`;
+}
+
+function openValuationModal(prefill) {
+  showModal(`
+    <h3>${prefill?'Edit':'Add'} mile valuation</h3>
+    <div class="form-row"><label>Partner name</label><input id="val-partner" type="text" value="${prefill?.partner||''}" placeholder="KrisFlyer" /></div>
+    <div class="form-row"><label>Value (SGD cents per mile)</label><input id="val-val" type="number" step="0.1" value="${prefill?.val||1.5}" /></div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveValuation('${prefill?.partner||''}')">Save</button>
+    </div>
+  `);
+}
+
+function editValuation(partner, val) { openValuationModal({partner,val}); }
+
+function saveValuation(oldPartner) {
+  const partner = document.getElementById('val-partner').value;
+  const val = parseFloat(document.getElementById('val-val').value)||0;
+  if (oldPartner && oldPartner !== partner) delete data.settings.mile_valuations[oldPartner];
+  data.settings.mile_valuations[partner] = val;
+  closeModal(); saveToDrive(); render();
+}
+
+function deleteValuation(partner) {
+  delete data.settings.mile_valuations[partner]; render();
+}
+
+function exportData() {
+  computeUpcoming();
+  const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = DRIVE_FILE; a.click();
+}
+
+function triggerImport() { document.getElementById('file-import')?.click(); }
+
+function handleImport(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      data = JSON.parse(ev.target.result);
+      saveToDrive(); render();
+    } catch(err) { alert('Invalid JSON file'); }
+  };
+  reader.readAsText(file);
+}
+
+/* =================== MODAL UTILS =================== */
+function showModal(html) {
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+      <div class="modal">${html}</div>
+    </div>`;
+}
+function closeModal() {
+  document.getElementById('modal-container').innerHTML = '';
+}
+
+/* =================== INIT =================== */
+window.onload = () => {
+  const gapi_script = document.createElement('script');
+  gapi_script.src = 'https://apis.google.com/js/api.js';
+  gapi_script.onload = gapiInit;
+  document.head.appendChild(gapi_script);
+
+  const gsi_script = document.createElement('script');
+  gsi_script.src = 'https://accounts.google.com/gsi/client';
+  document.head.appendChild(gsi_script);
+};
+</script>
+</body>
+</html>
