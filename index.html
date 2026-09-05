@@ -297,8 +297,8 @@
     <div class="nav-section">Profiles</div>
     <div class="nav-item" onclick="navigate('profile','marvin')"><span class="icon">👤</span> Marvin</div>
     <div class="nav-item" onclick="navigate('profile','wife')"><span class="icon">👤</span> Caroline</div>
+    <div class="nav-item" onclick="navigate('profile','cobae')"><span class="icon">👤</span> Cobae</div>
     <div class="nav-item" onclick="navigate('profile','joint')"><span class="icon">🏠</span> Joint</div>
-    <div class="nav-item" onclick="navigate('profile','cobae')"><span class="icon">✈</span> Cobae</div>
     <div class="nav-section">Tools</div>
     <div class="nav-item" onclick="navigate('smartspend')"><span class="icon">✦</span> Smart Spend</div>
     <div class="nav-item" onclick="navigate('cards')"><span class="icon">▤</span> Cards</div>
@@ -569,7 +569,7 @@ function navigate(view, sub) {
   const navItems = document.querySelectorAll('.nav-item');
   if (view === 'dashboard') navItems[0]?.classList.add('active');
   else if (view === 'profile') {
-    const idx = { marvin: 1, wife: 2, joint: 3, cobae: 4 }[currentProfile];
+    const idx = { marvin: 1, wife: 2, cobae: 3, joint: 4 }[currentProfile];
     navItems[idx]?.classList.add('active');
   } else if (view === 'smartspend') navItems[4]?.classList.add('active');
   else if (view === 'cards') navItems[5]?.classList.add('active');
@@ -699,6 +699,7 @@ function dashSmartSearch() {
 
 /* =================== PROFILE VIEW =================== */
 function renderProfile(profile) {
+  if (!data.profiles[profile]) data.profiles[profile] = { bills: [], subscriptions: [] };
   const p = data.profiles[profile];
   const bills = p.bills || [];
   const subs = p.subscriptions || [];
@@ -787,7 +788,7 @@ function openBillModal(profile, type) {
   const isSub = type === 'sub';
   const cardOptions = data.cards.filter(c => c.profile === profile || c.profile === 'joint')
     .map(c => `<option value="${c.name}">${c.name}</option>`).join('');
-  const profileOptions = ['marvin','wife','joint','cobae'].map(p =>
+  const profileOptions = ['marvin','wife','cobae','joint'].map(p =>
     `<option value="${p}" ${p===profile?'selected':''}>${profileLabel(p)}</option>`).join('');
 
   showModal(`
@@ -992,7 +993,7 @@ function renderCardTile(card, ci) {
 }
 
 function openCardModal(prefill) {
-  const profiles = ['marvin','wife','joint','cobae'].map(p=>`<option value="${p}" ${p===(prefill?.profile||'marvin')?'selected':''}>${profileLabel(p)}</option>`).join('');
+  const profiles = ['marvin','wife','cobae','joint'].map(p=>`<option value="${p}" ${p===(prefill?.profile||'marvin')?'selected':''}>${profileLabel(p)}</option>`).join('');
   showModal(`
     <h3>${prefill?'Edit':'Add'} Card</h3>
     <div class="form-grid">
