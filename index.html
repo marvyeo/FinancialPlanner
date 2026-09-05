@@ -928,7 +928,7 @@ function buildRecommendations(q) {
       ? `<div class="cap ${capWarn?'cap-warn':''}">Cap remaining: $${fmtAmt(r.capRemaining)}</div>`
       : '';
     return `<div class="rec-row ${isCapped?'opacity-50':''}">
-      <div class="rec-rank ${i===0?'gold'':''}">${i+1}</div>
+      <div class="rec-rank ${i===0?'gold':''}">${i+1}</div>
       <div class="rec-body">
         <div class="rec-card-name">${r.card.name} <span style="font-size:11px;color:#4A6580;font-weight:400;">(${profileLabel(r.card.profile)})</span></div>
         <div class="rec-detail">${milesLine}${isCapped?' — <span class="text-red">Cap reached</span>':''}</div>
