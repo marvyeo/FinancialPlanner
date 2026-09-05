@@ -690,7 +690,7 @@ function renderDashboard() {
 }
 
 function dashSmartSearch() {
-  const q = document.getElementById('dash-merchant-search')?.value?.toLowerCase() || '';
+  const q = (document.getElementById('dash-merchant-search')?.value || '').toLowerCase().trim();
   const out = document.getElementById('dash-rec-output');
   if (!out) return;
   if (!q) { out.innerHTML = ''; return; }
@@ -715,8 +715,9 @@ function renderProfile(profile) {
       <td>${b.recurrence||'monthly'}</td>
       <td>${b.paymentMethod||'—'}</td>
       <td>${statusBadge(st)}</td>
-      <td style="white-space:nowrap">
+      <td style="white-space:nowrap;display:flex;gap:4px;align-items:center;">
         ${st!=='paid' ? `<button class="btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="markPaid('${profile}','bill',${i})">Mark paid</button>` : ''}
+        <button class="btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="openEditBillModal('${profile}','bill',${i})">Edit</button>
         <button class="btn-danger" onclick="deleteBill('${profile}','bill',${i})">✕</button>
       </td>
     </tr>`;}).join('') : `<tr><td colspan="7"><div class="empty"><div class="icon">📋</div>No bills added yet</div></td></tr>`;
@@ -730,8 +731,9 @@ function renderProfile(profile) {
       <td>${b.paymentMethod||'—'}</td>
       <td>${b.category||'—'}</td>
       <td>${statusBadge(st)}</td>
-      <td>
+      <td style="white-space:nowrap;display:flex;gap:4px;align-items:center;">
         ${st!=='paid' ? `<button class="btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="markPaid('${profile}','sub',${i})">Mark paid</button>` : ''}
+        <button class="btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="openEditBillModal('${profile}','sub',${i})">Edit</button>
         <button class="btn-danger" onclick="deleteBill('${profile}','sub',${i})">✕</button>
       </td>
     </tr>`;}).join('') : `<tr><td colspan="7"><div class="empty"><div class="icon">🔄</div>No subscriptions added yet</div></td></tr>`;
@@ -867,7 +869,12 @@ function generateBillingReminders(cardName, profile) {
       ? today3.getFullYear() + Math.floor((today3.getMonth() + m) / 12)
       : today3.getFullYear();
     const mo = (today3.getMonth() + m) % 12;
-    const dueDate = new Date(yr, mo, Math.min(cycleDay, new Date(yr, mo+1, 0).getDate()));
+    const statementDay = Math.min(cycleDay, new Date(yr, mo+1, 0).getDate());
+    const statementDate = new Date(yr, mo, statementDay);
+    // Payment due = statement date + grace period days
+    const graceDays = parseInt(card.gracePeriodDays)||0;
+    const dueDate = new Date(statementDate);
+    dueDate.setDate(dueDate.getDate() + graceDays);
     const dueDateStr = dueDate.toISOString().slice(0,10);
     const dueMo = dueDateStr.slice(0,7); // YYYY-MM
     // Check if any bill for this card already exists in this month
@@ -954,6 +961,63 @@ function saveBill(type) {
   };
   if (type === 'sub') data.profiles[profile].subscriptions.push(bill);
   else data.profiles[profile].bills.push(bill);
+  closeModal();
+  saveToDrive();
+  render();
+}
+
+function openEditBillModal(profile, type, idx) {
+  const list = type === 'bill' ? data.profiles[profile].bills : data.profiles[profile].subscriptions;
+  const b = list[idx];
+  const isSub = type === 'sub';
+  const cardOptions = data.cards.filter(c => c.profile === profile || c.profile === 'joint')
+    .map(c => `<option value="${c.name}" ${c.name===b.paymentMethod?'selected':''}>${c.name}</option>`).join('');
+  const profileOptions = ['marvin','wife','cobae','joint'].map(p =>
+    `<option value="${p}" ${p===profile?'selected':''}>${profileLabel(p)}</option>`).join('');
+  const recOptions = ['monthly','quarterly','annual'].map(r =>
+    `<option value="${r}" ${r===(b.recurrence||'monthly')?'selected':''}>${r.charAt(0).toUpperCase()+r.slice(1)}</option>`).join('');
+  showModal(`
+    <h3>Edit ${isSub ? 'Subscription' : 'Bill'}</h3>
+    <div class="form-grid">
+      <div class="form-row"><label>Name</label><input id="m-name" type="text" value="${b.name||''}" /></div>
+      <div class="form-row"><label>Amount (SGD)</label><input id="m-amount" type="number" step="0.01" value="${b.amount||0}" /></div>
+    </div>
+    <div class="form-grid">
+      <div class="form-row"><label>Due date</label><input id="m-due" type="date" value="${b.dueDate||today()}" /></div>
+      <div class="form-row"><label>Recurrence</label><select id="m-rec">${recOptions}</select></div>
+    </div>
+    <div class="form-grid">
+      <div class="form-row"><label>Category</label><input id="m-cat" type="text" value="${b.category||''}" /></div>
+      <div class="form-row"><label>Profile</label><select id="m-profile">${profileOptions}</select></div>
+    </div>
+    <div class="form-row"><label>Payment method</label><select id="m-pay"><option value="Cash" ${b.paymentMethod==='Cash'?'selected':''}>Cash</option>${cardOptions}</select></div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="updateBill('${profile}','${type}',${idx})">Save changes</button>
+    </div>
+  `);
+}
+
+function updateBill(profile, type, idx) {
+  const list = type === 'bill' ? data.profiles[profile].bills : data.profiles[profile].subscriptions;
+  const newProfile = document.getElementById('m-profile').value;
+  const updated = {
+    ...list[idx],
+    name: document.getElementById('m-name').value,
+    amount: parseFloat(document.getElementById('m-amount').value)||0,
+    dueDate: document.getElementById('m-due').value,
+    recurrence: document.getElementById('m-rec').value,
+    category: document.getElementById('m-cat').value,
+    paymentMethod: document.getElementById('m-pay').value,
+  };
+  list.splice(idx, 1);
+  // If profile changed, move to new profile
+  if (newProfile !== profile) {
+    const targetList = type === 'bill' ? data.profiles[newProfile].bills : data.profiles[newProfile].subscriptions;
+    targetList.push(updated);
+  } else {
+    list.splice(idx, 0, updated);
+  }
   closeModal();
   saveToDrive();
   render();
@@ -1111,7 +1175,17 @@ function buildRecsForMerchant(merchant, q) {
 
 function buildRecommendations(q) {
   if (!data.cards.length) return `<div class="empty" style="padding:20px;"><div class="icon">▤</div>No cards added yet — add cards in the Cards view first.</div>`;
-  // If multiple merchants match (multi-MCC), show disambiguation
+  const allMerchantPool = [...SG_MERCHANTS, ...data.merchants];
+  const matchedMerchants = allMerchantPool.filter(m =>
+    m.name.toLowerCase().includes(q) ||
+    (m.mcc && m.mcc.includes(q)) ||
+    (m.category||'').toLowerCase().includes(q) ||
+    (m.service||'').toLowerCase().includes(q)
+  );
+  const merchant = matchedMerchants[0] || null;
+  if (!merchant && !q.match(/^\d+$/)) {
+    return `<div style="padding:14px;font-size:13px;color:#4A6580;">No merchant found for "<strong style="color:#8AABBF;">${q}</strong>" — try an MCC code directly, or add this merchant in the <a href="#" onclick="navigate('merchants')" style="color:#00C896;">Merchants page</a>.</div>`;
+  }
   if (matchedMerchants.length > 1) {
     const disambig = matchedMerchants.map(m =>
       `<button class="btn-secondary" style="margin:3px;font-size:12px;" onclick="document.getElementById('ss-search').value='${m.mcc}';ssSearch()">
@@ -1119,7 +1193,7 @@ function buildRecommendations(q) {
       </button>`
     ).join('');
     return `<div style="margin-bottom:14px;padding:12px 14px;background:#0D1B2A;border:1px solid #2A4A6B;border-radius:8px;">
-      <div style="font-size:12px;color:#8AABBF;margin-bottom:8px;">Multiple services found — select one for precise recommendations:</div>
+      <div style="font-size:12px;color:#8AABBF;margin-bottom:8px;">Multiple services found for "<strong style="color:#F0F4F8;">${q}</strong>" — pick the right one:</div>
       ${disambig}
     </div>` + buildRecsForMerchant(merchant, q);
   }
@@ -1208,7 +1282,7 @@ function renderCardTile(card, ci) {
             <span style="background:#1C3A52;color:#00C896;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:0.04em;">${profileLabel(card.profile)}</span>
             ${hasExpiredPromo?'<span class="badge badge-overdue">Promo expired</span>':''}
           </div>
-          <div class="card-meta">${card.issuer||'—'} · ${cycleTypeLabel} · Resets day ${card.cycleDate||'?'} · Tracked on ${{'transaction':'transaction date','posting':'posting date','calendar':'calendar month','statement':'statement month'}[card.cycleType||'calendar']||'calendar month'}</div>
+          <div class="card-meta">${card.issuer||'—'} · ${cycleTypeLabel} · Statement day ${card.cycleDate||'?'}${card.gracePeriodDays?' · Payment due +'+card.gracePeriodDays+'d':''}</div>
           <div style="margin-top:6px;font-size:12px;color:#8AABBF;">Base rate: <strong style="color:#F0F4F8;">${card.baseRate||0} pts/$</strong>${card.pointsCurrency?' &nbsp;·&nbsp; <span style="color:#4A6580;">'+card.pointsCurrency+'</span>':''}</div>
           ${partners ? `<div style="margin-top:8px;">${partners}</div>` : ''}
         </div>
@@ -1251,8 +1325,9 @@ function openCardModal(prefill) {
           <option value="posting" ${(prefill?.cycleType)==='posting'?'selected':''}>Posting date</option>
         </select>
       </div>
-      <div class="form-row"><label>Source / T&amp;C URL</label><input id="c-url" type="url" value="${prefill?.sourceUrl||''}" /></div>
+      <div class="form-row"><label>Grace period (days after cycle date)</label><input id="c-grace" type="number" min="0" max="60" value="${prefill?.gracePeriodDays||0}" placeholder="e.g. 26 for DBS (statement 12th, pay by 7th next month)" /></div>
     </div>
+    <div class="form-row"><label>Source / T&amp;C URL</label><input id="c-url" type="url" value="${prefill?.sourceUrl||''}" /></div>
     <p style="font-size:12px;color:#4A6580;margin:16px 0 4px;">Bonus rules, transfer partners, and promotions can be added after saving, or via card JSON import.</p>
     <div class="modal-footer">
       <button class="btn-secondary" onclick="closeModal()">Cancel</button>
@@ -1274,6 +1349,7 @@ function saveCard(mode, ci) {
     baseRate: parseFloat(document.getElementById('c-base').value)||1,
     pointsCurrency: document.getElementById('c-pts').value,
     cycleType: document.getElementById('c-cycletype').value,
+    gracePeriodDays: parseInt(document.getElementById('c-grace').value)||0,
     sourceUrl: document.getElementById('c-url').value,
   };
   if (mode === 'edit' && ci !== null) {
