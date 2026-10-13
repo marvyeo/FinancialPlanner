@@ -10,6 +10,7 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://apis.google.com/js/api.js"></script>
 <script src="https://accounts.google.com/gsi/client"></script>
+<script src="engine.js"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -270,6 +271,42 @@
   }
   .hamburger { display: none; }
   @media (max-width: 768px) { .hamburger { display: block; } }
+
+  /* Engine UI */
+  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    padding: 6px 12px; border-radius: 20px; font-size: 12.5px; font-weight: 500; cursor: pointer;
+    border: 1px solid #2A4A6B; color: #8AABBF; background: transparent; transition: all .15s; user-select: none;
+  }
+  .chip:hover { border-color: #4A6580; color: #F0F4F8; }
+  .chip.on { background: #1C3A52; border-color: #00C896; color: #00C896; }
+  .hint { font-size: 11.5px; color: #4A6580; margin-top: 4px; }
+  .pill { display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 10.5px; font-weight: 600; letter-spacing: .02em; }
+  .pill-green { background: #0D2A1E; color: #00C896; }
+  .pill-amber { background: #2D2A12; color: #F59E0B; }
+  .pill-red { background: #3A1212; color: #EF4444; }
+  .pill-blue { background: #1A2040; color: #7B9FD4; }
+  .rec-row.selectable { cursor: pointer; border-radius: 8px; padding-left: 8px; padding-right: 8px; }
+  .rec-row.selectable:hover { background: #111f2e; }
+  .rec-row.chosen { background: #102536; outline: 1px solid #00C896; }
+  .reason { font-size: 12.5px; color: #8AABBF; background: #0D1B2A; border: 1px solid #1C2F45; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+  .bar-row { display: grid; grid-template-columns: 140px 1fr 90px; gap: 10px; align-items: center; font-size: 12.5px; margin-bottom: 7px; }
+  .bar-track { height: 8px; background: #1C2F45; border-radius: 4px; overflow: hidden; }
+  .bar-fill { height: 100%; background: #00C896; border-radius: 4px; }
+  .banner { background: #102536; border: 1px solid #1F5070; border-radius: 10px; padding: 12px 16px; margin-bottom: 18px; font-size: 13px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #102536; border: 1px solid #00C896; color: #F0F4F8; padding: 10px 18px; border-radius: 8px; font-size: 13px; z-index: 400; display: none; max-width: 90vw; }
+  .modal.wide { max-width: 980px; }
+  .mini-table td, .mini-table th { padding: 6px 8px !important; font-size: 12px !important; }
+  .mini-table input, .mini-table select { background: #0D1B2A; border: 1px solid #2A4A6B; color: #F0F4F8; border-radius: 5px; padding: 4px 6px; font-size: 12px; width: 100%; }
+  .cond-row { font-size: 11.5px; color: #8AABBF; display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; }
+  .tabs-scroll { overflow-x: auto; }
+  .form-grid.sf-top { grid-template-columns: 2fr 1fr; }
+  .form-grid.sf-top.with-date { grid-template-columns: 2fr 1fr 1fr; }
+  @media (max-width: 768px) {
+    .form-grid.sf-top, .form-grid.sf-top.with-date { grid-template-columns: 1fr 1fr; gap: 0 12px; }
+    .sf-top .sf-merchant { grid-column: 1 / -1; }
+  }
+  @media (max-width: 768px) { .bar-row { grid-template-columns: 100px 1fr 70px; } .modal { padding: 20px 18px; } }
 </style>
 </head>
 <body>
@@ -293,18 +330,20 @@
   <div class="logo">FP<span> / Financial Planner</span></div>
   <div style="padding:8px 4px;">
     <div class="nav-section">Overview</div>
-    <div class="nav-item active" onclick="navigate('dashboard')"><span class="icon">⊞</span> Dashboard</div>
+    <div class="nav-item active" data-nav="dashboard" onclick="navigate('dashboard')"><span class="icon">⊞</span> Dashboard</div>
+    <div class="nav-item" data-nav="spend" onclick="navigate('spend')"><span class="icon">≡</span> Spending</div>
     <div class="nav-section">Profiles</div>
-    <div class="nav-item" onclick="navigate('profile','marvin')"><span class="icon">👤</span> Marvin</div>
-    <div class="nav-item" onclick="navigate('profile','wife')"><span class="icon">👤</span> Caroline</div>
-    <div class="nav-item" onclick="navigate('profile','cobae')"><span class="icon">👤</span> Cobae</div>
-    <div class="nav-item" onclick="navigate('profile','joint')"><span class="icon">🏠</span> Joint</div>
-    <div class="nav-section">Tools</div>
-    <div class="nav-item" onclick="navigate('smartspend')"><span class="icon">✦</span> Smart Spend</div>
-    <div class="nav-item" onclick="navigate('cards')"><span class="icon">▤</span> Cards</div>
-    <div class="nav-item" onclick="navigate('merchants')"><span class="icon">◈</span> Merchants</div>
+    <div class="nav-item" data-nav="profile:marvin" onclick="navigate('profile','marvin')"><span class="icon">👤</span> Marvin</div>
+    <div class="nav-item" data-nav="profile:wife" onclick="navigate('profile','wife')"><span class="icon">👤</span> Caroline</div>
+    <div class="nav-item" data-nav="profile:cobae" onclick="navigate('profile','cobae')"><span class="icon">👤</span> Cobae</div>
+    <div class="nav-item" data-nav="profile:joint" onclick="navigate('profile','joint')"><span class="icon">🏠</span> Joint</div>
+    <div class="nav-section">Card engine</div>
+    <div class="nav-item" data-nav="smartspend" onclick="navigate('smartspend')"><span class="icon">✦</span> Which card?</div>
+    <div class="nav-item" data-nav="strategy" onclick="navigate('strategy')"><span class="icon">◎</span> Strategy</div>
+    <div class="nav-item" data-nav="cards" onclick="navigate('cards')"><span class="icon">▤</span> Cards</div>
+    <div class="nav-item" data-nav="merchants" onclick="navigate('merchants')"><span class="icon">◈</span> Merchants</div>
     <div class="nav-section">System</div>
-    <div class="nav-item" onclick="navigate('settings')"><span class="icon">⚙</span> Settings</div>
+    <div class="nav-item" data-nav="settings" onclick="navigate('settings')"><span class="icon">⚙</span> Settings</div>
   </div>
   <div class="drive-status" id="drive-status-sidebar">
     <span class="dot"></span><span id="drive-status-text">Not connected</span>
@@ -313,11 +352,11 @@
 
 <!-- Mobile nav -->
 <div id="mobile-nav">
-  <div class="mob-nav-btn active" onclick="navigate('dashboard')" id="mobnav-dashboard"><div class="icon">⊞</div>Home</div>
-  <div class="mob-nav-btn" onclick="navigate('profile','marvin')" id="mobnav-profile"><div class="icon">👤</div>Profile</div>
-  <div class="mob-nav-btn" onclick="navigate('smartspend')" id="mobnav-smartspend"><div class="icon">✦</div>Smart Spend</div>
-  <div class="mob-nav-btn" onclick="navigate('cards')" id="mobnav-cards"><div class="icon">▤</div>Cards</div>
-  <div class="mob-nav-btn" onclick="navigate('settings')" id="mobnav-settings"><div class="icon">⚙</div>Settings</div>
+  <div class="mob-nav-btn active" data-nav="dashboard" onclick="navigate('dashboard')"><div class="icon">⊞</div>Home</div>
+  <div class="mob-nav-btn" data-nav="smartspend" onclick="navigate('smartspend')"><div class="icon">✦</div>Which card</div>
+  <div class="mob-nav-btn" onclick="openExpenseModal()"><div class="icon" style="color:#00C896;">⊕</div>Add</div>
+  <div class="mob-nav-btn" data-nav="spend" onclick="navigate('spend')"><div class="icon">≡</div>Spending</div>
+  <div class="mob-nav-btn" data-nav="strategy" onclick="navigate('strategy')"><div class="icon">◎</div>Strategy</div>
 </div>
 
 <!-- Main -->
@@ -326,6 +365,7 @@
     <button class="hamburger btn-secondary" style="padding:6px 10px;font-size:16px;border:none;background:none;color:#8AABBF;" onclick="toggleSidebar()">☰</button>
     <h1 id="page-title">Dashboard</h1>
     <div style="margin-left:auto;display:flex;gap:8px;">
+      <button class="btn-primary" onclick="openExpenseModal()" style="font-size:12px;padding:6px 12px;">+ Expense</button>
       <button class="btn-secondary" id="save-btn" onclick="saveToDrive()" style="font-size:12px;padding:6px 12px;">
         <span id="save-icon">💾</span> Save
       </button>
@@ -336,6 +376,8 @@
 
 <!-- Modal container -->
 <div id="modal-container"></div>
+<div id="toast"></div>
+<datalist id="merchant-list"></datalist>
 
 <script>
 /* =================== GOOGLE OAUTH =================== */
@@ -388,6 +430,9 @@ async function handleSignIn() {
 async function onSignedIn() {
   sessionStorage.setItem('fp_access_token', accessToken);
   await Promise.all([loadFromDrive(), loadMerchantsDB()]);
+  await loadRules();
+  ensureEngineData();
+  rebuildMerchantDatalist();
   document.getElementById('auth-overlay').style.display = 'none';
   setDriveStatus(true);
   render();
@@ -405,11 +450,19 @@ const DEFAULT_DATA = {
   profiles: {
     marvin: { bills: [], subscriptions: [] },
     wife: { bills: [], subscriptions: [] },
+    cobae: { bills: [], subscriptions: [] },
     joint: { bills: [], subscriptions: [] }
   },
   cards: [],
   merchants: [],
-  settings: { mile_valuations: { KrisFlyer: 1.5, 'Asia Miles': 1.4, ThankYou: 1.2, 'Membership Rewards': 1.3 } },
+  transactions: [],        // expense ledger — drives caps, conditions and analytics
+  merchantMappings: [],    // learned statement descriptor → merchant/MCC
+  rulesState: {},          // applied rules.json copy + version history
+  settings: {
+    mile_valuations: { KrisFlyer: 1.5, 'Asia Miles': 1.4 },
+    policy: { mode: 'miles_first', cashbackGapCents: 2.5 },
+    household: { parents: ['marvin', 'wife'], crossUse: false }
+  },
   upcoming: []
 };
 let data = JSON.parse(JSON.stringify(DEFAULT_DATA));
@@ -511,29 +564,24 @@ function computeUpcoming() {
         app: 'financialplanner', priority: 'normal', url: GITHUB_URL
       });
     }
-    // Cap alerts
-    if (card.bonusRules) {
-      card.bonusRules.forEach(rule => {
-        if (rule.monthlyCap && rule.currentSpend) {
-          const pct = rule.currentSpend / rule.monthlyCap;
-          if (pct >= 0.8) {
-            items.push({
-              label: `${card.name} ${rule.category} cap — ${Math.round(pct*100)}% used ($${fmtAmt(rule.currentSpend)}/$${fmtAmt(rule.monthlyCap)})`,
-              date: billingDate.toISOString().slice(0,10), type: 'cap-alert',
-              app: 'financialplanner', priority: pct >= 0.95 ? 'high' : 'normal', url: GITHUB_URL
-            });
-          }
-        }
-      });
-    }
   });
+  // Cap alerts from the engine (ledger-based, resets automatically each cycle)
+  allCapAlerts().forEach(a => items.push({
+    label: `${a.card.name} — ${a.cap.label} cap ${Math.round(a.cap.pct*100)}% used (${a.cap.unit==='cashback'?'$'+fmtAmt(a.cap.used)+' cashback':'$'+fmtAmt(a.cap.used)}/${a.cap.unit==='cashback'?'$'+fmtAmt(a.cap.limit):'$'+fmtAmt(a.cap.limit)})`,
+    date: a.status.cycle.end, type: 'cap-alert', app: 'financialplanner',
+    priority: a.cap.pct >= 0.95 ? 'high' : 'normal', url: GITHUB_URL
+  }));
+  // Rules refresh available
+  if (RULES_PENDING) items.push({ label: `Card rules update ${RULES_PENDING.rulesVersion} ready to review`, date: today(), type: 'rules-update', app: 'financialplanner', priority: 'normal', url: GITHUB_URL });
   data.upcoming = items;
 }
 
 /* =================== HELPERS =================== */
 function fmtAmt(n) { return Number(n||0).toLocaleString('en-SG',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
-function today() { return new Date().toISOString().slice(0,10); }
+// Local (Singapore) date — toISOString() would return yesterday before 8am SGT
+function today() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function nextCycle(dateStr, recurrence) {
   const d = new Date(dateStr);
   if (recurrence === 'monthly') d.setMonth(d.getMonth()+1);
@@ -564,24 +612,12 @@ let currentProfile = 'marvin';
 function navigate(view, sub) {
   currentView = view;
   if (sub) currentProfile = sub;
-  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-  const map = { dashboard: 0, profile: [1,2,3], smartspend: 4, cards: 5, merchants: 6, settings: 7 };
-  const navItems = document.querySelectorAll('.nav-item');
-  if (view === 'dashboard') navItems[0]?.classList.add('active');
-  else if (view === 'profile') {
-    const idx = { marvin: 1, wife: 2, cobae: 3, joint: 4 }[currentProfile];
-    navItems[idx]?.classList.add('active');
-  } else if (view === 'smartspend') navItems[5]?.classList.add('active');
-  else if (view === 'cards') navItems[6]?.classList.add('active');
-  else if (view === 'merchants') navItems[7]?.classList.add('active');
-  else if (view === 'settings') navItems[8]?.classList.add('active');
-  // Mobile nav
-  document.querySelectorAll('.mob-nav-btn').forEach(el=>el.classList.remove('active'));
-  if (view === 'dashboard') document.getElementById('mobnav-dashboard')?.classList.add('active');
-  else if (view === 'smartspend') document.getElementById('mobnav-smartspend')?.classList.add('active');
-  else if (view === 'cards') document.getElementById('mobnav-cards')?.classList.add('active');
-  else if (view === 'settings') document.getElementById('mobnav-settings')?.classList.add('active');
+  // Highlight by data-nav key (no index maps — they broke when profiles were added)
+  const key = view === 'profile' ? 'profile:' + currentProfile : view;
+  document.querySelectorAll('.nav-item, .mob-nav-btn').forEach(el => el.classList.toggle('active', el.dataset.nav === key));
+  document.getElementById('sidebar').classList.remove('open');
   render();
+  window.scrollTo(0, 0);
 }
 
 function toggleSidebar() {
@@ -590,13 +626,17 @@ function toggleSidebar() {
 
 /* =================== RENDER DISPATCHER =================== */
 function render() {
-  const titles = { dashboard: 'Dashboard', smartspend: 'Smart Spend', cards: 'Cards', merchants: 'Merchants', settings: 'Settings' };
+  const titles = { dashboard: 'Dashboard', spend: 'Spending', smartspend: 'Which card?', strategy: 'Strategy', cards: 'Cards', merchants: 'Merchants', settings: 'Settings' };
   document.getElementById('page-title').textContent =
     currentView === 'profile' ? profileLabel(currentProfile) : titles[currentView] || '';
   const content = document.getElementById('page-content');
-  if (currentView === 'dashboard') content.innerHTML = renderDashboard();
+  // Re-run merchant resolution for forms that already have text, so hints and recs come back after re-render
+  const restoreForm = p => FORMS[p] && FORMS[p].merchantText ? spendFormMerchant(p) : spendFormRefresh(p);
+  if (currentView === 'dashboard') { content.innerHTML = renderDashboard(); restoreForm('dash'); }
   else if (currentView === 'profile') { content.innerHTML = renderProfile(currentProfile); renderProfileCaps(currentProfile); }
-  else if (currentView === 'smartspend') content.innerHTML = renderSmartSpend();
+  else if (currentView === 'smartspend') { content.innerHTML = renderSmartSpend(); restoreForm('ss'); }
+  else if (currentView === 'spend') content.innerHTML = renderSpend();
+  else if (currentView === 'strategy') content.innerHTML = renderStrategy();
   else if (currentView === 'cards') content.innerHTML = renderCards();
   else if (currentView === 'merchants') content.innerHTML = renderMerchants();
   else if (currentView === 'settings') content.innerHTML = renderSettings();
@@ -607,7 +647,8 @@ function renderDashboard() {
   const allBills = [
     ...data.profiles.marvin.bills, ...data.profiles.marvin.subscriptions,
     ...data.profiles.wife.bills, ...data.profiles.wife.subscriptions,
-    ...data.profiles.joint.bills, ...data.profiles.joint.subscriptions
+    ...data.profiles.joint.bills, ...data.profiles.joint.subscriptions,
+    ...(data.profiles.cobae?.bills||[]), ...(data.profiles.cobae?.subscriptions||[])
   ];
   const overdue = allBills.filter(b => billStatus(b) === 'overdue');
   const thisMonth = allBills.filter(b => {
@@ -648,8 +689,25 @@ function renderDashboard() {
       <td>${statusBadge(billStatus(b))}</td>
     </tr>`).join('') : `<tr><td colspan="4"><div class="empty" style="padding:24px">No bills due this week</div></td></tr>`;
 
+  const mtd = monthSummary(today().slice(0,7));
   return `
+    ${rulesBanner()}
     <div class="stat-row">
+      <div class="stat-card">
+        <div class="label">Spent this month</div>
+        <div class="value tabnum">$${fmtAmt(mtd.spend)}</div>
+        <div class="sub">${mtd.count} expense${mtd.count!==1?'s':''} logged</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Rewards this month</div>
+        <div class="value tabnum text-green">${Math.round(mtd.miles).toLocaleString()} mi</div>
+        <div class="sub">${mtd.cashback ? '+ $' + fmtAmt(mtd.cashback) + ' cashback' : 'miles across all cards'}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Missed by using the wrong card</div>
+        <div class="value tabnum ${mtd.missed > 0.5 ? 'text-amber' : 'text-green'}">$${fmtAmt(mtd.missed)}</div>
+        <div class="sub">${mtd.missed > 0.5 ? mtd.missedCount + ' expense' + (mtd.missedCount!==1?'s':'') + ' — see Spending' : 'Every card choice was optimal'}</div>
+      </div>
       <div class="stat-card">
         <div class="label">Due this month</div>
         <div class="value tabnum text-amber">$${fmtAmt(monthTotal)}</div>
@@ -665,20 +723,13 @@ function renderDashboard() {
         <div class="value tabnum">$${fmtAmt(subMonthly)}</div>
         <div class="sub">${monthSubs.length} active</div>
       </div>
-      <div class="stat-card">
-        <div class="label">Cards tracked</div>
-        <div class="value tabnum text-green">${data.cards.length}</div>
-        <div class="sub">across all profiles</div>
-      </div>
     </div>
     ${alerts}
-    <div class="section-header"><h2>Smart Spend — quick lookup</h2></div>
+    ${capAlertsHtml()}
+    <div class="section-header"><h2>Which card should I use?</h2><a href="#" onclick="navigate('strategy');return false;" style="font-size:12px;color:#00C896;">Full cheat sheet →</a></div>
     <div class="smart-spend-box">
-      <div class="smart-search">
-        <input type="text" id="dash-merchant-search" placeholder="Type a merchant or MCC…" oninput="dashSmartSearch()" />
-        <button class="btn-primary" onclick="dashSmartSearch()">Find best card</button>
-      </div>
-      <div id="dash-rec-output" style="margin-top:8px;"></div>
+      ${spendFormHtml('dash')}
+      <div id="dash-rec" style="margin-top:14px;"></div>
     </div>
     <div class="section-header"><h2>Due this week</h2></div>
     <div class="table-wrap">
@@ -687,14 +738,6 @@ function renderDashboard() {
         <tbody>${soonRows}</tbody>
       </table>
     </div>`;
-}
-
-function dashSmartSearch() {
-  const q = (document.getElementById('dash-merchant-search')?.value || '').toLowerCase().trim();
-  const out = document.getElementById('dash-rec-output');
-  if (!out) return;
-  if (!q) { out.innerHTML = ''; return; }
-  out.innerHTML = buildRecommendations(q);
 }
 
 /* =================== PROFILE VIEW =================== */
@@ -775,87 +818,23 @@ function renderProfileCaps(profile) {
   if (!el) return;
   const profCards = data.cards.filter(c => c.profile === profile);
   if (!profCards.length) {
-    el.innerHTML = '<span class="text-muted" style="font-size:13px;">No cards for this profile yet</span>';
+    el.innerHTML = profile === 'cobae' || profile === 'joint'
+      ? `<span class="text-muted" style="font-size:13px;">${profileLabel(profile)} expenses are paid with Marvin's and Caroline's cards — the engine picks the best one each time.</span>`
+      : '<span class="text-muted" style="font-size:13px;">No cards for this profile yet</span>';
     return;
   }
-  const cycleLabels = {transaction:'by transaction date',posting:'by posting date',calendar:'calendar month',statement:'statement month'};
+  // Engine-driven status: caps and conditions are computed from the expense ledger
   el.innerHTML = profCards.map(card => {
-    const rules = (card.bonusRules||[]).filter(r => r.monthlyCap);
-    const today3 = new Date();
-    const cycleDay = parseInt(card.cycleDate)||22;
-    let resetDate = new Date(today3.getFullYear(), today3.getMonth(), cycleDay);
-    if (resetDate <= today3) resetDate.setMonth(resetDate.getMonth()+1);
-    const daysLeft = Math.ceil((resetDate - today3) / 86400000);
-    const daysColor = daysLeft<=3 ? '#EF4444' : daysLeft<=7 ? '#F59E0B' : '#00C896';
-    const cycleLabel = cycleLabels[card.cycleType||'calendar'] || 'calendar month';
-    // Include threshold rules (no monthlyCap but have threshold)
-    const thresholdRules = (card.bonusRules||[]).filter(r => r.threshold && !r.monthlyCap);
-    const capBarsHtml = rules.map(rule => {
-      const pct = Math.min(1, (Number(rule.currentSpend)||0)/Number(rule.monthlyCap));
-      const cls = pct >= 0.95 ? 'danger' : pct >= 0.8 ? 'warn' : '';
-      const remaining = Math.max(0, Number(rule.monthlyCap) - Number(rule.currentSpend||0));
-      const warnCls = pct >= 0.8 ? 'cap-warn' : '';
-      return [
-        '<div class="cap-bar-item">',
-          '<div class="cap-bar-label">',
-            '<span>' + (rule.category||'Bonus') + '</span>',
-            '<span class="tabnum ' + warnCls + '">' + Math.round(pct*100) + '% — $' + fmtAmt(remaining) + ' left</span>',
-          '</div>',
-          '<div class="cap-bar-track"><div class="cap-bar-fill ' + cls + '" style="width:' + Math.round(pct*100) + '%"></div></div>',
-        '</div>'
-      ].join('');
-    }).join('') + thresholdRules.map(rule => {
-      const t = rule.threshold;
-      const spendPct = Math.min(1, (Number(rule.monthlyTotalSpend)||0) / t.minMonthlySpend);
-      const merchantPct = Math.min(1, (Number(rule.distinctMerchantCount)||0) / t.minDistinctMerchants);
-      const bothMet = spendPct >= 1 && merchantPct >= 1;
-      const spendCls = spendPct >= 1 ? '' : spendPct >= 0.7 ? 'warn' : 'danger';
-      const mchCls = merchantPct >= 1 ? '' : 'warn';
-      return [
-        '<div style="background:#0D1B2A;border:1px solid #1C2F45;border-radius:8px;padding:10px 12px;margin-top:8px;">',
-          '<div style="font-size:11px;font-weight:600;color:#4A6580;margin-bottom:8px;letter-spacing:0.04em;">THRESHOLD MECHANICS</div>',
-          '<div class="cap-bar-item" style="margin-bottom:6px;">',
-            '<div class="cap-bar-label">',
-              '<span>Monthly spend</span>',
-              '<span class="tabnum ' + (spendPct>=1?'text-green':'cap-warn') + '">$' + fmtAmt(rule.monthlyTotalSpend||0) + ' / $' + fmtAmt(t.minMonthlySpend) + (spendPct>=1?' ✓':''  ) + '</span>',
-            '</div>',
-            '<div class="cap-bar-track"><div class="cap-bar-fill ' + spendCls + '" style="width:' + Math.round(spendPct*100) + '%"></div></div>',
-          '</div>',
-          '<div class="cap-bar-item">',
-            '<div class="cap-bar-label">',
-              '<span>Distinct merchants</span>',
-              '<span class="tabnum ' + (merchantPct>=1?'text-green':'cap-warn') + '">' + (rule.distinctMerchantCount||0) + ' / ' + t.minDistinctMerchants + (merchantPct>=1?' ✓':'') + '</span>',
-            '</div>',
-            '<div class="cap-bar-track"><div class="cap-bar-fill ' + mchCls + '" style="width:' + Math.round(merchantPct*100) + '%"></div></div>',
-          '</div>',
-          '<div style="font-size:11px;color:' + (bothMet?'#00C896':'#F59E0B') + ';margin-top:8px;font-weight:600;">',
-            bothMet ? '✓ 10 mpd unlocked this month' : '⚠ Both conditions needed to unlock 10 mpd — currently earning base rate',
-          '</div>',
-        '</div>'
-      ].join('');
-    }).join('');
-    const safeCardName = card.name.replace(/'/g, '&#39;');
-    return [
-      '<div class="card-tile" style="margin-bottom:12px;">',
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:' + (rules.length?'12px':'0') + ';">',
-          '<div>',
-            '<div style="font-weight:700;font-size:14px;">' + card.name + '</div>',
-            '<div style="font-size:12px;color:#4A6580;margin-top:2px;">' + (card.issuer||'') +
-              ' · Resets in <strong style="color:' + daysColor + '">' + daysLeft + ' day' + (daysLeft!==1?'s':'') + '</strong>' +
-              ' · <span style="color:#4A6580;">' + cycleLabel + '</span>' +
-            '</div>',
-          '</div>',
-          '<button class="btn-secondary" style="font-size:11px;padding:5px 12px;"',
-            ' onclick="generateBillingReminders(this.dataset.card,this.dataset.profile)"',
-            ' data-card="' + safeCardName + '" data-profile="' + profile + '">Generate 12-mo bills</button>',
-        '</div>',
-        capBarsHtml ? '<div class="cap-bars">' + capBarsHtml + '</div>' : '<span style="font-size:12px;color:#2A4A6B;">No capped bonus categories</span>',
-      '</div>'
-    ].join('');
+    const safeCardName = esc(card.name);
+    return `<div class="card-tile" style="margin-bottom:12px;">
+      ${cardStatusHtml(card, { compact: false })}
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn-secondary" style="font-size:11px;padding:5px 12px;" onclick="openCardSettings('${card.id}')">Card settings</button>
+        <button class="btn-secondary" style="font-size:11px;padding:5px 12px;" onclick="generateBillingReminders(this.dataset.card,this.dataset.profile)" data-card="${safeCardName}" data-profile="${profile}">Generate 12-mo bills</button>
+      </div>
+    </div>`;
   }).join('');
 }
-
-
 
 function generateBillingReminders(cardName, profile) {
   const card = data.cards.find(c => c.name === cardName);
@@ -1050,156 +1029,6 @@ async function loadMerchantsDB() {
     console.warn('Drive merchants.json load failed', e);
   }
 }
-function renderSmartSpend() {
-  const allMerchants = [...SG_MERCHANTS, ...data.merchants];
-  const merchantRows = data.merchants.map((m,i) => `
-    <tr>
-      <td style="font-weight:600;">${m.name}</td>
-      <td class="tabnum text-muted">${m.mcc||'—'}</td>
-      <td>${m.category||'—'}</td>
-      <td style="color:#8AABBF;font-size:12px;">${m.notes||'—'}</td>
-      <td><button class="btn-danger" onclick="deleteMerchant(${i})">✕</button></td>
-    </tr>`).join('');
-
-  return `
-    <p style="font-size:13px;color:#8AABBF;margin-bottom:20px;line-height:1.6;">
-      Smart Spend answers one question: <strong style="color:#F0F4F8;">which card should I use right now?</strong>
-      Type a merchant name, service type, or MCC — it searches ${SG_MERCHANTS.length} SG merchants in the database plus your saved merchants, finds the right MCC, then ranks your cards by effective ¢/$ value after miles transfer.
-      Merchants with multiple MCCs (e.g. GrabCar vs GrabFood) appear as separate entries — pick the right service.
-      The <a href="#" onclick="navigate('merchants')" style="color:#00C896;">Merchants page</a> is where you add new merchants to the database.
-    </p>
-    <div class="section-header"><h2>Card recommendation</h2></div>
-    <div class="smart-spend-box">
-      <div class="smart-search">
-        <input type="text" id="ss-search" placeholder="e.g. Cold Storage, Netflix, Grab, MCC 5411…" oninput="ssSearch()" />
-        <button class="btn-primary" onclick="ssSearch()">Find best card</button>
-      </div>
-      <div id="ss-output" style="margin-top:16px;"></div>
-    </div>
-    <div class="section-header" style="margin-top:8px;"><h2>Your saved merchants</h2><button class="btn-primary" onclick="openMerchantModal()">+ Add merchant</button></div>
-    <p style="font-size:12px;color:#4A6580;margin-bottom:12px;">Add merchants not already in the built-in SG database, or to override a category/MCC.</p>
-    <div class="table-wrap">
-      <table class="data-table">
-        <thead><tr><th>Merchant</th><th>MCC</th><th>Category</th><th>Notes</th><th></th></tr></thead>
-        <tbody>${merchantRows || `<tr><td colspan="5"><div class="empty"><div class="icon">◈</div>No custom merchants yet — the SG database covers most common merchants already</div></td></tr>`}
-        </tbody>
-      </table>
-    </div>`;
-}
-
-function ssSearch() {
-  const q = (document.getElementById('ss-search')?.value||'').toLowerCase();
-  const out = document.getElementById('ss-output');
-  if (!out) return;
-  if (!q) { out.innerHTML = ''; return; }
-  out.innerHTML = buildRecommendations(q);
-}
-
-function buildRecsForMerchant(merchant, q) {
-  const targetMCC = merchant?.mcc || '';
-  const targetCat = merchant?.category?.toLowerCase() || q;
-
-  const recs = data.cards.map(card => {
-    let earnRate = Number(card.baseRate) || 1;
-    let matchedRule = null;
-    if (card.bonusRules) {
-      card.bonusRules.forEach(rule => {
-        if ((rule.mcc && targetMCC && rule.mcc === targetMCC) ||
-            (rule.category && rule.category.toLowerCase().includes(targetCat))) {
-          if (Number(rule.rate) > earnRate) {
-            earnRate = Number(rule.rate);
-            matchedRule = rule;
-          }
-        }
-      });
-    }
-    let bestMiles = 0, bestPartner = null, bestRatio = 1;
-    if (card.transferPartners) {
-      card.transferPartners.forEach(tp => {
-        const valuation = data.settings.mile_valuations[tp.partner] || 0;
-        const ratio = Number(tp.ratio) || 1;
-        const milesPerDollar = earnRate / ratio;
-        const sgdVal = milesPerDollar * valuation;
-        if (sgdVal > bestMiles) {
-          bestMiles = sgdVal;
-          bestPartner = tp.partner;
-          bestRatio = ratio;
-        }
-      });
-    }
-    const capRemaining = matchedRule?.monthlyCap ?
-      Math.max(0, Number(matchedRule.monthlyCap) - Number(matchedRule.currentSpend||0)) : null;
-    const capPct = matchedRule?.monthlyCap ? Number(matchedRule.currentSpend||0)/Number(matchedRule.monthlyCap) : 0;
-    return { card, earnRate, bestMiles, bestPartner, bestRatio, capRemaining, capPct, matchedRule };
-  });
-
-  recs.sort((a,b) => b.bestMiles - a.bestMiles || b.earnRate - a.earnRate);
-  if (!recs.length) return `<div class="empty" style="padding:16px;">No matching cards found.</div>`;
-
-  const merchantLabel = merchant ? `<div style="font-size:12px;color:#4A6580;margin-bottom:12px;">Matched: <strong style="color:#8AABBF;">${merchant.service||merchant.name}</strong> · MCC ${merchant.mcc} · ${merchant.category}${merchant.notes?'<br><span style="color:#2A4A6B;">'+merchant.notes+'</span>':''}</div>` : '';
-
-  return merchantLabel + recs.slice(0,5).map((r,i) => {
-    const isCapped = r.capRemaining !== null && r.capRemaining <= 0;
-    const capWarn = r.capPct >= 0.8;
-    const threshold = r.matchedRule?.threshold;
-    const thresholdMet = !threshold || (
-      (r.matchedRule.monthlyTotalSpend||0) >= threshold.minMonthlySpend &&
-      (r.matchedRule.distinctMerchantCount||0) >= threshold.minDistinctMerchants
-    );
-    const effectiveRate = (threshold && !thresholdMet) ? r.card.baseRate : r.earnRate;
-    const milesLine = r.bestPartner
-      ? `${effectiveRate} pts/$ → ${(effectiveRate/r.bestRatio).toFixed(2)} ${r.bestPartner} miles/$`
-      : `${effectiveRate} pts/$`;
-    const thresholdNote = threshold && !thresholdMet
-      ? `<span class="text-amber"> ⚠ Threshold not yet met ($${fmtAmt(r.matchedRule.monthlyTotalSpend||0)}/$${fmtAmt(threshold.minMonthlySpend)} spend, ${r.matchedRule.distinctMerchantCount||0}/${threshold.minDistinctMerchants} merchants)</span>`
-      : (threshold ? '<span class="text-green"> ✓ Threshold met</span>' : '');
-    const effLine = r.bestMiles && thresholdMet
-      ? `~${(r.bestMiles * 100).toFixed(2)}¢/$`
-      : `${effectiveRate} pts/$`;
-    const capLine = r.capRemaining !== null
-      ? `<div class="cap ${capWarn?'cap-warn':''}">Cap remaining: $${fmtAmt(r.capRemaining)}</div>`
-      : '';
-    return `<div class="rec-row ${isCapped?'opacity-50':''}">
-      <div class="rec-rank ${i===0?'gold':''}">${i+1}</div>
-      <div class="rec-body">
-        <div class="rec-card-name">${r.card.name} <span style="font-size:11px;color:#4A6580;font-weight:400;">(${profileLabel(r.card.profile)})</span></div>
-        <div class="rec-detail">${milesLine}${isCapped?' — <span class="text-red">Cap reached</span>':''}${thresholdNote||''}</div>
-      </div>
-      <div class="rec-value">
-        <div class="eff">${effLine}</div>
-        ${capLine}
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function buildRecommendations(q) {
-  if (!data.cards.length) return `<div class="empty" style="padding:20px;"><div class="icon">▤</div>No cards added yet — add cards in the Cards view first.</div>`;
-  const allMerchantPool = [...SG_MERCHANTS, ...data.merchants];
-  const matchedMerchants = allMerchantPool.filter(m =>
-    m.name.toLowerCase().includes(q) ||
-    (m.mcc && m.mcc.includes(q)) ||
-    (m.category||'').toLowerCase().includes(q) ||
-    (m.service||'').toLowerCase().includes(q)
-  );
-  const merchant = matchedMerchants[0] || null;
-  if (!merchant && !q.match(/^\d+$/)) {
-    return `<div style="padding:14px;font-size:13px;color:#4A6580;">No merchant found for "<strong style="color:#8AABBF;">${q}</strong>" — try an MCC code directly, or add this merchant in the <a href="#" onclick="navigate('merchants')" style="color:#00C896;">Merchants page</a>.</div>`;
-  }
-  if (matchedMerchants.length > 1) {
-    const disambig = matchedMerchants.map(m =>
-      `<button class="btn-secondary" style="margin:3px;font-size:12px;" onclick="document.getElementById('ss-search').value='${m.mcc}';ssSearch()">
-        ${m.service||m.name} — MCC ${m.mcc} (${m.category})
-      </button>`
-    ).join('');
-    return `<div style="margin-bottom:14px;padding:12px 14px;background:#0D1B2A;border:1px solid #2A4A6B;border-radius:8px;">
-      <div style="font-size:12px;color:#8AABBF;margin-bottom:8px;">Multiple services found for "<strong style="color:#F0F4F8;">${q}</strong>" — pick the right one:</div>
-      ${disambig}
-    </div>` + buildRecsForMerchant(merchant, q);
-  }
-  return buildRecsForMerchant(merchant, q);
-}
-
 /* =================== CARDS =================== */
 function cardImgUrl(name) {
   // Map card names to representative logo images via Clearbit/logo.dev fallback
@@ -1255,14 +1084,25 @@ function renderCards() {
 }
 
 function renderCardTile(card, ci) {
-  const capBars = (card.bonusRules||[]).filter(r=>r.monthlyCap).map(rule => {
-    const pct = Math.min(1, (Number(rule.currentSpend)||0)/Number(rule.monthlyCap));
-    const cls = pct >= 0.95 ? 'danger' : pct >= 0.8 ? 'warn' : '';
-    return `<div class="cap-bar-item">
-      <div class="cap-bar-label"><span>${rule.category||rule.mcc||'Bonus'}</span><span class="tabnum">$${fmtAmt(rule.currentSpend||0)} / $${fmtAmt(rule.monthlyCap)}</span></div>
-      <div class="cap-bar-track"><div class="cap-bar-fill ${cls}" style="width:${Math.round(pct*100)}%"></div></div>
+  const def = FPEngine.resolveDef(card, RULES);
+  const engineBlock = cardStatusHtml(card, { compact: true, hideHeader: true });
+  const bonusList = (def.bonuses||[]).map(b => {
+    const rate = b.mpd != null ? b.mpd + ' mpd' : b.pct + '%';
+    const caps = (b.cap||[]).map(g => { const c = (def.capGroups||{})[g]; return c ? (c.cashback!=null ? '$'+c.cashback+' cashback' : '$'+fmtAmt(c.spend)) : ''; }).filter(Boolean).join(' + ');
+    const req = (b.requires||[]).filter(r=>r.type!=='option').map(r=>r.label).join(', ');
+    return `<div style="font-size:12px;color:#8AABBF;padding:3px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;">
+      <strong style="color:#F0F4F8;min-width:58px;">${rate}</strong><span>${esc(b.label)}</span>
+      ${caps?`<span class="pill pill-blue">cap ${caps}/${def.cycle==='statement'?'stmt':'mo'}</span>`:''}
+      ${req?`<span class="pill pill-amber">needs ${esc(req)}</span>`:''}
+      ${b.verify?'<span class="pill pill-red" title="Check the bank T&Cs">verify</span>':''}
     </div>`;
   }).join('');
+  const baseLine = def.reward.type === 'cashback'
+    ? `${def.reward.pct}% cashback base`
+    : `${def.reward.mpd} mpd local · ${def.reward.fcyMpd ?? def.reward.mpd} mpd FCY`;
+  const linkPill = def.legacy
+    ? `<span class="pill pill-amber" title="Not matched to rules.json — using the card's own bonus rules">legacy rules</span>`
+    : `<span class="pill pill-green" title="Linked to rules.json">rules ${esc(RULES.rulesVersion||'')}</span>`;
 
   const partners = (card.transferPartners||[]).map(tp =>
     `<span style="background:#1C2F45;border-radius:4px;padding:2px 8px;font-size:11.5px;margin-right:4px;">${tp.partner} ${tp.ratio}:1</span>`
@@ -1270,7 +1110,7 @@ function renderCardTile(card, ci) {
 
   const hasExpiredPromo = (card.currentPromotions||[]).some(p => p.expiry && new Date(p.expiry) < new Date());
 
-  const cycleTypeLabel = { calendar: 'Calendar month', statement: 'Statement month', transaction: 'Transaction date', posting: 'Posting date' }[card.cycleType||'calendar'] || 'Calendar month';
+  const cycleTypeLabel = { calendar: 'Calendar month caps', statement: 'Statement month caps' }[def.cycle || card.cycleType || 'calendar'] || 'Calendar month caps';
   const logoUrl = cardImgUrl(card.name);
   return `<div class="card-tile">
     <div class="card-top">
@@ -1283,16 +1123,19 @@ function renderCardTile(card, ci) {
             ${hasExpiredPromo?'<span class="badge badge-overdue">Promo expired</span>':''}
           </div>
           <div class="card-meta">${card.issuer||'—'} · ${cycleTypeLabel} · Statement day ${card.cycleDate||'?'}${card.gracePeriodDays?' · Payment due +'+card.gracePeriodDays+'d':''}</div>
-          <div style="margin-top:6px;font-size:12px;color:#8AABBF;">Base rate: <strong style="color:#F0F4F8;">${card.baseRate||0} pts/$</strong>${card.pointsCurrency?' &nbsp;·&nbsp; <span style="color:#4A6580;">'+card.pointsCurrency+'</span>':''}</div>
-          ${partners ? `<div style="margin-top:8px;">${partners}</div>` : ''}
+          <div style="margin-top:6px;font-size:12px;color:#8AABBF;">Base: <strong style="color:#F0F4F8;">${baseLine}</strong> &nbsp;${linkPill}</div>
+          ${def.transfer ? `<div style="margin-top:4px;font-size:11.5px;color:#4A6580;">${esc(def.transfer.ratio)}${def.transfer.feeSGD?' · $'+def.transfer.feeSGD+' fee':''}</div>` : (def.legacy && partners ? `<div style="margin-top:8px;">${partners}</div>` : '')}
         </div>
       </div>
       <div style="display:flex;gap:8px;flex-shrink:0;">
+        <button class="btn-secondary" style="font-size:12px;padding:6px 12px;" onclick="openCardSettings('${card.id}')">Card settings</button>
         <button class="btn-secondary" style="font-size:12px;padding:6px 12px;" onclick="openCardEditModal(${ci})">Edit</button>
         <button class="btn-danger" onclick="deleteCard(${ci})">✕</button>
       </div>
     </div>
-    ${capBars ? `<div class="cap-bars">${capBars}</div>` : ''}
+    ${bonusList ? `<div style="border-top:1px solid #1C2F45;padding-top:8px;margin-bottom:8px;">${bonusList}</div>` : ''}
+    ${def.notes ? `<div class="hint" style="margin-bottom:8px;">ⓘ ${esc(def.notes)}</div>` : ''}
+    ${engineBlock}
     ${(card.currentPromotions||[]).length ? `<div style="margin-top:12px;font-size:12px;color:#8AABBF;">
       Promos: ${card.currentPromotions.map(p=>`<span style="color:${new Date(p.expiry)<new Date()?'#EF4444':'#F59E0B'};">${p.name} (exp ${p.expiry})</span>`).join(', ')}
     </div>` : ''}
@@ -1353,22 +1196,32 @@ function saveCard(mode, ci) {
     sourceUrl: document.getElementById('c-url').value,
   };
   if (mode === 'edit' && ci !== null) {
-    card.bonusRules = data.cards[ci].bonusRules || [];
-    card.transferPartners = data.cards[ci].transferPartners || [];
-    card.currentPromotions = data.cards[ci].currentPromotions || [];
-    card.lastUpdated = data.cards[ci].lastUpdated;
-    data.cards[ci] = card;
+    // Keep id, rule link, options, adjustments and legacy rules
+    const nameChanged = data.cards[ci].name !== card.name;
+    data.cards[ci] = { ...data.cards[ci], ...card };
+    if (nameChanged) {
+      data.transactions.forEach(t => { if (t.cardId === data.cards[ci].id) t.cardName = card.name; });
+      delete data.cards[ci].ruleId; // re-match on the new name
+    }
   } else {
+    card.id = 'card_' + uid();
+    card.options = {};
     card.bonusRules = [];
     card.transferPartners = [];
     card.currentPromotions = [];
     card.lastUpdated = today();
     data.cards.push(card);
   }
+  FPEngine.autoLink(data.cards, RULES);
   closeModal(); saveToDrive(); render();
 }
 
-function deleteCard(ci) { data.cards.splice(ci,1); render(); }
+function deleteCard(ci) {
+  const c = data.cards[ci];
+  const n = data.transactions.filter(t => t.cardId === c.id).length;
+  if (!confirm(`Remove ${c.name}?` + (n ? ` Its ${n} logged expense${n!==1?'s':''} stay in Spending but won't count toward any card.` : ''))) return;
+  data.cards.splice(ci,1); saveToDrive(); render();
+}
 
 function openCardImport() {
   showModal(`
@@ -1399,10 +1252,11 @@ function doCardImport() {
         });
         data.cards[idx] = { ...data.cards[idx], ...incoming, bonusRules: mergedRules, lastUpdated: today() };
       } else {
-        data.cards.push({ ...incoming, lastUpdated: today(), bonusRules: incoming.bonusRules||[], transferPartners: incoming.transferPartners||[], currentPromotions: incoming.currentPromotions||[] });
+        data.cards.push({ id: 'card_' + uid(), options: {}, ...incoming, lastUpdated: today(), bonusRules: incoming.bonusRules||[], transferPartners: incoming.transferPartners||[], currentPromotions: incoming.currentPromotions||[] });
       }
       imported++;
     });
+    FPEngine.autoLink(data.cards, RULES);
     closeModal();
     saveToDrive();
     render();
@@ -1564,7 +1418,46 @@ function renderSettings() {
           <button class="btn-danger" onclick="deleteValuation('${k}')">✕</button></td>
     </tr>`).join('');
 
+  const pol = data.settings.policy || {};
+  const hh = data.settings.household || {};
+  const rs = data.rulesState || {};
+  const hist = (rs.history||[]).slice(-6).reverse().map(h => `<tr><td class="tabnum">${esc(h.version)}</td><td class="tabnum">${esc(h.appliedAt)}</td><td>${h.changes ?? '—'} change${h.changes===1?'':'s'}</td></tr>`).join('');
   return `
+    ${rulesBanner()}
+    <div class="section-header"><h2>Card engine policy</h2></div>
+    <div class="smart-spend-box">
+      <div class="form-grid">
+        <div class="form-row"><label>Goal</label>
+          <select id="pol-mode" onchange="savePolicy()">
+            <option value="miles_first" ${pol.mode!=='max_value'?'selected':''}>Miles first (cashback only if clearly better)</option>
+            <option value="max_value" ${pol.mode==='max_value'?'selected':''}>Highest SGD value, miles or cashback</option>
+          </select>
+        </div>
+        <div class="form-row"><label>Switch to cashback when it beats miles by at least (¢ per $)</label>
+          <input id="pol-gap" type="number" step="0.5" min="0" value="${pol.cashbackGapCents ?? 2.5}" onchange="savePolicy()" ${pol.mode==='max_value'?'disabled':''}/>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:-4px;">Example at 1.5¢/mile: 4 mpd = 6¢/$. 10% cashback = 10¢/$ → gap 4¢ → switches to cashback at a 2.5¢ threshold, stays on miles at 5¢.</div>
+      <div class="form-row" style="margin-top:14px;">
+        <label style="display:flex;gap:8px;align-items:center;cursor:pointer;"><input type="checkbox" id="hh-cross" style="width:auto;" ${hh.crossUse?'checked':''} onchange="savePolicy()"/> Let Marvin and Caroline also use each other's cards for personal spend</label>
+        <div class="hint">Cobae's and Joint expenses always consider both parents' cards.</div>
+      </div>
+    </div>
+
+    <div class="section-header"><h2>Card rules</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn-secondary" onclick="checkRulesNow()">⟳ Check for update</button>
+        <button class="btn-secondary" onclick="document.getElementById('file-rules').click()">↑ Load rules.json</button>
+        <button class="btn-secondary" onclick="downloadRules()">↓ Download current</button>
+      </div>
+    </div>
+    <p style="font-size:13px;color:#8AABBF;margin-bottom:12px;">
+      Applied version <strong style="color:#F0F4F8;">${esc(RULES.rulesVersion || 'none')}</strong>${rs.appliedAt ? ' · applied ' + esc(rs.appliedAt) : ''} · ${(RULES.cards||[]).length} card definitions.
+      A weekly refresh researches SG card changes and publishes a new <code style="background:#1C2F45;padding:1px 5px;border-radius:3px;">rules.json</code>; you'll see a banner to review and apply it.
+    </p>
+    ${hist ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Version</th><th>Applied</th><th>Changes</th></tr></thead><tbody>${hist}</tbody></table></div>` : ''}
+    <input type="file" id="file-rules" accept=".json" style="display:none" onchange="handleRulesUpload(event)">
+
     <div class="section-header"><h2>Mile valuations</h2><button class="btn-primary" onclick="openValuationModal()">+ Add partner</button></div>
     <p style="font-size:13px;color:#8AABBF;margin-bottom:16px;">Valuation in SGD cents per mile, used by the Smart Spend recommendation engine.</p>
     <div class="table-wrap" style="margin-bottom:32px;">
@@ -1672,10 +1565,758 @@ function handleImport(e) {
   reader.onload = ev => {
     try {
       data = JSON.parse(ev.target.result);
+      if (data.rulesState?.applied) RULES = data.rulesState.applied;
+      ensureEngineData();
       saveToDrive(); render();
     } catch(err) { alert('Invalid JSON file'); }
   };
   reader.readAsText(file);
+}
+
+/* =====================================================================
+   CARD ENGINE INTEGRATION  (engine logic lives in engine.js)
+   ===================================================================== */
+let RULES = { cards: [] };     // the rules the household has approved
+let RULES_PENDING = null;      // newer published rules awaiting review
+const PROFILES = ['marvin','wife','cobae','joint'];
+const CHANNELS = [
+  { id: 'mobile_contactless', label: 'Tap phone' },
+  { id: 'card_contactless', label: 'Tap card' },
+  { id: 'online', label: 'Online / app' },
+  { id: 'chip', label: 'Insert / swipe' },
+];
+const channelLabel = id => (CHANNELS.find(c => c.id === id) || {}).label || id || '—';
+
+function engineSettings() {
+  return { mile_valuations: data.settings.mile_valuations || {}, policy: data.settings.policy, household: data.settings.household, defaultMileValue: 1.5 };
+}
+function engineCtx() { return { cards: data.cards, rules: RULES, ledger: data.transactions || [], settings: engineSettings() }; }
+function cardById(id) { return data.cards.find(c => c.id === id); }
+
+function toast(msg, ms) {
+  const t = document.getElementById('toast');
+  t.innerHTML = msg; t.style.display = 'block';
+  clearTimeout(toast._t); toast._t = setTimeout(() => { t.style.display = 'none'; }, ms || 3200);
+}
+
+function ensureEngineData() {
+  data.transactions = data.transactions || [];
+  data.merchantMappings = data.merchantMappings || [];
+  data.rulesState = data.rulesState || {};
+  data.settings = data.settings || {};
+  data.settings.mile_valuations = data.settings.mile_valuations || { KrisFlyer: 1.5, 'Asia Miles': 1.4 };
+  data.settings.policy = Object.assign({ mode: 'miles_first', cashbackGapCents: 2.5 }, data.settings.policy || {});
+  data.settings.household = Object.assign({ parents: ['marvin','wife'], crossUse: false }, data.settings.household || {});
+  PROFILES.forEach(p => { data.profiles[p] = data.profiles[p] || { bills: [], subscriptions: [] }; });
+  data.cards.forEach(c => { if (!c.id) c.id = 'card_' + uid(); c.options = c.options || {}; });
+  FPEngine.autoLink(data.cards, RULES);
+}
+
+/* ---------------- rules: load, review, apply ---------------- */
+async function fetchPublishedRules() {
+  try {
+    const res = await fetch('rules.json?ts=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return null;
+    const r = await res.json();
+    const errs = FPEngine.validateRules(r);
+    if (errs.length) { console.warn('Published rules.json failed validation', errs); return null; }
+    return r;
+  } catch (e) { console.warn('rules.json not reachable', e); return null; }
+}
+
+async function loadRules() {
+  const published = await fetchPublishedRules();
+  const rs = data.rulesState = data.rulesState || {};
+  if (rs.applied && rs.applied.cards) RULES = rs.applied;
+  else if (published) {
+    // First run: adopt the published rules straight away
+    RULES = published;
+    rs.applied = published; rs.appliedVersion = published.rulesVersion; rs.appliedAt = today();
+    rs.history = [{ version: published.rulesVersion, appliedAt: today(), changes: null }];
+  }
+  RULES_PENDING = (published && published.rulesVersion !== RULES.rulesVersion && published.rulesVersion > (RULES.rulesVersion || '') && published.rulesVersion !== rs.dismissedVersion) ? published : null;
+}
+
+function rulesBanner() {
+  if (!RULES_PENDING) return '';
+  const n = FPEngine.diffRules(RULES, RULES_PENDING).length;
+  return `<div class="banner">
+    <span style="font-size:18px;">⟳</span>
+    <div style="flex:1;min-width:200px;"><strong>Card rules update ${esc(RULES_PENDING.rulesVersion)}</strong> — ${n} card${n!==1?'s':''} changed since ${esc(RULES.rulesVersion||'your current rules')}.</div>
+    <button class="btn-primary" style="font-size:12px;padding:6px 14px;" onclick="openRulesDiff()">Review changes</button>
+  </div>`;
+}
+
+function openRulesDiff(candidate) {
+  const next = candidate || RULES_PENDING;
+  if (!next) return;
+  const diffs = FPEngine.diffRules(RULES, next);
+  const held = new Set(data.cards.map(c => FPEngine.resolveDef(c, RULES).id));
+  const rows = diffs.length ? diffs.map(d => `
+    <div style="padding:10px 0;border-bottom:1px solid #1C2F45;">
+      <div style="display:flex;gap:8px;align-items:center;"><strong>${esc(d.name)}</strong>
+        <span class="pill ${d.type==='added'?'pill-green':d.type==='removed'?'pill-red':'pill-amber'}">${d.type}</span>
+        ${held.has(d.cardId) ? '<span class="pill pill-blue">you hold this</span>' : ''}</div>
+      <ul style="margin:6px 0 0 18px;font-size:12.5px;color:#8AABBF;">${d.details.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+    </div>`).join('') : '<div class="empty" style="padding:20px;">No rule changes — only metadata differs.</div>';
+  const src = (next.changeLog || []).length ? `<div class="hint" style="margin-top:10px;">${next.changeLog.map(esc).join('<br>')}</div>` : '';
+  window._rulesCandidate = next;
+  showModal(`
+    <h3>Rules ${esc(RULES.rulesVersion||'—')} → ${esc(next.rulesVersion)}</h3>
+    <p style="font-size:12.5px;color:#8AABBF;margin:-10px 0 10px;">${esc(next.generatedBy || '')}${next.generatedAt ? ' · ' + esc(String(next.generatedAt).slice(0,10)) : ''}</p>
+    <div style="max-height:55vh;overflow:auto;">${rows}</div>${src}
+    <div class="modal-footer">
+      ${candidate ? '' : '<button class="btn-secondary" onclick="dismissRulesUpdate()">Skip this version</button>'}
+      <button class="btn-secondary" onclick="closeModal()">Later</button>
+      <button class="btn-primary" onclick="applyRules()">Apply update</button>
+    </div>`);
+  document.querySelector('#modal-container .modal').classList.add('wide');
+}
+
+function applyRules() {
+  const next = window._rulesCandidate; if (!next) return;
+  const changes = FPEngine.diffRules(RULES, next).length;
+  RULES = next;
+  const rs = data.rulesState;
+  rs.applied = next; rs.appliedVersion = next.rulesVersion; rs.appliedAt = today();
+  rs.history = (rs.history || []).concat([{ version: next.rulesVersion, appliedAt: today(), changes }]).slice(-24);
+  if (RULES_PENDING && RULES_PENDING.rulesVersion === next.rulesVersion) RULES_PENDING = null;
+  FPEngine.autoLink(data.cards, RULES);
+  closeModal(); saveToDrive(); render();
+  toast(`Applied card rules ${esc(next.rulesVersion)} (${changes} change${changes!==1?'s':''}).`);
+}
+function dismissRulesUpdate() {
+  data.rulesState.dismissedVersion = RULES_PENDING.rulesVersion;
+  RULES_PENDING = null; closeModal(); saveToDrive(); render();
+}
+async function checkRulesNow() {
+  toast('Checking for published rules…');
+  delete data.rulesState.dismissedVersion;
+  await loadRules();
+  render();
+  toast(RULES_PENDING ? `Update ${esc(RULES_PENDING.rulesVersion)} available — review it in the banner.` : `You're on the latest rules (${esc(RULES.rulesVersion||'none')}).`);
+}
+function handleRulesUpload(e) {
+  const f = e.target.files[0]; if (!f) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const r = JSON.parse(ev.target.result);
+      const errs = FPEngine.validateRules(r);
+      if (errs.length) { alert('That rules.json has problems:\n• ' + errs.slice(0,8).join('\n• ')); return; }
+      openRulesDiff(r);
+    } catch (err) { alert('Not valid JSON: ' + err.message); }
+  };
+  reader.readAsText(f); e.target.value = '';
+}
+function downloadRules() {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(RULES, null, 2)], { type: 'application/json' }));
+  a.download = 'rules.json'; a.click();
+}
+function savePolicy() {
+  data.settings.policy.mode = document.getElementById('pol-mode').value;
+  data.settings.policy.cashbackGapCents = parseFloat(document.getElementById('pol-gap').value) || 0;
+  data.settings.household.crossUse = document.getElementById('hh-cross').checked;
+  saveToDrive(); render();
+}
+
+/* ---------------- merchants for the entry form ---------------- */
+let MERCHANT_BY_LABEL = new Map();
+function merchantPool() { return [...SG_MERCHANTS, ...(data.merchants || [])]; }
+function merchantLabel(m) { return m.service && m.service !== m.name ? `${m.name} — ${m.service}` : m.name; }
+// "GrabFood" when the service already names the brand, else "Shopee · Online Retail" (both words stay matchable by the engine)
+function merchantDisplayName(m) {
+  if (!m.service || m.service === m.name) return m.name;
+  return m.service.toLowerCase().includes(m.name.toLowerCase()) ? m.service : `${m.name} · ${m.service}`;
+}
+function rebuildMerchantDatalist() {
+  MERCHANT_BY_LABEL = new Map();
+  merchantPool().forEach(m => { if (m && m.name) MERCHANT_BY_LABEL.set(merchantLabel(m).toLowerCase(), m); });
+  const dl = document.getElementById('merchant-list');
+  if (dl) dl.innerHTML = [...MERCHANT_BY_LABEL.values()].map(m => `<option value="${esc(merchantLabel(m))}">${esc(m.category||'')}${m.mcc?' · MCC '+esc(m.mcc):''}</option>`).join('');
+}
+/** Turn whatever was typed into merchant / MCC / category / channel guesses. */
+function resolveMerchantInput(text) {
+  const t = String(text || '').trim();
+  if (!t) return null;
+  const hit = MERCHANT_BY_LABEL.get(t.toLowerCase());
+  if (hit) return { merchant: merchantDisplayName(hit), mcc: hit.mcc || '', category: hit.category || FPEngine.categoryForMcc(hit.mcc), source: 'db', variants: merchantPool().filter(m => m.name === hit.name && (m.service||'') !== (hit.service||'')) };
+  if (/^\d{4}$/.test(t)) return { merchant: 'MCC ' + t, mcc: t, category: FPEngine.categoryForMcc(t), source: 'mcc', variants: [] };
+  const sameName = merchantPool().filter(m => m.name.toLowerCase() === t.toLowerCase());
+  if (sameName.length) {
+    const m = sameName[0];
+    return { merchant: merchantDisplayName(m), mcc: m.mcc || '', category: m.category || FPEngine.categoryForMcc(m.mcc), source: 'db', variants: sameName.slice(1), pickVariant: sameName.length > 1 };
+  }
+  const g = FPEngine.categorise(t, merchantPool(), data.merchantMappings);
+  return { merchant: g.confidence === 'none' ? t : g.merchant, mcc: g.mcc, category: g.category, channel: g.confidence === 'none' ? null : g.channel, fcy: g.fcy, source: g.confidence, variants: [] };
+}
+
+/* ---------------- spend form (shared by dashboard, Which card?, expense modal) ---------------- */
+const FORMS = {};
+function spendFormHtml(p, init) {
+  init = init || {};
+  const f = FORMS[p] = Object.assign({
+    amount: '', date: today(), merchantText: '', merchant: '', mcc: '', category: '',
+    forProfile: currentView === 'profile' ? currentProfile : 'marvin',
+    channel: 'mobile_contactless', fcy: false, wallet: false, cardId: null, cardTouched: false, note: ''
+  }, FORMS[p] && p !== 'qa' ? FORMS[p] : {}, init);
+  const forChips = PROFILES.map(k => `<span class="chip ${f.forProfile===k?'on':''}" onclick="spendFormSet('${p}','forProfile','${k}')">${profileLabel(k)}</span>`).join('');
+  const chChips = CHANNELS.map(c => `<span class="chip ${f.channel===c.id?'on':''}" onclick="spendFormSet('${p}','channel','${c.id}')">${c.label}</span>`).join('');
+  return `<div id="${p}-form">
+    <div class="form-grid sf-top ${p==='qa'?'with-date':''}">
+      <div class="form-row sf-merchant"><label>Merchant</label>
+        <input id="${p}-merchant" list="merchant-list" autocomplete="off" placeholder="e.g. Cold Storage, GrabFood, Shopee, MCC 5812" value="${esc(f.merchantText)}"
+          oninput="spendFormMerchant('${p}')" />
+        <div class="hint" id="${p}-mhint"></div>
+      </div>
+      <div class="form-row"><label>Amount (S$)</label><input id="${p}-amount" type="number" inputmode="decimal" step="0.01" min="0" placeholder="50.00" value="${esc(f.amount)}" oninput="spendFormRefresh('${p}')" /></div>
+      ${p==='qa' ? `<div class="form-row"><label>Date</label><input id="${p}-date" type="date" value="${esc(f.date)}" onchange="spendFormRefresh('${p}')" /></div>` : ''}
+    </div>
+    <div class="form-row"><label>Spending for</label><div class="chip-row" id="${p}-for">${forChips}</div></div>
+    <div class="form-row"><label>How you'll pay</label><div class="chip-row" id="${p}-ch">${chChips}</div></div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:#8AABBF;">
+      <label style="display:flex;gap:6px;align-items:center;cursor:pointer;"><input type="checkbox" id="${p}-fcy" ${f.fcy?'checked':''} onchange="spendFormRefresh('${p}')"/> Foreign currency</label>
+      <label style="display:flex;gap:6px;align-items:center;cursor:pointer;" title="Apple Pay / Google Pay inside an app or website — some cards exclude this"><input type="checkbox" id="${p}-wallet" ${f.wallet?'checked':''} onchange="spendFormRefresh('${p}')"/> Paying online via Apple/Google Pay</label>
+      <span>MCC <input id="${p}-mcc" value="${esc(f.mcc)}" placeholder="auto" style="width:64px;background:#0D1B2A;border:1px solid #2A4A6B;color:#F0F4F8;border-radius:5px;padding:2px 6px;font-size:12px;" oninput="FORMS['${p}'].mccManual=true;spendFormRefresh('${p}')"/></span>
+    </div>
+  </div>`;
+}
+function spendFormSet(p, key, val) {
+  FORMS[p][key] = val;
+  const sel = key === 'forProfile' ? `#${p}-for .chip` : `#${p}-ch .chip`;
+  const list = key === 'forProfile' ? PROFILES : CHANNELS.map(c => c.id);
+  document.querySelectorAll(sel).forEach((el, i) => el.classList.toggle('on', list[i] === val));
+  if (key === 'forProfile') FORMS[p].cardTouched = false;
+  spendFormRefresh(p);
+}
+function spendFormMerchant(p) {
+  const f = FORMS[p];
+  const text = document.getElementById(p + '-merchant').value;
+  f.merchantText = text;
+  const r = resolveMerchantInput(text);
+  const hint = document.getElementById(p + '-mhint');
+  if (!r) { f.merchant = ''; if (!f.mccManual) f.mcc = ''; hint.innerHTML = ''; spendFormRefresh(p); return; }
+  f.merchant = r.merchant; f.category = r.category;
+  if (!f.mccManual) { f.mcc = r.mcc || ''; document.getElementById(p + '-mcc').value = f.mcc; }
+  if (r.channel && r.source !== 'db') spendFormSet(p, 'channel', r.channel);
+  else if (r.source === 'db' && /online|delivery|e-?commerce|subscription|app/i.test(r.category || '')) spendFormSet(p, 'channel', 'online');
+  if (r.fcy) document.getElementById(p + '-fcy').checked = true;
+  const variants = (r.variants || []).map(m => `<span class="chip" style="padding:2px 8px;font-size:11px;" onclick="document.getElementById('${p}-merchant').value='${esc(merchantLabel(m)).replace(/'/g,"\\'")}';spendFormMerchant('${p}')">${esc(m.service || m.name)} · ${esc(m.mcc)}</span>`).join(' ');
+  const srcLabel = { db: 'merchant DB', learned: 'learned', keyword: 'best guess', mcc: 'MCC', none: 'unknown — set MCC for accuracy' }[r.source] || r.source;
+  hint.innerHTML = `${esc(r.category || 'Other')}${f.mcc ? ' · MCC ' + esc(f.mcc) : ''} <span style="color:#2A4A6B;">(${srcLabel})</span>` + (variants ? `<div style="margin-top:4px;">Other services: ${variants}</div>` : '');
+  spendFormRefresh(p);
+}
+function spendFormRead(p) {
+  const f = FORMS[p];
+  const g = id => document.getElementById(p + '-' + id);
+  const amt = parseFloat(g('amount')?.value);
+  f.amount = g('amount')?.value || '';
+  f.mcc = (g('mcc')?.value || '').trim();
+  f.fcy = !!g('fcy')?.checked; f.wallet = !!g('wallet')?.checked;
+  if (g('date')) f.date = g('date').value || today();
+  return {
+    amount: amt > 0 ? amt : 50, realAmount: amt > 0 ? amt : 0, date: f.date || today(),
+    merchant: f.merchant || f.merchantText || '', mcc: f.mcc,
+    category: (f.mccManual && f.mcc && FPEngine.categoryForMcc(f.mcc) !== 'Other') ? FPEngine.categoryForMcc(f.mcc) : (f.category && f.category !== 'Other' ? f.category : FPEngine.categoryForMcc(f.mcc)),
+    channel: f.channel, fcy: f.fcy, wallet: f.wallet && f.channel === 'online', forProfile: f.forProfile,
+  };
+}
+function spendFormRefresh(p) {
+  const out = document.getElementById(p + '-rec');
+  if (!out || !FORMS[p]) return;
+  const t = spendFormRead(p);
+  if (p === 'qa') qaSyncCardSelect();
+  if (!data.cards.length) { out.innerHTML = `<div class="empty" style="padding:16px;">Add your cards on the Cards page first.</div>`; return; }
+  if (!t.merchant && !t.mcc) { out.innerHTML = `<div class="hint">Type a merchant (or an MCC) to see which card to use.</div>`; return; }
+  const rec = FPEngine.recommend(t, engineCtx(), { excludeId: FORMS[p].editId });
+  FORMS[p].lastRec = rec;
+  if (p === 'qa' && !FORMS[p].cardTouched && rec.pick) FORMS[p].cardId = rec.pick.card.id;
+  out.innerHTML = recListHtml(rec, p, t);
+  if (p === 'qa') qaSyncCardSelect();
+}
+
+function recListHtml(rec, p, t) {
+  const isQa = p === 'qa';
+  const amountNote = t.realAmount ? '' : ' <span class="hint">(based on S$50)</span>';
+  const rows = rec.ranked.slice(0, isQa ? 8 : 5).map((o, i) => {
+    const chosen = isQa && FORMS.qa.cardId === o.card.id;
+    const earnTxt = o.excluded ? 'No rewards' : o.type === 'cashback' ? `$${fmtAmt(o.cashback)}` : `${Math.round(o.miles).toLocaleString()} mi`;
+    const notes = [];
+    if (o.bonusLabel) notes.push(esc(o.bonusLabel));
+    if (o.committed) notes.push(`<span class="text-amber">counting on you hitting the minimum spend</span>`);
+    o.unlock.forEach(u => {
+      const parts = u.items.filter(it => it.target).map(it => it.money ? `$${fmtAmt(it.progress)}/$${fmtAmt(it.target)} spent` : `${it.progress}/${it.target} merchants`);
+      if (parts.length) notes.push(`<span class="text-amber">🔒 ${esc(u.bonus)} — ${parts.join(', ')}</span>`);
+    });
+    o.notes.filter(n => !/cap reached/.test(n) || !o.bonusLabel).forEach(n => notes.push(`<span class="${/cap/.test(n)?'text-amber':'text-muted'}">${esc(n)}</span>`));
+    const capLine = o.capRoom != null ? `<div class="cap ${o.capRoom < 100 ? 'cap-warn' : ''}">$${fmtAmt(o.capRoom)} cap left</div>` : '';
+    return `<div class="rec-row ${isQa ? 'selectable' : ''} ${chosen ? 'chosen' : ''} ${o.excluded ? 'opacity-50' : ''}" ${isQa ? `onclick="qaChooseCard('${o.card.id}')"` : ''}>
+      <div class="rec-rank ${o === rec.pick ? 'gold' : ''}">${i + 1}</div>
+      <div class="rec-body">
+        <div class="rec-card-name">${esc(o.card.name)} <span style="font-size:11px;color:#4A6580;font-weight:400;">(${profileLabel(o.card.profile)})</span>
+          ${o.type === 'cashback' ? '<span class="pill pill-blue">cashback</span>' : ''}</div>
+        <div class="rec-detail">${o.excluded ? 'Excluded on this card' : esc(o.unitLine)}${notes.length ? ' · ' + notes.join(' · ') : ''}</div>
+      </div>
+      <div class="rec-value"><div class="eff">${o.excluded ? '—' : o.centsPerDollar.toFixed(2) + '¢/$'}</div><div class="cap">${earnTxt}</div>${capLine}</div>
+    </div>`;
+  }).join('');
+  const reason = rec.pick ? `<div class="reason"><strong style="color:#00C896;">Use ${esc(rec.pick.card.name)}</strong>${amountNote} — ${esc(rec.reason)}</div>` : `<div class="reason">${esc(rec.reason)}</div>`;
+  const logBtn = !isQa && rec.pick ? `<div style="margin-top:10px;"><button class="btn-primary" onclick="logFromForm('${p}')">Log this expense with ${esc(rec.pick.card.name)}</button></div>` : '';
+  return reason + rows + logBtn;
+}
+function logFromForm(p) {
+  const f = FORMS[p];
+  openExpenseModal({ merchantText: f.merchantText, merchant: f.merchant, mcc: f.mcc, category: f.category, amount: f.amount, forProfile: f.forProfile, channel: f.channel, fcy: f.fcy, wallet: f.wallet, mccManual: f.mccManual });
+}
+
+/* ---------------- expense modal (add / edit) ---------------- */
+function openExpenseModal(init) {
+  let editing = null;
+  if (typeof init === 'string') {
+    editing = data.transactions.find(t => t.id === init);
+    if (!editing) return;
+    init = { merchantText: editing.merchant, merchant: editing.merchant, mcc: editing.mcc, category: editing.category, amount: String(editing.amount),
+      date: editing.date, forProfile: editing.forProfile, channel: editing.channel, fcy: !!editing.fcy, wallet: !!editing.wallet,
+      cardId: editing.cardId, cardTouched: true, note: editing.note || '', editId: editing.id, mccManual: true };
+  }
+  delete FORMS.qa;
+  showModal(`
+    <h3>${editing ? 'Edit expense' : 'Add expense'}</h3>
+    ${spendFormHtml('qa', init || {})}
+    <div class="form-grid" style="margin-top:14px;">
+      <div class="form-row"><label>Paid with</label><select id="qa-card" onchange="qaChooseCard(this.value)"></select></div>
+      <div class="form-row"><label>Note (optional)</label><input id="qa-note" value="${esc((init||{}).note||'')}" placeholder="e.g. Cobae's swimming class"/></div>
+    </div>
+    <div style="font-size:11.5px;font-weight:600;color:#4A6580;letter-spacing:.06em;margin:8px 0 2px;">RECOMMENDATION — tap a card to choose it</div>
+    <div id="qa-rec"></div>
+    <div class="modal-footer">
+      ${editing ? `<button class="btn-danger" style="margin-right:auto;" onclick="deleteExpense('${editing.id}')">Delete</button>` : ''}
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveExpense()">${editing ? 'Save changes' : 'Log expense'}</button>
+    </div>`);
+  document.querySelector('#modal-container .modal').classList.add('wide');
+  if (init && init.merchantText && !editing) spendFormMerchant('qa'); else spendFormRefresh('qa');
+  if (!editing) setTimeout(() => document.getElementById(init && init.merchantText ? 'qa-amount' : 'qa-merchant')?.focus(), 50);
+}
+function qaSyncCardSelect() {
+  const sel = document.getElementById('qa-card'); if (!sel) return;
+  const f = FORMS.qa;
+  const pool = FPEngine.candidateCards(f.forProfile, data.cards, engineSettings());
+  const others = data.cards.filter(c => !pool.includes(c));
+  const opt = c => `<option value="${c.id}" ${c.id===f.cardId?'selected':''}>${esc(c.name)} (${profileLabel(c.profile)})${f.lastRec && f.lastRec.pick && f.lastRec.pick.card.id===c.id ? ' ★ best' : ''}</option>`;
+  sel.innerHTML = pool.map(opt).join('') + (others.length ? `<optgroup label="Other cards">${others.map(opt).join('')}</optgroup>` : '') + `<option value="__cash" ${f.cardId==='__cash'?'selected':''}>Cash / PayNow / GIRO (no card)</option>`;
+}
+function qaChooseCard(id) {
+  FORMS.qa.cardId = id; FORMS.qa.cardTouched = true;
+  spendFormRefresh('qa');
+}
+function saveExpense() {
+  const f = FORMS.qa;
+  const t = spendFormRead('qa');
+  if (!t.realAmount) { alert('Enter the amount.'); return; }
+  if (!t.merchant) { alert('Enter the merchant.'); return; }
+  const card = cardById(f.cardId);
+  const rec = f.lastRec;
+  const txn = {
+    id: f.editId || 'tx_' + uid(),
+    date: t.date, amount: Math.round(t.realAmount * 100) / 100,
+    merchant: t.merchant, mcc: t.mcc, category: t.category || FPEngine.categoryForMcc(t.mcc),
+    channel: t.channel, fcy: t.fcy, wallet: t.wallet, forProfile: t.forProfile,
+    cardId: card ? card.id : null, cardName: card ? card.name : 'Cash / non-card', paidBy: card ? card.profile : t.forProfile,
+    recommendedCardId: rec && rec.pick ? rec.pick.card.id : null,
+    note: document.getElementById('qa-note').value.trim(),
+    source: 'manual', createdAt: new Date().toISOString(),
+  };
+  if (f.editId) {
+    const i = data.transactions.findIndex(x => x.id === f.editId);
+    const prev = data.transactions[i];
+    Object.assign(txn, { source: prev.source, rawDescription: prev.rawDescription, importBatch: prev.importBatch, createdAt: prev.createdAt });
+    // Learn the correction for future statement imports
+    if (prev.rawDescription && (prev.merchant !== txn.merchant || prev.mcc !== txn.mcc || prev.channel !== txn.channel)) learnMapping(prev.rawDescription, txn);
+    data.transactions[i] = txn;
+  } else data.transactions.push(txn);
+  closeModal(); saveToDrive(); render();
+  const earned = card ? FPEngine.ledgerEarnings(engineCtx(), x => x.cardId === card.id).get(txn.id) : null;
+  const e = earned ? (earned.result.type === 'cashback' ? '$' + fmtAmt(earned.result.cashback) + ' cashback' : Math.round(earned.result.miles) + ' miles') : 'no rewards';
+  toast(`${f.editId ? 'Updated' : 'Logged'} S$${fmtAmt(txn.amount)} at ${esc(txn.merchant)}${card ? ' on ' + esc(card.name) : ''} · ${e}`);
+}
+function deleteExpense(id) {
+  if (!confirm('Delete this expense?')) return;
+  data.transactions = data.transactions.filter(t => t.id !== id);
+  closeModal(); saveToDrive(); render();
+}
+function learnMapping(raw, txn) {
+  const pattern = FPEngine.util.norm(raw).replace(/\d+/g, ' ').replace(/\s+/g, ' ').trim().split(' ').slice(0, 3).join(' ');
+  if (pattern.length < 3) return;
+  data.merchantMappings = (data.merchantMappings || []).filter(m => m.pattern !== pattern);
+  data.merchantMappings.unshift({ pattern, merchant: txn.merchant, mcc: txn.mcc, category: txn.category, channel: txn.channel, learnedAt: today() });
+}
+
+/* ---------------- Which card? page ---------------- */
+function renderSmartSpend() {
+  return `
+    ${rulesBanner()}
+    <p style="font-size:13px;color:#8AABBF;margin-bottom:16px;line-height:1.6;">
+      Pick the merchant, who it's for and how you'll pay. The engine checks every card you hold against the current rules, what's left under each cap this cycle,
+      and minimum-spend conditions, then applies your policy: <strong style="color:#F0F4F8;">${data.settings.policy.mode === 'max_value' ? 'highest value' : 'miles first, cashback only if it beats miles by ' + data.settings.policy.cashbackGapCents + '¢/$'}</strong>.
+    </p>
+    <div class="smart-spend-box">${spendFormHtml('ss')}</div>
+    <div class="smart-spend-box" id="ss-rec"></div>`;
+}
+
+/* ---------------- card status (caps + conditions) ---------------- */
+function cardStatusHtml(card, opts) {
+  opts = opts || {};
+  const st = FPEngine.cardStatus(card, RULES, data.transactions, today());
+  const dl = st.daysLeft;
+  const daysColor = dl <= 3 ? '#EF4444' : dl <= 7 ? '#F59E0B' : '#00C896';
+  const cycleTxt = st.cycle.type === 'statement' ? `statement ${st.cycle.start.slice(5)} → ${st.cycle.end.slice(5)}` : 'calendar month';
+  const head = opts.hideHeader ? '' : `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+      <div><div style="font-weight:700;font-size:14px;">${esc(card.name)}</div>
+      <div style="font-size:12px;color:#4A6580;margin-top:2px;">${profileLabel(card.profile)} · ${cycleTxt} · resets in <strong style="color:${daysColor}">${dl} day${dl!==1?'s':''}</strong></div></div>
+      <div style="text-align:right;font-size:12px;color:#8AABBF;" class="tabnum">$${fmtAmt(st.spend)} spent<br><span class="text-green">${st.def.reward.type==='cashback' ? '$'+fmtAmt(st.earned.cashback) : Math.round(st.earned.miles).toLocaleString()+' mi'}</span></div>
+    </div>`;
+  const sub = opts.hideHeader ? `<div class="hint" style="margin-bottom:6px;">This cycle (${cycleTxt}, resets in <strong style="color:${daysColor}">${dl}d</strong>): $${fmtAmt(st.spend)} spent · ${st.def.reward.type==='cashback' ? '$'+fmtAmt(st.earned.cashback)+' cashback' : Math.round(st.earned.miles).toLocaleString()+' miles'}</div>` : '';
+  const caps = st.caps.map(c => {
+    const cls = c.pct >= 0.95 ? 'danger' : c.pct >= 0.8 ? 'warn' : '';
+    const val = c.unit === 'cashback' ? `$${fmtAmt(c.used)} / $${fmtAmt(c.limit)} cashback` : `$${fmtAmt(c.used)} / $${fmtAmt(c.limit)}`;
+    return `<div class="cap-bar-item"><div class="cap-bar-label"><span>${esc(c.label)}</span><span class="tabnum ${c.pct>=0.8?'cap-warn':''}">${val}</span></div>
+      <div class="cap-bar-track"><div class="cap-bar-fill ${cls}" style="width:${Math.round(c.pct*100)}%"></div></div></div>`;
+  }).join('');
+  // Bonuses sharing the same requirement (e.g. CIMB's five categories, all needing S$800) show as one block
+  const groups = [];
+  st.conditions.forEach(c => {
+    const key = JSON.stringify((c.bonus.requires || []).filter(r => r.type !== 'option'));
+    const g = groups.find(x => x.key === key);
+    if (g) g.bonuses.push(c.bonus); else groups.push({ key, bonuses: [c.bonus], result: c.result });
+  });
+  const conds = groups.map(({ bonuses, result }) => {
+    const bonus = { id: bonuses.map(b => b.id).join(','), label: bonuses.map(b => b.label).join(' · ') };
+    const status = result.status === 'met' ? '<span class="pill pill-green">unlocked</span>' : result.status === 'committed' ? '<span class="pill pill-amber">committed</span>' : '<span class="pill pill-red">locked</span>';
+    const items = result.items.filter(i => !i.option).map(i => {
+      const pct = i.target ? Math.min(1, i.progress / i.target) : 1;
+      const v = i.money ? `$${fmtAmt(i.progress)} / $${fmtAmt(i.target)}` : `${i.progress} / ${i.target}`;
+      return `<div class="cond-row"><span>${esc(i.label)}</span><span class="tabnum ${i.met?'text-green':'text-amber'}">${v}${i.met?' ✓':''}</span></div>
+        <div class="cap-bar-track" style="height:4px;"><div class="cap-bar-fill ${i.met?'':'warn'}" style="width:${Math.round(pct*100)}%"></div></div>`;
+    }).join('');
+    const committed = bonuses.every(b => (card.options.commit || {})[b.id]);
+    return `<div style="background:#0D1B2A;border:1px solid #1C2F45;border-radius:8px;padding:9px 11px;margin-top:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;"><strong>${esc(bonus.label)}</strong>${status}</div>
+      ${items}
+      ${result.status !== 'met' ? `<label style="display:flex;gap:6px;align-items:center;font-size:11.5px;color:#8AABBF;margin-top:6px;cursor:pointer;">
+        <input type="checkbox" style="width:auto;" ${committed?'checked':''} onchange="toggleCommit('${card.id}','${bonus.id}',this.checked)"/> I'll hit this — recommend this card as if unlocked</label>` : ''}
+    </div>`;
+  }).join('');
+  return head + sub + (caps ? `<div class="cap-bars" style="margin-top:8px;">${caps}</div>` : (opts.compact ? '' : '<div class="hint" style="margin-top:6px;">No capped bonuses</div>')) + conds;
+}
+function toggleCommit(cardId, bonusIds, on) {
+  const c = cardById(cardId); c.options.commit = c.options.commit || {};
+  bonusIds.split(',').forEach(id => { if (on) c.options.commit[id] = true; else delete c.options.commit[id]; });
+  saveToDrive(); render();
+}
+function allCapAlerts() {
+  const out = [];
+  if (!window.FPEngine) return out;
+  data.cards.forEach(card => {
+    const status = FPEngine.cardStatus(card, RULES, data.transactions || [], today());
+    status.caps.forEach(cap => { if (cap.pct >= 0.8) out.push({ card, cap, status }); });
+  });
+  return out;
+}
+function capAlertsHtml() {
+  return allCapAlerts().map(a => `<div class="alert-bar upcoming">◔ <div><strong>${esc(a.card.name)}</strong> — ${esc(a.cap.label)} cap ${Math.round(a.cap.pct*100)}% used; ${a.cap.unit==='cashback' ? '$'+fmtAmt(a.cap.remaining)+' cashback' : '$'+fmtAmt(a.cap.remaining)} left until ${a.status.cycle.end}. The engine will route this category elsewhere once it's full.</div></div>`).join('');
+}
+
+/* ---------------- card settings modal ---------------- */
+function openCardSettings(cardId) {
+  const card = cardById(cardId); if (!card) return;
+  const def = FPEngine.resolveDef(card, RULES);
+  const defOptions = (RULES.cards || []).map(d => `<option value="${d.id}" ${d.id === def.id ? 'selected' : ''}>${esc(d.names[0])} (${esc(d.issuer||'')})</option>`).join('');
+  const opts = Object.entries(def.options || {}).map(([key, spec]) => {
+    const v = FPEngine.optionValue(card, def, key);
+    if (spec.type === 'boolean') return `<div class="form-row"><label style="display:flex;gap:8px;align-items:center;cursor:pointer;"><input type="checkbox" style="width:auto;" data-opt="${key}" data-type="boolean" ${v?'checked':''}/> ${esc(spec.label)}</label></div>`;
+    return `<div class="form-row"><label>${esc(spec.label)}</label><select data-opt="${key}">${Object.entries(spec.choices).map(([k, c]) => `<option value="${k}" ${String(v)===k?'selected':''}>${esc(c.label)}</option>`).join('')}</select></div>`;
+  }).join('');
+  const tenX = (def.bonuses || []).some(b => b.when && b.when.merchantsOption) ? (def.bonuses.filter(b => b.when.merchantsOption).map(b => `<div class="form-row"><label>${esc(b.label)} — merchant names, comma separated</label><input data-opt="${b.when.merchantsOption}" value="${esc(card.options[b.when.merchantsOption]||'')}" placeholder="e.g. Shell, Lazada, Agoda"/></div>`).join('')) : '';
+  const cyc = FPEngine.cycleFor(def.cycle || card.cycleType, card.cycleDate, today());
+  const adj = (card.capAdjustments || {})[cyc.key] || {};
+  const adjRows = Object.keys(def.capGroups || {}).map(g => {
+    const users = (def.bonuses||[]).filter(b => (b.cap||[]).includes(g)).map(b => b.label).join(' / ');
+    return `<div class="form-row"><label>Bonus spend already used: ${esc(users || g)}</label><input type="number" step="0.01" data-adj="${g}" value="${adj[g] || ''}" placeholder="0.00"/></div>`;
+  }).join('');
+  showModal(`
+    <h3>${esc(card.name)} — settings</h3>
+    <div class="form-row"><label>Rules definition</label>
+      <select id="cs-rule">${defOptions}<option value="legacy" ${def.legacy?'selected':''}>Legacy (card's own bonus rules)</option></select>
+      <div class="hint">Matched automatically by name. Change it if the wrong card was picked.</div></div>
+    <div class="form-grid">
+      <div class="form-row"><label>Statement day</label><input id="cs-stmt" type="number" min="1" max="31" value="${esc(card.cycleDate||'')}"/><div class="hint">Used for statement-month caps (UOB Visa Signature, Citi, CIMB).</div></div>
+      <div class="form-row"><label>Payment due (days after statement)</label><input id="cs-grace" type="number" min="0" max="60" value="${esc(card.gracePeriodDays||'')}"/></div>
+    </div>
+    ${opts}${tenX}
+    <div style="font-size:11.5px;font-weight:600;color:#4A6580;letter-spacing:.06em;margin:16px 0 6px;">SPEND NOT LOGGED IN THE APP — THIS CYCLE (${esc(cyc.start)} → ${esc(cyc.end)})</div>
+    <div class="hint" style="margin:-2px 0 10px;">Use this when you start tracking mid-cycle, so caps and minimums start from the right place. Resets automatically next cycle.</div>
+    <div class="form-row"><label>Total card spend so far (counts toward minimum-spend conditions)</label><input type="number" step="0.01" data-adj="_total" value="${adj._total || ''}" placeholder="0.00"/></div>
+    ${adjRows}
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveCardSettings('${card.id}','${cyc.key}')">Save</button>
+    </div>`);
+}
+function saveCardSettings(cardId, cycleKey) {
+  const card = cardById(cardId);
+  card.ruleId = document.getElementById('cs-rule').value;
+  card.cycleDate = document.getElementById('cs-stmt').value;
+  card.gracePeriodDays = parseInt(document.getElementById('cs-grace').value) || 0;
+  document.querySelectorAll('#modal-container [data-opt]').forEach(el => {
+    card.options[el.dataset.opt] = el.dataset.type === 'boolean' ? el.checked : el.value;
+  });
+  const adj = {};
+  document.querySelectorAll('#modal-container [data-adj]').forEach(el => { const v = parseFloat(el.value); if (v > 0) adj[el.dataset.adj] = v; });
+  card.capAdjustments = card.capAdjustments || {};
+  if (Object.keys(adj).length) card.capAdjustments[cycleKey] = adj; else delete card.capAdjustments[cycleKey];
+  closeModal(); saveToDrive(); render();
+  toast('Saved ' + esc(card.name));
+}
+
+/* ---------------- Strategy page ---------------- */
+let strategyTab = 'marvin';
+function renderStrategy() {
+  const tabs = [['marvin','Marvin'],['wife','Caroline'],['cobae','Household (Cobae & joint)']];
+  const ctx = engineCtx();
+  const rows = FPEngine.strategy(ctx, strategyTab, today(), 50).map(({ scenario, rec }) => {
+    const p = rec.pick;
+    const runner = rec.ranked.find(o => o !== p && !o.excluded && o.card.id !== (p && p.card.id));
+    if (!p) return `<tr><td>${esc(scenario.label)}</td><td colspan="3" class="text-muted">No card earns rewards — pay by GIRO / bank transfer</td></tr>`;
+    const cap = p.capRoom != null ? `<span class="${p.capRoom<100?'text-amber':'text-muted'}">$${fmtAmt(p.capRoom)} cap left</span>` : '';
+    return `<tr>
+      <td>${esc(scenario.label)}${scenario.fcy ? ' <span class="pill pill-blue">FCY</span>' : ''}</td>
+      <td><strong>${esc(p.card.name)}</strong><div class="hint" style="margin-top:1px;">${profileLabel(p.card.profile)}${p.bonusLabel ? ' · ' + esc(p.bonusLabel) : ''}${p.committed ? ' · <span class="text-amber">needs min. spend</span>' : ''}</div></td>
+      <td class="tabnum"><span class="text-green" style="font-weight:700;">${esc(p.unitLine)}</span><div class="hint" style="margin-top:1px;">${cap}</div></td>
+      <td style="font-size:12px;color:#8AABBF;">${runner ? esc(runner.card.name) + ' · ' + esc(runner.unitLine) : '—'}</td>
+    </tr>`;
+  }).join('');
+  const owners = strategyTab === 'cobae' ? ['marvin','wife','joint'] : [strategyTab, 'joint'].concat(data.settings.household.crossUse ? ['marvin','wife'] : []);
+  const cards = data.cards.filter(c => owners.includes(c.profile));
+  const tiles = cards.map(c => `<div class="card-tile">${cardStatusHtml(c)}</div>`).join('');
+  const valid = (RULES.cards||[]).filter(d => d.verify || (d.bonuses||[]).some(b => b.verify)).length;
+  return `
+    ${rulesBanner()}
+    <div class="profile-tabs tabs-scroll">${tabs.map(([k,l]) => `<div class="profile-tab ${strategyTab===k?'active':''}" onclick="strategyTab='${k}';render()">${l}</div>`).join('')}</div>
+    <p style="font-size:13px;color:#8AABBF;margin:-8px 0 16px;line-height:1.6;">Live cheat sheet for a S$50 spend today, using what's left under each cap this cycle. It changes as you log expenses and caps fill up.
+      Rules ${esc(RULES.rulesVersion||'—')}${valid ? ` · <span class="text-amber">${valid} card${valid!==1?'s have':' has'} items marked "verify"</span>` : ''}.</p>
+    <div class="table-wrap"><table class="data-table">
+      <thead><tr><th>When you're paying for…</th><th>Use</th><th>Earn</th><th>Next best</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    <div class="section-header"><h2>Caps & conditions this cycle</h2></div>
+    ${tiles || '<div class="empty">No cards for this view</div>'}`;
+}
+
+/* ---------------- Spending page ---------------- */
+let spendMonth = null, spendFilter = 'all', spendCard = 'all';
+function monthSummary(ym, profileFilter, cardFilter) {
+  const inScope = t => t.date && t.date.slice(0,7) === ym && (!profileFilter || profileFilter === 'all' || t.forProfile === profileFilter) && (!cardFilter || cardFilter === 'all' || t.cardId === cardFilter);
+  const txns = (data.transactions || []).filter(inScope);
+  const res = { txns, count: txns.length, spend: 0, miles: 0, cashback: 0, missed: 0, missedCount: 0, rows: [] };
+  if (!txns.length || !window.FPEngine) return res;
+  const rows = FPEngine.analyseLedger(engineCtx(), inScope);
+  rows.forEach(r => {
+    res.spend += Number(r.txn.amount) || 0;
+    if (r.actual) { res.miles += r.actual.result.miles; res.cashback += r.actual.result.cashback; }
+    if (r.missedCents > 0.5) { res.missed += r.missedCents / 100; res.missedCount++; }
+  });
+  res.rows = rows;
+  return res;
+}
+function renderSpend() {
+  spendMonth = spendMonth || today().slice(0,7);
+  const sum = monthSummary(spendMonth, spendFilter, spendCard);
+  const byCat = {}, byWho = {};
+  sum.txns.forEach(t => { byCat[t.category || 'Other'] = (byCat[t.category || 'Other'] || 0) + Number(t.amount); byWho[t.forProfile] = (byWho[t.forProfile] || 0) + Number(t.amount); });
+  const bars = (obj, labelFn) => {
+    const entries = Object.entries(obj).sort((a,b) => b[1]-a[1]);
+    const max = entries[0] ? entries[0][1] : 1;
+    return entries.map(([k,v]) => `<div class="bar-row"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(labelFn ? labelFn(k) : k)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.max(2, v/max*100)}%"></div></div><span class="tabnum" style="text-align:right;">$${fmtAmt(v)}</span></div>`).join('') || '<div class="hint">Nothing yet</div>';
+  };
+  const rows = sum.rows.slice().sort((a,b) => (b.txn.date||'').localeCompare(a.txn.date||'') || String(b.txn.createdAt||'').localeCompare(String(a.txn.createdAt||''))).map(r => {
+    const t = r.txn;
+    const earned = r.actual ? (r.actual.result.type === 'cashback' ? '$' + fmtAmt(r.actual.result.cashback) : Math.round(r.actual.result.miles).toLocaleString() + ' mi') : '—';
+    const missed = r.missedCents > 0.5 ? `<div class="hint text-amber" title="${esc(r.best.card.name)} would have earned ${esc(r.best.unitLine)}">−$${fmtAmt(r.missedCents/100)} vs ${esc(r.best.card.name)}</div>` : '';
+    return `<tr style="cursor:pointer;" onclick="openExpenseModal('${t.id}')">
+      <td class="tabnum" style="white-space:nowrap;">${esc(t.date.slice(5))}</td>
+      <td>${esc(t.merchant)}<div class="hint" style="margin-top:1px;">${esc(t.category||'')}${t.mcc ? ' · ' + esc(t.mcc) : ''} · ${channelLabel(t.channel)}${t.fcy ? ' · FCY' : ''}${t.source==='import' ? ' · imported' : ''}</div></td>
+      <td>${profileLabel(t.forProfile)}</td>
+      <td style="font-size:12.5px;">${esc(t.cardName || '—')}</td>
+      <td class="tabnum" style="text-align:right;">$${fmtAmt(t.amount)}</td>
+      <td class="tabnum" style="text-align:right;"><span class="text-green">${earned}</span>${missed}</td>
+    </tr>`;
+  }).join('');
+  const cardOpts = data.cards.map(c => `<option value="${c.id}" ${spendCard===c.id?'selected':''}>${esc(c.name)}</option>`).join('');
+  return `
+    <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center;">
+      <button class="btn-primary" onclick="openExpenseModal()">+ Add expense</button>
+      <button class="btn-secondary" onclick="openImportModal()">↑ Import statement</button>
+      <input type="month" value="${spendMonth}" onchange="spendMonth=this.value;render()" style="background:#0D1B2A;border:1px solid #2A4A6B;color:#F0F4F8;border-radius:7px;padding:7px 10px;font-size:13px;"/>
+      <select onchange="spendFilter=this.value;render()" style="background:#0D1B2A;border:1px solid #2A4A6B;color:#F0F4F8;border-radius:7px;padding:7px 10px;font-size:13px;">
+        <option value="all">Everyone</option>${PROFILES.map(p => `<option value="${p}" ${spendFilter===p?'selected':''}>${profileLabel(p)}</option>`).join('')}
+      </select>
+      <select onchange="spendCard=this.value;render()" style="background:#0D1B2A;border:1px solid #2A4A6B;color:#F0F4F8;border-radius:7px;padding:7px 10px;font-size:13px;max-width:220px;">
+        <option value="all">All cards</option>${cardOpts}
+      </select>
+    </div>
+    <div class="stat-row">
+      <div class="stat-card"><div class="label">Spent</div><div class="value tabnum">$${fmtAmt(sum.spend)}</div><div class="sub">${sum.count} expense${sum.count!==1?'s':''}</div></div>
+      <div class="stat-card"><div class="label">Miles earned</div><div class="value tabnum text-green">${Math.round(sum.miles).toLocaleString()}</div><div class="sub">${sum.spend ? (sum.miles/sum.spend).toFixed(2) + ' mpd average' : '—'}</div></div>
+      <div class="stat-card"><div class="label">Cashback earned</div><div class="value tabnum">$${fmtAmt(sum.cashback)}</div><div class="sub">credited by banks next cycle</div></div>
+      <div class="stat-card"><div class="label">Missed value</div><div class="value tabnum ${sum.missed>0.5?'text-amber':'text-green'}">$${fmtAmt(sum.missed)}</div><div class="sub">${sum.missedCount} sub-optimal card choice${sum.missedCount!==1?'s':''}</div></div>
+    </div>
+    <div class="form-grid" style="gap:20px;margin-bottom:24px;">
+      <div class="smart-spend-box" style="margin:0;"><div class="section-header"><h2>By category</h2></div>${bars(byCat)}</div>
+      <div class="smart-spend-box" style="margin:0;"><div class="section-header"><h2>By person</h2></div>${bars(byWho, profileLabel)}</div>
+    </div>
+    <div class="section-header"><h2>Expenses</h2><span class="hint">Tap a row to edit. Earned figures include bonuses unlocked later in the cycle.</span></div>
+    <div class="table-wrap" style="overflow-x:auto;"><table class="data-table">
+      <thead><tr><th>Date</th><th>Merchant</th><th>For</th><th>Card</th><th style="text-align:right;">Amount</th><th style="text-align:right;">Earned</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="6"><div class="empty"><div class="icon">≡</div>No expenses for this month yet — add one, or import a statement.</div></td></tr>`}</tbody>
+    </table></div>`;
+}
+
+/* ---------------- statement import ---------------- */
+let IMPORT = null;
+function openImportModal() {
+  IMPORT = { rows: [] };
+  const cardOpts = data.cards.map(c => `<option value="${c.id}">${esc(c.name)} (${profileLabel(c.profile)})</option>`).join('');
+  showModal(`
+    <h3>Import a card statement</h3>
+    <p style="font-size:12.5px;color:#8AABBF;margin:-8px 0 14px;">CSV export, PDF statement, or text copied from internet banking. Nothing leaves your browser; only the expenses you confirm are saved to your Drive.</p>
+    <div class="form-grid">
+      <div class="form-row"><label>Statement is for card</label><select id="im-card">${cardOpts}</select></div>
+      <div class="form-row"><label>Statement date (helps with the year)</label><input id="im-ref" type="date" value="${today()}"/></div>
+    </div>
+    <div class="form-row"><label>File (.csv, .pdf, .txt)</label><input id="im-file" type="file" accept=".csv,.pdf,.txt,text/csv,application/pdf"/></div>
+    <div class="form-row"><label>…or paste statement lines</label><textarea id="im-text" rows="6" style="font-family:monospace;font-size:12px;" placeholder="12 OCT  GRAB*FOOD SINGAPORE      23.40&#10;13 OCT  COLD STORAGE JELITA        86.15"></textarea></div>
+    <div id="im-status" class="hint"></div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="readStatement()">Read statement</button>
+    </div>`);
+}
+async function readStatement() {
+  const status = document.getElementById('im-status');
+  const cardId = document.getElementById('im-card').value;
+  const refDate = document.getElementById('im-ref').value || today();
+  const file = document.getElementById('im-file').files[0];
+  const pasted = document.getElementById('im-text').value;
+  let parsed = [];
+  try {
+    if (file && /\.csv$/i.test(file.name)) {
+      const table = FPEngine.parseCSV(await file.text());
+      const map = FPEngine.guessCsvMapping(table[0] || []);
+      if (map.date < 0 || map.description < 0 || (map.amount < 0 && map.debit < 0)) { status.innerHTML = '<span class="text-red">Could not find date / description / amount columns in that CSV. Try pasting the lines instead.</span>'; return; }
+      parsed = FPEngine.csvToRows(table, map, { refDate });
+    } else if (file && /\.pdf$/i.test(file.name)) {
+      status.textContent = 'Reading PDF…';
+      parsed = FPEngine.parseStatementText(await pdfToText(file), { refDate });
+    } else if (file) parsed = FPEngine.parseStatementText(await file.text(), { refDate });
+    else parsed = FPEngine.parseStatementText(pasted, { refDate });
+  } catch (e) { status.innerHTML = `<span class="text-red">${esc(e.message || e)}</span>`; return; }
+  if (!parsed.length) { status.innerHTML = '<span class="text-red">No transaction lines found. Lines need a date at the start and an amount at the end.</span>'; return; }
+  const card = cardById(cardId);
+  const existing = new Set((data.transactions || []).map(t => FPEngine.txnFingerprint(t)));
+  const batch = 'imp_' + uid();
+  IMPORT = { cardId, batch, rows: parsed.map(r => {
+    const g = FPEngine.categorise(r.description, merchantPool(), data.merchantMappings);
+    const row = { ...r, merchant: g.merchant, mcc: g.mcc || '', category: g.category, channel: g.channel || 'chip', fcy: g.fcy, forProfile: card.profile, confidence: g.confidence };
+    row.duplicate = existing.has(FPEngine.txnFingerprint({ cardId, date: r.date, amount: r.amount, rawDescription: r.description }));
+    row.include = !r.credit && !row.duplicate;
+    row.guess = { merchant: row.merchant, mcc: row.mcc, channel: row.channel };
+    return row;
+  }) };
+  renderImportPreview();
+}
+function renderImportPreview() {
+  const card = cardById(IMPORT.cardId);
+  const n = IMPORT.rows.filter(r => r.include).length;
+  const total = IMPORT.rows.filter(r => r.include).reduce((s, r) => s + r.amount, 0);
+  const rows = IMPORT.rows.map((r, i) => `<tr style="${r.include ? '' : 'opacity:.45;'}">
+    <td><input type="checkbox" style="width:auto;" ${r.include?'checked':''} onchange="IMPORT.rows[${i}].include=this.checked;renderImportPreview()"/></td>
+    <td class="tabnum" style="white-space:nowrap;">${esc(r.date.slice(5))}</td>
+    <td style="max-width:220px;"><div style="font-size:11px;color:#4A6580;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(r.description)}">${esc(r.description)}</div>
+      <input value="${esc(r.merchant)}" onchange="IMPORT.rows[${i}].merchant=this.value"/>
+      ${r.credit ? '<span class="pill pill-blue">credit</span>' : ''}${r.duplicate ? '<span class="pill pill-amber">already logged</span>' : ''}${r.confidence==='none' ? '<span class="pill pill-red">unknown</span>' : ''}</td>
+    <td style="width:70px;"><input value="${esc(r.mcc)}" onchange="IMPORT.rows[${i}].mcc=this.value.trim();IMPORT.rows[${i}].category=FPEngine.categoryForMcc(this.value.trim())" placeholder="MCC"/></td>
+    <td style="width:120px;"><select onchange="IMPORT.rows[${i}].channel=this.value">${CHANNELS.map(c => `<option value="${c.id}" ${r.channel===c.id?'selected':''}>${c.label}</option>`).join('')}</select></td>
+    <td style="width:110px;"><select onchange="IMPORT.rows[${i}].forProfile=this.value">${PROFILES.map(p => `<option value="${p}" ${r.forProfile===p?'selected':''}>${profileLabel(p)}</option>`).join('')}</select></td>
+    <td class="tabnum" style="text-align:right;white-space:nowrap;">$${fmtAmt(r.amount)}${r.fcy ? '<div class="hint">FCY</div>' : ''}</td>
+  </tr>`).join('');
+  showModal(`
+    <h3>Review ${IMPORT.rows.length} lines — ${esc(card.name)}</h3>
+    <p style="font-size:12.5px;color:#8AABBF;margin:-8px 0 12px;">Merchant, MCC and payment method are guessed from the description; fix any that are wrong and the app learns them for next time. Channel matters for contactless/online bonuses.</p>
+    <div style="max-height:55vh;overflow:auto;"><table class="data-table mini-table">
+      <thead><tr><th></th><th>Date</th><th>Merchant</th><th>MCC</th><th>Paid by</th><th>For</th><th style="text-align:right;">Amount</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    <div class="modal-footer" style="align-items:center;">
+      <span style="margin-right:auto;font-size:12.5px;color:#8AABBF;">${n} to import · $${fmtAmt(total)}</span>
+      <button class="btn-secondary" onclick="openImportModal()">Back</button>
+      <button class="btn-primary" onclick="commitImport()" ${n?'':'disabled'}>Import ${n}</button>
+    </div>`);
+  document.querySelector('#modal-container .modal').classList.add('wide');
+}
+function commitImport() {
+  const card = cardById(IMPORT.cardId);
+  let n = 0, learned = 0;
+  IMPORT.rows.filter(r => r.include).forEach(r => {
+    const txn = {
+      id: 'tx_' + uid() + n, date: r.date, postDate: r.postDate || null, amount: Math.round(r.amount * 100) / 100,
+      merchant: r.merchant, mcc: r.mcc, category: r.category || FPEngine.categoryForMcc(r.mcc),
+      channel: r.channel, fcy: !!r.fcy, wallet: false, forProfile: r.forProfile,
+      cardId: card.id, cardName: card.name, paidBy: card.profile,
+      source: 'import', importBatch: IMPORT.batch, rawDescription: r.description, createdAt: new Date().toISOString(),
+    };
+    if (r.merchant !== r.guess.merchant || r.mcc !== r.guess.mcc || r.channel !== r.guess.channel) { learnMapping(r.description, txn); learned++; }
+    data.transactions.push(txn); n++;
+  });
+  const skipped = IMPORT.rows.length - n;
+  IMPORT = null; closeModal(); saveToDrive();
+  spendMonth = null; navigate('spend');
+  toast(`Imported ${n} expense${n!==1?'s':''} for ${esc(card.name)}${skipped ? ` · skipped ${skipped}` : ''}${learned ? ` · learned ${learned} merchant correction${learned!==1?'s':''}` : ''}`, 4500);
+}
+async function loadPdfJs() {
+  if (window.pdfjsLib) return;
+  await new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = res; s.onerror = () => rej(new Error('Could not load the PDF reader'));
+    document.head.appendChild(s);
+  });
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+/** Extract text lines from a PDF statement, grouping items that share a baseline. Handles password-protected PDFs. */
+async function pdfToText(file) {
+  await loadPdfJs();
+  const buf = new Uint8Array(await file.arrayBuffer());
+  const task = window.pdfjsLib.getDocument({ data: buf });
+  task.onPassword = (update, reason) => {
+    const pw = prompt(reason === 2 ? 'Wrong password — try again:' : 'This statement is password-protected (often your NRIC + date of birth). Password:');
+    if (pw == null) { task.destroy(); return; }
+    update(pw);
+  };
+  const pdf = await task.promise;
+  const lines = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const tc = await (await pdf.getPage(p)).getTextContent();
+    const rows = [];
+    tc.items.forEach(it => {
+      if (!it.str || !it.str.trim()) return;
+      const y = it.transform[5], x = it.transform[4];
+      let row = rows.find(r => Math.abs(r.y - y) <= 2.5);
+      if (!row) { row = { y, items: [] }; rows.push(row); }
+      row.items.push({ x, s: it.str });
+    });
+    rows.sort((a, b) => b.y - a.y).forEach(r => lines.push(r.items.sort((a, b) => a.x - b.x).map(i => i.s).join('  ')));
+  }
+  return lines.join('\n');
 }
 
 /* =================== MODAL UTILS =================== */

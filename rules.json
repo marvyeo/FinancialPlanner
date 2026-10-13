@@ -1,0 +1,1392 @@
+{
+  "schemaVersion": 2,
+  "rulesVersion": "2026-10-13",
+  "generatedAt": "2026-10-13T23:40:00+08:00",
+  "generatedBy": "Claude weekly rules refresh (baseline)",
+  "notes": "mpd = miles per S$ for the card's best airline programme, including the base rate. pct = total cashback % including base. Caps are in S$ of spend unless the cap group says cashback. Items with verify:true need a T&C check.",
+  "sharedLists": {
+    "GENERAL_EXCLUSIONS": [
+      "4900",
+      "5960",
+      "6300",
+      "6381",
+      "6399",
+      "8211",
+      "8220",
+      "8241",
+      "8244",
+      "8249",
+      "8299",
+      "8398",
+      "8651",
+      "8661",
+      "9211",
+      "9222",
+      "9223",
+      "9311",
+      "9399",
+      "9402",
+      "6540",
+      "6051",
+      "6012",
+      "6211",
+      "4829",
+      "7995",
+      "6513",
+      "8062"
+    ],
+    "TRAVEL": [
+      "3000-3350",
+      "3351-3500",
+      "3501-3999",
+      "4411",
+      "4511",
+      "4582",
+      "4722",
+      "4723",
+      "7011",
+      "7012",
+      "7512",
+      "7513",
+      "7519"
+    ],
+    "TRANSIT": [
+      "4111",
+      "4112",
+      "4131"
+    ],
+    "FASHION": [
+      "5311",
+      "5611",
+      "5621",
+      "5631",
+      "5641",
+      "5651",
+      "5655",
+      "5661",
+      "5691",
+      "5699",
+      "5948"
+    ]
+  },
+  "cards": [
+    {
+      "id": "amex-plat-credit",
+      "names": [
+        "amex platinum credit",
+        "american express platinum credit",
+        "amex plat credit"
+      ],
+      "issuer": "American Express",
+      "reward": {
+        "type": "miles",
+        "unit": "MR points",
+        "mpd": 0.57,
+        "fcyMpd": 0.57,
+        "rounding": {
+          "block": 1.6
+        }
+      },
+      "programs": {
+        "KrisFlyer": 1,
+        "Asia Miles": 1
+      },
+      "cycle": "statement",
+      "exclusions": {
+        "mcc": [
+          "@GENERAL_EXCLUSIONS",
+          "@TRANSIT"
+        ],
+        "merchants": [
+          "spc",
+          "axs",
+          "singpost"
+        ]
+      },
+      "bonuses": [
+        {
+          "id": "amex-10x",
+          "label": "10Xcelerator merchant",
+          "mpd": 2.84,
+          "when": {
+            "merchantsOption": "tenXMerchants"
+          },
+          "notes": "Add the current 10Xcelerator partner list under card options. No cap.",
+          "verify": true
+        }
+      ],
+      "transfer": {
+        "ratio": "2.2 MR : 1 mile (post 23 Feb 2026 devaluation)",
+        "feeSGD": 0
+      },
+      "sources": [
+        "https://milelion.com/2026/02/24/review-american-express-platinum-credit-card/"
+      ]
+    },
+    {
+      "id": "amex-krisflyer",
+      "names": [
+        "amex krisflyer",
+        "american express krisflyer",
+        "krisflyer credit card",
+        "kf amex"
+      ],
+      "issuer": "American Express",
+      "reward": {
+        "type": "miles",
+        "unit": "KrisFlyer miles",
+        "mpd": 1.1,
+        "fcyMpd": 1.1,
+        "rounding": {
+          "mode": "exact"
+        }
+      },
+      "programs": {
+        "KrisFlyer": 1
+      },
+      "cycle": "calendar",
+      "exclusions": {
+        "mcc": [
+          "@GENERAL_EXCLUSIONS",
+          "@TRANSIT"
+        ],
+        "merchants": [
+          "spc",
+          "axs",
+          "singpost",
+          "grabpay",
+          "shopeepay"
+        ]
+      },
+      "bonuses": [
+        {
+          "id": "kf-sia",
+          "label": "SIA / Scoot / KrisShop / Pelago (SGD)",
+          "mpd": 2,
+          "when": {
+            "fcy": false,
+            "merchants": [
+              "singapore airlines",
+              "singaporeair",
+              "scoot",
+              "krisshop",
+              "pelago"
+            ]
+          }
+        },
+        {
+          "id": "kf-grab",
+          "label": "Grab (first S$200/mo)",
+          "mpd": 2,
+          "cap": [
+            "kf-grab"
+          ],
+          "when": {
+            "merchants": [
+              "grab"
+            ],
+            "mccExclude": [
+              "6540"
+            ]
+          }
+        }
+      ],
+      "capGroups": {
+        "kf-grab": {
+          "spend": 200
+        }
+      },
+      "transfer": {
+        "ratio": "Miles credited directly",
+        "feeSGD": 0
+      },
+      "sources": [
+        "https://mainlymiles.com/2026/09/24/amex-krisflyer-credit-card-review-2026/"
+      ]
+    },
+    {
+      "id": "dbs-altitude",
+      "names": [
+        "dbs altitude"
+      ],
+      "issuer": "DBS",
+      "reward": {
+        "type": "miles",
+        "unit": "DBS Points",
+        "mpd": 1.3,
+        "fcyMpd": 2.2,
+        "rounding": {
+          "mode": "exact"
+        }
+      },
+      "programs": {
+        "KrisFlyer": 1,
+        "Asia Miles": 1
+      },
+      "cycle": "calendar",
+      "exclusions": {
+        "mcc": [
+          "@GENERAL_EXCLUSIONS"
+        ],
+        "merchants": [
+          "amaze"
+        ]
+      },
+      "bonuses": [],
+      "transfer": {
+        "ratio": "5,000 DBS Points : 10,000 miles",
+        "feeSGD": 27.25
+      },
+      "sources": [
+        "https://milelion.com/2026/05/24/review-dbs-altitude-card/"
+      ]
+    },
+    {
+      "id": "dbs-wwmc",
+      "names": [
+        "dbs woman s world",
+        "dbs womans world",
+        "dbs wwmc",
+        "woman s world"
+      ],
+      "issuer": "DBS",
+      "reward": {
+        "type": "miles",
+        "unit": "DBS Points",
+        "mpd": 0.4,
+        "fcyMpd": 1.2,
+        "rounding": {
+          "mode": "exact"
+        }
+      },
+      "programs": {
+        "KrisFlyer": 1,
+        "Asia Miles": 1
+      },
+      "cycle": "calendar",
+      "exclusions": {
+        "mcc": [
+          "@GENERAL_EXCLUSIONS",
+          "7399"
+        ],
+        "merchants": [
+          "amaze",
+          "cardup",
+          "ipaymy"
+        ]
+      },
+      "bonuses": [
+        {
+          "id": "wwmc-online",
+          "label": "Online (any category)",
+          "mpd": 4,
+          "cap": [
+            "wwmc"
+          ],
+          "when": {
+            "channels": [
+              "online"
+            ]
+          },
+          "notes": "Blacklist approach: all online spend unless excluded. In-store taps earn 0.4 mpd."
+        }
+      ],
+      "capGroups": {
+        "wwmc": {
+          "spend": 1000
+        }
+      },
+      "transfer": {
+        "ratio": "5,000 DBS Points : 10,000 miles",
+        "feeSGD": 27.25
+      },
+      "sources": [
+        "https://milelion.com/2026/08/11/review-dbs-womans-world-card/"
+      ]
+    },
+    {
+      "id": "dbs-yuu",
+      "names": [
+        "dbs yuu",
+        "yuu visa",
+        "yuu card"
+      ],
+      "issuer": "DBS",
+      "reward": {
+        "type": "miles",
+        "unit": "yuu Points",
+        "mpd": 0.28,
+        "fcyMpd": 0.28,
+        "rounding": {
+          "block": 1
+        }
+      },
+      "programs": {
+        "KrisFlyer": 1
+      },
+      "cycle": "calendar",
+      "exclusions": {
+        "mcc": [
+          "@GENERAL_EXCLUSIONS"
+        ],
+        "merchants": []
+      },
+      "merchantGroups": {
+        "yuu": [
+          [
+            "7 eleven",
+            "7eleven",
+            "seven eleven"
+          ],
+          [
+            "chagee"
+          ],
+          [
+            "charge+",
+            "charge plus"
+          ],
+          [
+            "cold storage",
+            "cs fresh",
+            "jasons"
+          ],
+          [
+            "foodpanda",
+            "pandamart"
+          ],
+          [
+            "giant"
+          ],
+          [
+            "guardian"
+          ],
+          [
+            "gojek"
+          ],
+          [
+            "singtel"
+          ]
+        ]
+      },
+      "bonuses": [
+        {
+          "id": "yuu-10",
+          "label": "10 mpd at yuu merchants",
+          "mpd": 10,
+          "cap": [
+            "yuu"
+          ],
+          "when": {
+            "anyOf": [
+              {
+                "merchantGroup": "yuu"
+              },
+              {
+                "merchants": [
+                  "simplygo",
+                  "bus mrt"
+                ]
+              }
+            ]
+          },
+          "requires": [
+            {
+              "type": "minSpend",
+              "amount": 800,
+              "basis": "card",
+              "label": "S$800 total card spend"
+            },
+            {
+              "type": "distinctMerchants",
+              "count": 4,
+              "group": "yuu",
+              "label": "4 different yuu merchants"
+            }
+          ]
+        },
+        {
+          "id": "yuu-2.8",
+          "label": "yuu merchants (before 10 mpd unlocks)",
+          "mpd": 2.78,
+          "cap": [
+            "yuu"
+          ],
+          "when": {
+            "anyOf": [
+              {
+                "merchantGroup": "yuu"
+              },
+              {
+                "merchants": [
+                  "simplygo",
+                  "bus mrt"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "capGroups": {
+        "yuu": {
+          "spend": 822.86
+        }
+      },
+      "transfer": {
+        "ratio": "3.6 yuu Points : 1 KrisFlyer mile, free, instant",
+        "feeSGD": 0
+      },
+      "sources": [
+        "https://milelion.com/2026/07/18/faqs-dbs-yuu-card-yuu-points-and-10-mpd-at-yuu-merchants/"
+      ]
+    },
+    {
+      "id": "uob-preferred-visa",
+      "names": [
+        "uob preferred visa",
+        "uob preferred platinum",
+        "uob ppv",
+        "uob pv"
+      ],
+      "issuer": "UOB",
+      "reward": {
+        "type": "miles",
+        "unit": "UNI$",
+        "mpd": 0.4,
+        "fcyMpd": 0.4,
+        "rounding": {
+          "block": 5
+        }
+      },
+      "programs": {
+        "KrisFlyer": 1,
+        "Asia Miles": 1
+      },
+      "cycle": "calendar",
+      "exclusions": {
+        "mcc": [
+          "@GENERAL_EXCLUSIONS"
+        ],
+        "merchants": [
+          "ipaymy"
+        ]
+      },
+      "bonuses": [
+        {
+          "id": "uobpv-mobile",
+          "label": "Mobile contactless (Apple/Google/Samsung Pay)",
+          "mpd": 4,
+          "cap": [
+            "uobpv-mobile"
+          ],
+          "when": {
+            "channels": [
+              "mobile_contactless"
+            ]
+          }
+        },
+        {
+          "id": "uobpv-simplygo",
+          "label": "SimplyGo (bus/MRT)",
+          "mpd": 4,
+          "cap": [
+            "uobpv-mobile"
+          ],
+          "when": {
+            "anyOf": [
+              {
+                "merchants": [
+                  "simplygo",
+                  "bus mrt"
+                ]
+              },
+              {
+                "mcc": [
+                  "4111"
+                ]
+              }
+            ]
+          },
+          "notes": "Which sub-cap SimplyGo draws from is not stated; assumed the contactless cap.",
+          "verify": true
+        },
+        {
+          "id": "uobpv-online",
+          "label": "Selected online (retail, groceries, dining, delivery, entertainment)",
+          "mpd": 4,
+          "cap": [
+            "uobpv-online"
+          ],
+          "when": {
+            "channels": [
+              "online"
+            ],
+            "mcc": [
+              "5311",
+              "5331",
+              "5399",
+              "5999",
+              "5722",
+              "5732",
+              "5411",
+              "5811",
+              "5812",
+              "5814",
+              "5499",
+              "7832",
+              "7922",
+              "7929",
+              "7996"
+            ],
+            "mccExclude": [
+              "@TRAVEL"
+            ]
+          },
+          "notes": "MCC list approximated from UOB's category descriptions.",
+          "verify": true
+        }
+      ],
+      "capGroups": {
+        "uobpv-mobile": {
+          "spend": 600
+        },
+        "uobpv-online": {
+          "spend": 600
+        }
+      },
+      "transfer": {
+        "ratio": "5,000 UNI$ : 10,000 miles",
+        "feeSGD": 27
+      },
+      "sources": [
+        "https://milelion.com/2026/03/29/review-uob-preferred-platinum-visa-card/",
+        "https://milelion.com/2026/03/10/goodbye-uob-preferred-platinum-visa-hello-uob-preferred-visa/"
+      ]
+    },
+    {
+      "id": "uob-visa-signature",
+      "names": [
+        "uob visa signature",
+        "uob vs"
+      ],
+      "issuer": "UOB",
+      "reward": {
+        "type": "miles",
+        "unit": "UNI$",
+        "mpd": 0.4,
+        "fcyMpd": 0.4,
+        "rounding": {
+          "block": 5
+        }
+      },
+      "programs": {
+        "KrisFlyer": 1,
+        "Asia Miles": 1
+      },
+      "cycle": "statement",
+      "exclusions": {
+        "mcc": [
+          "@GENERAL_EXCLUSIONS",
+          "7523",
+          "5993",
+          "7800",
+          "7801",
+          "7802"
+        ],
+        "merchants": [
+          "spc",
+          "shell",
+          "axs",
+          "amaze",
+          "ez link",
+          "flashpay"
+        ]
+      },
+      "bonuses": [
+        {
+          "id": "uobvs-fcy",
+          "label": "Overseas / FCY",
+          "mpd": 4,
+          "cap": [
+            "uobvs-fcy"
+          ],
+          "when": {
+            "fcy": true
+          },
+          "requires": [
+            {
+              "type": "minSpend",
+              "amount": 1000,
+              "basis": "bonus",
+              "label": "S$1,000 FCY spend this statement"
+            }
+          ],
+          "notes": "Online FCY only counts if the merchant's gateway is overseas. DCC (paying in SGD abroad) does not count."
+        },
+        {
+          "id": "uobvs-local",
+          "label": "Contactless / petrol / SimplyGo (SGD)",
+          "mpd": 4,
+          "cap": [
+            "uobvs-local"
+          ],
+          "when": {
+            "fcy": false,
+            "anyOf": [
+              {
+                "channels": [
+                  "mobile_contactless",
+                  "card_contactless"
+                ]
+              },
+              {
+                "mcc": [
+                  "5541",
+                  "5542"
+                ]
+              },
+              {
+                "mcc": [
+                  "4111"
+                ]
+              },
+              {
+                "merchants": [
+                  "simplygo",
+                  "bus mrt"
+                ]
+              }
+            ]
+          },
+          "requires": [
+            {
+              "type": "minSpend",
+              "amount": 1000,
+              "basis": "bonus",
+              "label": "S$1,000 contactless/petrol spend this statement"
+            }
+          ]
+        }
+      ],
+      "capGroups": {
+        "uobvs-fcy": {
+          "spend": 1200
+        },
+        "uobvs-local": {
+          "spend": 1200
+        }
+      },
+      "transfer": {
+        "ratio": "5,000 UNI$ : 10,000 miles",
+        "feeSGD": 27
+      },
+      "sources": [
+        "https://mainlymiles.com/2026/07/29/uob-visa-signature-review-2026/"
+      ]
+    },
+    {
+      "id": "uob-ladys",
+      "names": [
+        "uob lady s",
+        "uob ladys",
+        "uob lady"
+      ],
+      "issuer": "UOB",
+      "reward": {
+        "type": "miles",
+        "unit": "UNI$",
+        "mpd": 0.4,
+        "fcyMpd": 0.4,
+        "rounding": {
+          "block": 5
+        }
+      },
+      "programs": {
+        "KrisFlyer": 1,
+        "Asia Miles": 1
+      },
+      "cycle": "calendar",
+      "exclusions": {
+        "mcc": [
+          "@GENERAL_EXCLUSIONS"
+        ],
+        "merchants": []
+      },
+      "options": {
+        "ladysCategory": {
+          "label": "Selected bonus category (change each quarter)",
+          "default": "dining",
+          "choices": {
+            "beauty": {
+              "label": "Beauty & Wellness",
+              "mcc": [
+                "5912",
+                "5977",
+                "7230",
+                "7231",
+                "7297",
+                "7298"
+              ]
+            },
+            "dining": {
+              "label": "Dining",
+              "mcc": [
+                "5811",
+                "5812",
+                "5814",
+                "5499"
+              ]
+            },
+            "entertainment": {
+              "label": "Entertainment",
+              "mcc": [
+                "5813",
+                "7832",
+                "7922"
+              ]
+            },
+            "family": {
+              "label": "Family",
+              "mcc": [
+                "5411",
+                "5641"
+              ]
+            },
+            "fashion": {
+              "label": "Fashion",
+              "mcc": [
+                "5311",
+                "5611",
+                "5621",
+                "5631",
+                "5651",
+                "5655",
+                "5661",
+                "5691",
+                "5699",
+                "5948"
+              ]
+            },
+            "transport": {
+              "label": "Transport",
+              "mcc": [
+                "4111",
+                "4121",
+                "4789",
+                "5541",
+                "5542"
+              ]
+            },
+            "travel": {
+              "label": "Travel",
+              "mcc": [
+                "3000-3299",
+                "3500-3999",
+                "4411",
+                "4511",
+                "4582",
+                "4722",
+                "5309",
+                "7011"
+              ]
+            }
+          }
+        },
+        "ladysSavingsTier": {
+          "label": "UOB Lady's Savings Account balance",
+          "default": "0",
+          "choices": {
+            "0": {
+              "label": "Under S$10K / none",
+              "add": 0
+            },
+            "1": {
+              "label": "S$10K–50K (+2 mpd)",
+              "add": 2
+            },
+            "2": {
+              "label": "S$50K–100K (+4 mpd)",
+              "add": 4
+            },
+            "3": {
+              "label": "S$100K+ (+6 mpd)",
+              "add": 6
+            }
+          }
+        }
+      },
+      "bonuses": [
+        {
+          "id": "ladys-cat",
+          "label": "Selected category",
+          "mpd": 4,
+          "cap": [
+            "ladys"
+          ],
+          "when": {
+            "optionCategory": "ladysCategory"
+          },
+          "rateAdd": "ladysSavingsTier"
+        }
+      ],
+      "capGroups": {
+        "ladys": {
+          "spend": 1000
+        }
+      },
+      "transfer": {
+        "ratio": "5,000 UNI$ : 10,000 miles",
+        "feeSGD": 27
+      },
+      "sources": [
+        "https://milelion.com/2026/08/18/review-uob-ladys-card-ladys-solitaire/"
+      ]
+    },
+    {
+      "id": "ocbc-rewards",
+      "names": [
+        "ocbc rewards",
+        "ocbc titanium rewards"
+      ],
+      "issuer": "OCBC",
+      "reward": {
+        "type": "miles",
+        "unit": "OCBC$",
+        "mpd": 0.4,
+        "fcyMpd": 0.4,
+        "rounding": {
+          "block": 5
+        }
+      },
+      "programs": {
+        "KrisFlyer": 1,
+        "Asia Miles": 0.725
+      },
+      "cycle": "calendar",
+      "exclusions": {
+        "mcc": [
+          "@GENERAL_EXCLUSIONS"
+        ],
+        "merchants": [
+          "cardup",
+          "ipaymy",
+          "renthero"
+        ]
+      },
+      "bonuses": [
+        {
+          "id": "ocbc-shopping",
+          "label": "Shopping (MCC or named merchant)",
+          "mpd": 4,
+          "cap": [
+            "ocbc"
+          ],
+          "when": {
+            "mcc": [
+              "5309",
+              "5311",
+              "5611-5699",
+              "5941",
+              "5948"
+            ],
+            "merchants": [
+              "alibaba",
+              "aliexpress",
+              "amazon",
+              "ezbuy",
+              "guardian",
+              "lazada",
+              "mustafa",
+              "unity",
+              "shopee",
+              "taobao",
+              "tiktok",
+              "watsons"
+            ],
+            "mccExclude": [
+              "5411",
+              "5262",
+              "6540"
+            ]
+          }
+        }
+      ],
+      "capGroups": {
+        "ocbc": {
+          "spend": 1110
+        }
+      },
+      "transfer": {
+        "ratio": "25,000 OCBC$ : 10,000 KrisFlyer miles",
+        "feeSGD": 25
+      },
+      "sources": [
+        "https://milelion.com/2026/05/29/review-ocbc-titanium-rewards-card/"
+      ],
+      "notes": "OCBC runs a rotating quarterly +2 mpd promo at Shopee/Lazada/TikTok Shop/Taobao/Watsons. Not included until the current quarter's T&Cs are confirmed."
+    },
+    {
+      "id": "citi-rewards",
+      "names": [
+        "citi rewards"
+      ],
+      "issuer": "Citi",
+      "reward": {
+        "type": "miles",
+        "unit": "ThankYou Points",
+        "mpd": 0.4,
+        "fcyMpd": 0.4,
+        "rounding": {
+          "block": 1
+        }
+      },
+      "programs": {
+        "KrisFlyer": 1,
+        "Asia Miles": 1
+      },
+      "cycle": "statement",
+      "exclusions": {
+        "mcc": [
+          "@GENERAL_EXCLUSIONS"
+        ],
+        "merchants": [
+          "grabpay"
+        ]
+      },
+      "bonuses": [
+        {
+          "id": "citi-online",
+          "label": "Online (excl. travel & in-app mobile wallets)",
+          "mpd": 4,
+          "cap": [
+            "citi"
+          ],
+          "when": {
+            "channels": [
+              "online"
+            ],
+            "noWallet": true,
+            "mccExclude": [
+              "@TRAVEL",
+              "@TRANSIT",
+              "4121"
+            ]
+          },
+          "notes": "Citi treats ride-hailing as travel-related."
+        },
+        {
+          "id": "citi-fashion",
+          "label": "Clothes, shoes, bags, department stores",
+          "mpd": 4,
+          "cap": [
+            "citi"
+          ],
+          "when": {
+            "mcc": [
+              "@FASHION"
+            ],
+            "noWallet": true
+          }
+        }
+      ],
+      "capGroups": {
+        "citi": {
+          "spend": 1000
+        }
+      },
+      "transfer": {
+        "ratio": "25,000 ThankYou : 10,000 miles",
+        "feeSGD": 27.25
+      },
+      "sources": [
+        "https://milelion.com/2026/10/04/get-16000-bonus-miles-with-a-new-citi-rewards-card/",
+        "https://mainlymiles.com/2026/08/08/last-two-months-for-the-citi-rewards-visa-card/"
+      ],
+      "notes": "Citi Rewards Visa is discontinued on 15 Oct 2026; only the Mastercard remains."
+    },
+    {
+      "id": "hsbc-revolution",
+      "names": [
+        "hsbc revolution",
+        "hsbc revo"
+      ],
+      "issuer": "HSBC",
+      "reward": {
+        "type": "miles",
+        "unit": "HSBC points",
+        "mpd": 0.4,
+        "fcyMpd": 0.4,
+        "rounding": {
+          "block": 1
+        }
+      },
+      "programs": {
+        "Asia Miles": 1,
+        "KrisFlyer": 0.833
+      },
+      "cycle": "calendar",
+      "exclusions": {
+        "mcc": [
+          "@GENERAL_EXCLUSIONS",
+          "4111"
+        ],
+        "merchants": [
+          "cardup",
+          "ipaymy",
+          "ez link",
+          "transitlink",
+          "youtrip"
+        ]
+      },
+      "options": {
+        "hsbcEnhanced": {
+          "label": "S$50K+ month-end ADB in HSBC Everyday Global Account (8 mpd tier)",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "bonuses": [
+        {
+          "id": "hsbc-8",
+          "label": "Online/contactless, eligible category (8 mpd tier)",
+          "mpd": 8,
+          "cap": [
+            "hsbc-enh"
+          ],
+          "when": {
+            "channels": [
+              "online",
+              "mobile_contactless",
+              "card_contactless"
+            ],
+            "mcc": [
+              "@HSBC_WHITELIST"
+            ]
+          },
+          "requires": [
+            {
+              "type": "option",
+              "key": "hsbcEnhanced",
+              "equals": true,
+              "label": "S$50K ADB in Everyday Global Account"
+            }
+          ]
+        },
+        {
+          "id": "hsbc-4",
+          "label": "Online/contactless, eligible category",
+          "mpd": 4,
+          "cap": [
+            "hsbc"
+          ],
+          "when": {
+            "channels": [
+              "online",
+              "mobile_contactless",
+              "card_contactless"
+            ],
+            "mcc": [
+              "@HSBC_WHITELIST"
+            ]
+          },
+          "requires": [
+            {
+              "type": "option",
+              "key": "hsbcEnhanced",
+              "equals": false,
+              "label": "Standard tier"
+            }
+          ]
+        }
+      ],
+      "lists": {
+        "HSBC_WHITELIST": [
+          "5441",
+          "5462",
+          "5811",
+          "5812",
+          "5813",
+          "4816",
+          "5045",
+          "5262",
+          "5309-5311",
+          "5331",
+          "5399",
+          "5611-5699",
+          "5732-5735",
+          "5912",
+          "5942-5949",
+          "5964-5970",
+          "5992",
+          "5999",
+          "4121",
+          "7997",
+          "3000-3350",
+          "4511",
+          "3351-3500",
+          "3501-3999",
+          "7011",
+          "4411"
+        ]
+      },
+      "capGroups": {
+        "hsbc": {
+          "spend": 1000
+        },
+        "hsbc-enh": {
+          "spend": 1200
+        }
+      },
+      "transfer": {
+        "ratio": "25,000 pts : 10,000 Asia Miles; 30,000 : 10,000 KrisFlyer; no fee",
+        "feeSGD": 0
+      },
+      "sources": [
+        "https://milelion.com/2026/04/08/review-hsbc-revolution-card/"
+      ]
+    },
+    {
+      "id": "cimb-visa-signature",
+      "names": [
+        "cimb visa signature"
+      ],
+      "issuer": "CIMB",
+      "reward": {
+        "type": "cashback",
+        "pct": 0.2,
+        "fcyPct": 0.2,
+        "rounding": {
+          "mode": "exact"
+        }
+      },
+      "cycle": "statement",
+      "exclusions": {
+        "mcc": [
+          "@GENERAL_EXCLUSIONS"
+        ],
+        "merchants": [
+          "grabpay"
+        ]
+      },
+      "bonuses": [
+        {
+          "id": "cimbvs-online",
+          "label": "Online shopping",
+          "pct": 10,
+          "cap": [
+            "cimbvs-online",
+            "cimbvs-total"
+          ],
+          "when": {
+            "channels": [
+              "online"
+            ],
+            "mcc": [
+              "5311",
+              "5611-5699",
+              "5948",
+              "5732",
+              "5734"
+            ],
+            "merchants": [
+              "alibaba",
+              "amazon",
+              "apple",
+              "ezbuy",
+              "razer",
+              "shopee"
+            ]
+          },
+          "requires": [
+            {
+              "type": "minSpend",
+              "amount": 800,
+              "basis": "card",
+              "label": "S$800 spend this statement"
+            }
+          ]
+        },
+        {
+          "id": "cimbvs-grocery",
+          "label": "Groceries",
+          "pct": 10,
+          "cap": [
+            "cimbvs-grocery",
+            "cimbvs-total"
+          ],
+          "when": {
+            "mcc": [
+              "5411"
+            ]
+          },
+          "requires": [
+            {
+              "type": "minSpend",
+              "amount": 800,
+              "basis": "card",
+              "label": "S$800 spend this statement"
+            }
+          ]
+        },
+        {
+          "id": "cimbvs-beauty",
+          "label": "Beauty & wellness",
+          "pct": 10,
+          "cap": [
+            "cimbvs-beauty",
+            "cimbvs-total"
+          ],
+          "when": {
+            "mcc": [
+              "5912",
+              "5977",
+              "7230",
+              "7297",
+              "7298"
+            ]
+          },
+          "requires": [
+            {
+              "type": "minSpend",
+              "amount": 800,
+              "basis": "card",
+              "label": "S$800 spend this statement"
+            }
+          ]
+        },
+        {
+          "id": "cimbvs-pet",
+          "label": "Pet care",
+          "pct": 10,
+          "cap": [
+            "cimbvs-pet",
+            "cimbvs-total"
+          ],
+          "when": {
+            "mcc": [
+              "5995",
+              "0742"
+            ]
+          },
+          "requires": [
+            {
+              "type": "minSpend",
+              "amount": 800,
+              "basis": "card",
+              "label": "S$800 spend this statement"
+            }
+          ]
+        },
+        {
+          "id": "cimbvs-cruise",
+          "label": "Cruises",
+          "pct": 10,
+          "cap": [
+            "cimbvs-cruise",
+            "cimbvs-total"
+          ],
+          "when": {
+            "mcc": [
+              "4411"
+            ]
+          },
+          "requires": [
+            {
+              "type": "minSpend",
+              "amount": 800,
+              "basis": "card",
+              "label": "S$800 spend this statement"
+            }
+          ]
+        }
+      ],
+      "capGroups": {
+        "cimbvs-online": {
+          "cashback": 20
+        },
+        "cimbvs-grocery": {
+          "cashback": 20
+        },
+        "cimbvs-beauty": {
+          "cashback": 20
+        },
+        "cimbvs-pet": {
+          "cashback": 20
+        },
+        "cimbvs-cruise": {
+          "cashback": 20
+        },
+        "cimbvs-total": {
+          "cashback": 100
+        }
+      },
+      "sources": [
+        "https://www.singsaver.com.sg/credit-card/blog/cimb-visa-signature-card-review"
+      ],
+      "notes": "Sources disagree on whether the S$800 minimum is total spend or category spend; engine uses total card spend."
+    },
+    {
+      "id": "cimb-visa-infinite",
+      "names": [
+        "cimb visa infinite"
+      ],
+      "issuer": "CIMB",
+      "reward": {
+        "type": "cashback",
+        "pct": 0,
+        "fcyPct": 0,
+        "rounding": {
+          "mode": "exact"
+        }
+      },
+      "cycle": "statement",
+      "exclusions": {
+        "mcc": [
+          "@GENERAL_EXCLUSIONS"
+        ],
+        "merchants": []
+      },
+      "bonuses": [
+        {
+          "id": "cimbvi-fcy",
+          "label": "Overseas / FCY / travel",
+          "pct": 2,
+          "when": {
+            "anyOf": [
+              {
+                "fcy": true
+              },
+              {
+                "mcc": [
+                  "@TRAVEL"
+                ]
+              }
+            ]
+          },
+          "requires": [
+            {
+              "type": "minSpend",
+              "amount": 2000,
+              "basis": "card",
+              "label": "S$2,000 spend this month (else no cashback)"
+            }
+          ]
+        }
+      ],
+      "sources": [
+        "https://moneysmart.sg/credit-cards/cimb-visa-infinite"
+      ],
+      "notes": "Local non-travel cashback rate not published in sources checked; set to 0% until verified.",
+      "verify": true
+    }
+  ],
+  "changeLog": [
+    "Baseline for the rules engine, researched 13 Oct 2026.",
+    "UOB Visa Signature: two separate S$1,000 minimums (FCY; contactless/petrol/SimplyGo) and two S$1,200 caps per statement.",
+    "UOB Preferred Platinum Visa is now UOB Preferred Visa: S$600 mobile-contactless cap + S$600 online cap; SimplyGo earns 4 mpd.",
+    "HSBC Revolution: 4 mpd capped ~S$1,000/month; 8 mpd tier (S$1,200 cap) with S$50K in an HSBC Everyday Global Account.",
+    "DBS yuu: 10 mpd needs S$800 card spend + 4 different yuu merchants; bonus capped at ~S$823/month.",
+    "AMEX Platinum Credit: ~0.57 mpd base, 2.84 mpd at 10Xcelerator after the Feb 2026 transfer devaluation.",
+    "Citi Rewards Visa ends 15 Oct 2026; Citi Rewards Mastercard keeps a S$1,000/statement 4 mpd cap.",
+    "CIMB Visa Signature: 10% cashback needs S$800/statement; S$20 per category, S$100 total."
+  ]
+}
