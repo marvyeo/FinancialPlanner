@@ -1,0 +1,3328 @@
+{
+ "_meta": {
+  "version": "2026-10-14",
+  "lastUpdated": "2026-10-14",
+  "source": "Financial Planner curated SG merchant list (repo). Your Drive merchants.json entries override these.",
+  "confidence": {
+   "reported": "Published by a named source (see source).",
+   "typical": "Standard MCC for this kind of merchant in SG; not independently confirmed.",
+   "unverified": "Best guess. Check your statement or HeyMax / DBS digibot and correct it."
+  },
+  "howToCheck": "HeyMax merchant search; or lock a DBS card and read the declined MCC in digibot; or the Instarem app with an Amaze-paired card.",
+  "sources": [
+   "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "https://milelion.com/2025/07/28/what-are-the-best-cards-for-online-food-delivery",
+   "https://www.fairprice.com.sg/events/in-store/kopitiam-now-on-fairprice-group-app/"
+  ]
+ },
+ "merchants": [
+  {
+   "name": "Kopitiam",
+   "service": "",
+   "mcc": "5812",
+   "category": "Food court",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "KOPITIAM",
+    "KOPITIAM INVESTMENT"
+   ],
+   "mccAlt": [
+    "5814"
+   ],
+   "confidence": "unverified",
+   "source": "",
+   "notes": "Food court chain (FairPrice Group). Card terminals usually code as eating places.",
+   "id": "kopitiam"
+  },
+  {
+   "name": "Kopitiam",
+   "service": "via FairPrice Group app",
+   "mcc": "5812",
+   "category": "Food court",
+   "channel": "online",
+   "aliases": [
+    "FAIRPRICE GROUP APP",
+    "FP GROUP",
+    "FAIRPRICE APP"
+   ],
+   "mccAlt": [
+    "5814",
+    "5411"
+   ],
+   "confidence": "unverified",
+   "source": "https://www.fairprice.com.sg/events/in-store/kopitiam-now-on-fairprice-group-app/",
+   "notes": "Pay-in-app at ~70 Kopitiam outlets incl. Lau Pa Sat. Counts as an online/in-app payment. MCC not published — check the first statement line; if it shows as FAIRPRICE with 5411, change this entry.",
+   "id": "kopitiam-via-fairprice-group-app"
+  },
+  {
+   "name": "Lau Pa Sat",
+   "service": "",
+   "mcc": "5812",
+   "category": "Food court",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "LAU PA SAT",
+    "LAUPASAT",
+    "FESTIVAL MARKET"
+   ],
+   "mccAlt": [
+    "5814"
+   ],
+   "confidence": "unverified",
+   "source": "",
+   "notes": "Run under Kopitiam/FairPrice Group. Paying via the FairPrice app → use the Kopitiam (via FairPrice Group app) entry.",
+   "id": "lau-pa-sat"
+  },
+  {
+   "name": "Koufu",
+   "service": "",
+   "mcc": "5812",
+   "category": "Food court",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "KOUFU",
+    "COOKHOUSE BY KOUFU",
+    "FORK & SPOON"
+   ],
+   "mccAlt": [
+    "5814"
+   ],
+   "confidence": "unverified",
+   "source": "",
+   "notes": "",
+   "id": "koufu"
+  },
+  {
+   "name": "Food Republic",
+   "service": "",
+   "mcc": "5812",
+   "category": "Food court",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "FOOD REPUBLIC",
+    "BREADTALK FOOD REPUBLIC"
+   ],
+   "mccAlt": [
+    "5814"
+   ],
+   "confidence": "unverified",
+   "source": "",
+   "notes": "BreadTalk Group — Food Republic is not a yuu merchant.",
+   "id": "food-republic"
+  },
+  {
+   "name": "Foodfare",
+   "service": "",
+   "mcc": "5812",
+   "category": "Food court",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "FOODFARE",
+    "NTUC FOODFARE"
+   ],
+   "mccAlt": [
+    "5814"
+   ],
+   "confidence": "unverified",
+   "source": "",
+   "notes": "",
+   "id": "foodfare"
+  },
+  {
+   "name": "Food Junction",
+   "service": "",
+   "mcc": "5812",
+   "category": "Food court",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "FOOD JUNCTION"
+   ],
+   "mccAlt": [
+    "5814"
+   ],
+   "confidence": "unverified",
+   "source": "",
+   "notes": "",
+   "id": "food-junction"
+  },
+  {
+   "name": "Kopi & Tarts / coffee shop",
+   "service": "",
+   "mcc": "5812",
+   "category": "Coffee shop",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "COFFEESHOP",
+    "COFFEE SHOP",
+    "EATING HOUSE"
+   ],
+   "mccAlt": [
+    "5814"
+   ],
+   "confidence": "unverified",
+   "source": "",
+   "notes": "",
+   "id": "kopi-tarts-coffee-shop"
+  },
+  {
+   "name": "Hawker stall (NETS/card terminal)",
+   "service": "",
+   "mcc": "5812",
+   "category": "Hawker",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "HAWKER",
+    "FOOD CENTRE",
+    "FOOD CENTER"
+   ],
+   "mccAlt": [
+    "5814",
+    "5499"
+   ],
+   "confidence": "unverified",
+   "source": "",
+   "notes": "Many hawker stalls use SGQR/NETS — not card payments.",
+   "id": "hawker-stall-nets-card-terminal"
+  },
+  {
+   "name": "Grab",
+   "service": "GrabFood",
+   "mcc": "5812",
+   "category": "Food delivery",
+   "channel": "online",
+   "aliases": [
+    "GRABFOOD",
+    "GRAB FOOD",
+    "GRAB* FOOD",
+    "GRAB*FOOD"
+   ],
+   "mccAlt": [
+    "5814",
+    "5499"
+   ],
+   "confidence": "reported",
+   "source": "https://milelion.com/2025/07/28/what-are-the-best-cards-for-online-food-delivery",
+   "notes": "MileLion: 5812 or 5814. MoneySmart reports 5499.",
+   "id": "grab-grabfood"
+  },
+  {
+   "name": "Grab",
+   "service": "GrabMart",
+   "mcc": "5411",
+   "category": "Groceries",
+   "channel": "online",
+   "aliases": [
+    "GRABMART",
+    "GRAB MART"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "grab-grabmart"
+  },
+  {
+   "name": "Grab",
+   "service": "GrabCar / GrabTaxi",
+   "mcc": "4121",
+   "category": "Transport",
+   "channel": "online",
+   "aliases": [
+    "GRAB*A-",
+    "GRAB*",
+    "GRABTAXI",
+    "GRABCAR",
+    "GRAB RIDES"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "grab-grabcar-grabtaxi"
+  },
+  {
+   "name": "Grab",
+   "service": "GrabPay top-up",
+   "mcc": "7399",
+   "category": "Wallet top-up",
+   "channel": "online",
+   "aliases": [
+    "GRABPAY",
+    "GRAB PAY TOPUP",
+    "GPAY"
+   ],
+   "mccAlt": [
+    "6051",
+    "6540"
+   ],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "Excluded from rewards on almost every card.",
+   "id": "grab-grabpay-top-up"
+  },
+  {
+   "name": "foodpanda",
+   "service": "",
+   "mcc": "5812",
+   "category": "Food delivery",
+   "channel": "online",
+   "aliases": [
+    "FOODPANDA",
+    "FOOD PANDA",
+    "DH*FOODPANDA"
+   ],
+   "mccAlt": [
+    "5814",
+    "5499"
+   ],
+   "confidence": "reported",
+   "source": "https://milelion.com/2025/07/28/what-are-the-best-cards-for-online-food-delivery",
+   "notes": "yuu merchant (DBS yuu 10 mpd if threshold met).",
+   "id": "foodpanda"
+  },
+  {
+   "name": "foodpanda",
+   "service": "pandamart",
+   "mcc": "5411",
+   "category": "Groceries",
+   "channel": "online",
+   "aliases": [
+    "PANDAMART"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "foodpanda-pandamart"
+  },
+  {
+   "name": "Deliveroo",
+   "service": "",
+   "mcc": "5812",
+   "category": "Food delivery",
+   "channel": "online",
+   "aliases": [
+    "DELIVEROO"
+   ],
+   "mccAlt": [
+    "5814",
+    "5499"
+   ],
+   "confidence": "reported",
+   "source": "https://milelion.com/2025/07/28/what-are-the-best-cards-for-online-food-delivery",
+   "notes": "",
+   "id": "deliveroo"
+  },
+  {
+   "name": "Oddle Eats",
+   "service": "",
+   "mcc": "5812",
+   "category": "Food delivery",
+   "channel": "online",
+   "aliases": [
+    "ODDLE"
+   ],
+   "mccAlt": [
+    "5734"
+   ],
+   "confidence": "reported",
+   "source": "https://milelion.com/2025/07/28/what-are-the-best-cards-for-online-food-delivery",
+   "notes": "",
+   "id": "oddle-eats"
+  },
+  {
+   "name": "WhyQ",
+   "service": "",
+   "mcc": "5499",
+   "category": "Food delivery",
+   "channel": "online",
+   "aliases": [
+    "WHYQ"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://milelion.com/2025/07/28/what-are-the-best-cards-for-online-food-delivery",
+   "notes": "",
+   "id": "whyq"
+  },
+  {
+   "name": "McDonald's",
+   "service": "",
+   "mcc": "5814",
+   "category": "Fast food",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "MCDONALD",
+    "MCD ",
+    "MCDELIVERY"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "mcdonald-s"
+  },
+  {
+   "name": "KFC",
+   "service": "",
+   "mcc": "5814",
+   "category": "Fast food",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "KFC"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "",
+   "id": "kfc"
+  },
+  {
+   "name": "Burger King",
+   "service": "",
+   "mcc": "5814",
+   "category": "Fast food",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "BURGER KING"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "burger-king"
+  },
+  {
+   "name": "Subway",
+   "service": "",
+   "mcc": "5814",
+   "category": "Fast food",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "SUBWAY"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "subway"
+  },
+  {
+   "name": "Old Chang Kee",
+   "service": "",
+   "mcc": "5814",
+   "category": "Fast food",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "OLD CHANG KEE"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "old-chang-kee"
+  },
+  {
+   "name": "Pizza Hut",
+   "service": "",
+   "mcc": "5814",
+   "category": "Fast food",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "PIZZA HUT"
+   ],
+   "mccAlt": [
+    "5812"
+   ],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "pizza-hut"
+  },
+  {
+   "name": "Domino's",
+   "service": "",
+   "mcc": "5811",
+   "category": "Dining",
+   "channel": "online",
+   "aliases": [
+    "DOMINO"
+   ],
+   "mccAlt": [
+    "5812"
+   ],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "domino-s"
+  },
+  {
+   "name": "Toast Box",
+   "service": "",
+   "mcc": "5812",
+   "category": "Dining",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "TOAST BOX",
+    "TOASTBOX"
+   ],
+   "mccAlt": [
+    "5814"
+   ],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "toast-box"
+  },
+  {
+   "name": "Ya Kun",
+   "service": "",
+   "mcc": "5814",
+   "category": "Café",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "YA KUN"
+   ],
+   "mccAlt": [
+    "5812"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "ya-kun"
+  },
+  {
+   "name": "Starbucks",
+   "service": "",
+   "mcc": "5814",
+   "category": "Café",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "STARBUCKS"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "starbucks"
+  },
+  {
+   "name": "Coffee Bean",
+   "service": "",
+   "mcc": "5814",
+   "category": "Café",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "COFFEE BEAN",
+    "CBTL"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "coffee-bean"
+  },
+  {
+   "name": "Luckin Coffee",
+   "service": "",
+   "mcc": "5814",
+   "category": "Café",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "LUCKIN"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "luckin-coffee"
+  },
+  {
+   "name": "Koi Thé",
+   "service": "",
+   "mcc": "5814",
+   "category": "Café",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "KOI THE",
+    "KOI CAFE"
+   ],
+   "mccAlt": [
+    "5499"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "koi-th"
+  },
+  {
+   "name": "LiHO",
+   "service": "",
+   "mcc": "5814",
+   "category": "Café",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "LIHO"
+   ],
+   "mccAlt": [
+    "5499"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "liho"
+  },
+  {
+   "name": "CHAGEE",
+   "service": "",
+   "mcc": "5814",
+   "category": "Café",
+   "channel": "online",
+   "aliases": [
+    "CHAGEE",
+    "BAWANG CHAJI"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "yuu merchant for app orders.",
+   "id": "chagee"
+  },
+  {
+   "name": "Mr Bean",
+   "service": "",
+   "mcc": "5814",
+   "category": "Café",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "MR BEAN"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "mr-bean"
+  },
+  {
+   "name": "Jollibee",
+   "service": "",
+   "mcc": "5814",
+   "category": "Fast food",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "JOLLIBEE"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "jollibee"
+  },
+  {
+   "name": "Mos Burger",
+   "service": "",
+   "mcc": "5814",
+   "category": "Fast food",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "MOS BURGER"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "mos-burger"
+  },
+  {
+   "name": "Texas Chicken",
+   "service": "",
+   "mcc": "5814",
+   "category": "Fast food",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "TEXAS CHICKEN"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "texas-chicken"
+  },
+  {
+   "name": "Swensen's",
+   "service": "",
+   "mcc": "5812",
+   "category": "Dining",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "SWENSEN"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "swensen-s"
+  },
+  {
+   "name": "Din Tai Fung",
+   "service": "",
+   "mcc": "5812",
+   "category": "Dining",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "DIN TAI FUNG"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "din-tai-fung"
+  },
+  {
+   "name": "Crystal Jade",
+   "service": "",
+   "mcc": "5812",
+   "category": "Dining",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "CRYSTAL JADE"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "crystal-jade"
+  },
+  {
+   "name": "Paradise Group",
+   "service": "",
+   "mcc": "5812",
+   "category": "Dining",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "PARADISE DYNASTY",
+    "PARADISE INN",
+    "PARADISE TEOCHEW"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "paradise-group"
+  },
+  {
+   "name": "Ichiban Boshi",
+   "service": "",
+   "mcc": "5812",
+   "category": "Dining",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "ICHIBAN"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "ichiban-boshi"
+  },
+  {
+   "name": "Sushi Express / Sushiro",
+   "service": "",
+   "mcc": "5812",
+   "category": "Dining",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "SUSHI EXPRESS",
+    "SUSHIRO",
+    "GENKI SUSHI"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "sushi-express-sushiro"
+  },
+  {
+   "name": "Haidilao",
+   "service": "",
+   "mcc": "5812",
+   "category": "Dining",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "HAIDILAO",
+    "HAI DI LAO"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "haidilao"
+  },
+  {
+   "name": "Saizeriya",
+   "service": "",
+   "mcc": "5812",
+   "category": "Dining",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "SAIZERIYA"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "saizeriya"
+  },
+  {
+   "name": "Putien",
+   "service": "",
+   "mcc": "5812",
+   "category": "Dining",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "PUTIEN"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "putien"
+  },
+  {
+   "name": "Jumbo Seafood",
+   "service": "",
+   "mcc": "5812",
+   "category": "Dining",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "JUMBO SEAFOOD",
+    "JUMBO GROUP"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "jumbo-seafood"
+  },
+  {
+   "name": "Bengawan Solo",
+   "service": "",
+   "mcc": "5462",
+   "category": "Bakery",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "BENGAWAN SOLO"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "bengawan-solo"
+  },
+  {
+   "name": "BreadTalk",
+   "service": "",
+   "mcc": "5462",
+   "category": "Bakery",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "BREADTALK",
+    "TOAST BOX BT"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "breadtalk"
+  },
+  {
+   "name": "Four Leaves",
+   "service": "",
+   "mcc": "5462",
+   "category": "Bakery",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "FOUR LEAVES"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "four-leaves"
+  },
+  {
+   "name": "Polar Puffs & Cakes",
+   "service": "",
+   "mcc": "5462",
+   "category": "Bakery",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "POLAR PUFFS",
+    "POLAR CAFE"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "polar-puffs-cakes"
+  },
+  {
+   "name": "Swee Heng",
+   "service": "",
+   "mcc": "5462",
+   "category": "Bakery",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "SWEE HENG"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "swee-heng"
+  },
+  {
+   "name": "IKEA",
+   "service": "IKEA Restaurant",
+   "mcc": "5814",
+   "category": "Fast food",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "IKEA RESTAURANT",
+    "IKEA FOOD",
+    "IKEA BISTRO"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "ikea-ikea-restaurant"
+  },
+  {
+   "name": "NTUC FairPrice",
+   "service": "",
+   "mcc": "5411",
+   "category": "Groceries",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "NTUC FP",
+    "FAIRPRICE",
+    "NTUC FAIRPRICE",
+    "FAIRPRICE FINEST",
+    "FAIRPRICE XTRA",
+    "FP XTRA",
+    "UNITY NTUC"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "",
+   "id": "ntuc-fairprice"
+  },
+  {
+   "name": "NTUC FairPrice",
+   "service": "FairPrice Online",
+   "mcc": "5411",
+   "category": "Groceries",
+   "channel": "online",
+   "aliases": [
+    "FAIRPRICE ON",
+    "FAIRPRICE ONLINE",
+    "FPON"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "ntuc-fairprice-fairprice-online"
+  },
+  {
+   "name": "Cold Storage",
+   "service": "",
+   "mcc": "5411",
+   "category": "Groceries",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "COLD STORAGE",
+    "CS FRESH",
+    "JASONS DELI",
+    "JASONS"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "yuu merchant.",
+   "id": "cold-storage"
+  },
+  {
+   "name": "Giant",
+   "service": "",
+   "mcc": "5411",
+   "category": "Groceries",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "GIANT HYPERMARKET",
+    "GIANT SUPERMARKET",
+    "GIANT "
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "yuu merchant.",
+   "id": "giant"
+  },
+  {
+   "name": "Sheng Siong",
+   "service": "",
+   "mcc": "5411",
+   "category": "Groceries",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "SHENG SIONG"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "",
+   "id": "sheng-siong"
+  },
+  {
+   "name": "Don Don Donki",
+   "service": "",
+   "mcc": "5411",
+   "category": "Groceries",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "DON DON DONKI",
+    "DONKI",
+    "PAN PACIFIC INTL"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "don-don-donki"
+  },
+  {
+   "name": "RedMart",
+   "service": "",
+   "mcc": "5411",
+   "category": "Groceries",
+   "channel": "online",
+   "aliases": [
+    "REDMART",
+    "LAZADA REDMART"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "redmart"
+  },
+  {
+   "name": "Prime Supermarket",
+   "service": "",
+   "mcc": "5411",
+   "category": "Groceries",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "PRIME SUPERMARKET"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "prime-supermarket"
+  },
+  {
+   "name": "Little Farms",
+   "service": "",
+   "mcc": "5411",
+   "category": "Groceries",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "LITTLE FARMS"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "little-farms"
+  },
+  {
+   "name": "Hao Mart",
+   "service": "",
+   "mcc": "5411",
+   "category": "Groceries",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "HAO MART"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "hao-mart"
+  },
+  {
+   "name": "U Stars",
+   "service": "",
+   "mcc": "5411",
+   "category": "Groceries",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "U STARS",
+    "USTARS"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "u-stars"
+  },
+  {
+   "name": "Meidi-Ya",
+   "service": "",
+   "mcc": "5411",
+   "category": "Groceries",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "MEIDI-YA",
+    "MEIDIYA"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "meidi-ya"
+  },
+  {
+   "name": "7-Eleven",
+   "service": "",
+   "mcc": "5499",
+   "category": "Convenience",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "7-ELEVEN",
+    "7 ELEVEN",
+    "7ELEVEN",
+    "SEVEN ELEVEN"
+   ],
+   "mccAlt": [
+    "5411"
+   ],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "yuu merchant.",
+   "id": "7-eleven"
+  },
+  {
+   "name": "Cheers",
+   "service": "",
+   "mcc": "5499",
+   "category": "Convenience",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "CHEERS"
+   ],
+   "mccAlt": [
+    "5411"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "cheers"
+  },
+  {
+   "name": "Sinopec Easy Joy",
+   "service": "",
+   "mcc": "5499",
+   "category": "Convenience",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "EASY JOY"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "sinopec-easy-joy"
+  },
+  {
+   "name": "Watsons",
+   "service": "",
+   "mcc": "5912",
+   "category": "Pharmacy & beauty",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "WATSONS",
+    "WATSON"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "",
+   "id": "watsons"
+  },
+  {
+   "name": "Guardian",
+   "service": "",
+   "mcc": "5912",
+   "category": "Pharmacy & beauty",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "GUARDIAN HEALTH",
+    "GUARDIAN"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "yuu merchant.",
+   "id": "guardian"
+  },
+  {
+   "name": "Unity Pharmacy",
+   "service": "",
+   "mcc": "5912",
+   "category": "Pharmacy & beauty",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "UNITY PHARMACY",
+    "UNITY "
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "unity-pharmacy"
+  },
+  {
+   "name": "Sephora",
+   "service": "",
+   "mcc": "5977",
+   "category": "Pharmacy & beauty",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "SEPHORA"
+   ],
+   "mccAlt": [
+    "5999"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "sephora"
+  },
+  {
+   "name": "Sasa",
+   "service": "",
+   "mcc": "5977",
+   "category": "Pharmacy & beauty",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "SASA "
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "sasa"
+  },
+  {
+   "name": "Innisfree / Sulwhasoo",
+   "service": "",
+   "mcc": "5977",
+   "category": "Pharmacy & beauty",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "INNISFREE",
+    "SULWHASOO"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "innisfree-sulwhasoo"
+  },
+  {
+   "name": "Shopee",
+   "service": "Online Retail",
+   "mcc": "5399",
+   "category": "Online shopping",
+   "channel": "online",
+   "aliases": [
+    "SHOPEE",
+    "SHOPEE SINGAPORE MP",
+    "SHOPEE SG"
+   ],
+   "mccAlt": [
+    "5331",
+    "5999"
+   ],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "MoneySmart and The Money Bees: 5399 (some cards show 5331).",
+   "id": "shopee-online-retail"
+  },
+  {
+   "name": "Shopee",
+   "service": "ShopeePay top-up",
+   "mcc": "6540",
+   "category": "Wallet top-up",
+   "channel": "online",
+   "aliases": [
+    "SHOPEEPAY",
+    "SHOPEE PAY"
+   ],
+   "mccAlt": [
+    "5262"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "Excluded on most cards.",
+   "id": "shopee-shopeepay-top-up"
+  },
+  {
+   "name": "Lazada",
+   "service": "",
+   "mcc": "5311",
+   "category": "Online shopping",
+   "channel": "online",
+   "aliases": [
+    "LAZADA",
+    "LAZ*",
+    "LAZADA SINGAPORE"
+   ],
+   "mccAlt": [
+    "5999"
+   ],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "lazada"
+  },
+  {
+   "name": "Taobao",
+   "service": "Taobao app",
+   "mcc": "5311",
+   "category": "Online shopping",
+   "channel": "online",
+   "aliases": [
+    "TAOBAO",
+    "ALIPAY*TAOBAO",
+    "TMALL"
+   ],
+   "mccAlt": [
+    "5411"
+   ],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "Website orders reported as 5411. Often FCY.",
+   "id": "taobao-taobao-app"
+  },
+  {
+   "name": "Amazon",
+   "service": "",
+   "mcc": "5999",
+   "category": "Online shopping",
+   "channel": "online",
+   "aliases": [
+    "AMAZON",
+    "AMZN",
+    "AMAZON SG",
+    "AMAZON MKTPL"
+   ],
+   "mccAlt": [
+    "5942"
+   ],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "amazon"
+  },
+  {
+   "name": "Amazon",
+   "service": "Prime",
+   "mcc": "5999",
+   "category": "Subscriptions",
+   "channel": "online",
+   "aliases": [
+    "AMAZON PRIME",
+    "PRIME VIDEO"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "amazon-prime"
+  },
+  {
+   "name": "Qoo10",
+   "service": "",
+   "mcc": "5399",
+   "category": "Online shopping",
+   "channel": "online",
+   "aliases": [
+    "QOO10"
+   ],
+   "mccAlt": [
+    "5699"
+   ],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "",
+   "id": "qoo10"
+  },
+  {
+   "name": "TikTok Shop",
+   "service": "",
+   "mcc": "5999",
+   "category": "Online shopping",
+   "channel": "online",
+   "aliases": [
+    "TIKTOK SHOP",
+    "TIKTOK"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "tiktok-shop"
+  },
+  {
+   "name": "Carousell",
+   "service": "",
+   "mcc": "5999",
+   "category": "Online shopping",
+   "channel": "online",
+   "aliases": [
+    "CAROUSELL"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "carousell"
+  },
+  {
+   "name": "Ezbuy",
+   "service": "",
+   "mcc": "5691",
+   "category": "Online shopping",
+   "channel": "online",
+   "aliases": [
+    "EZBUY"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "ezbuy"
+  },
+  {
+   "name": "AliExpress",
+   "service": "",
+   "mcc": "5999",
+   "category": "Online shopping",
+   "channel": "online",
+   "aliases": [
+    "ALIEXPRESS"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "aliexpress"
+  },
+  {
+   "name": "Temu",
+   "service": "",
+   "mcc": "5999",
+   "category": "Online shopping",
+   "channel": "online",
+   "aliases": [
+    "TEMU"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "temu"
+  },
+  {
+   "name": "Shein",
+   "service": "",
+   "mcc": "5651",
+   "category": "Fashion",
+   "channel": "online",
+   "aliases": [
+    "SHEIN"
+   ],
+   "mccAlt": [
+    "5999"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "shein"
+  },
+  {
+   "name": "Zalora",
+   "service": "",
+   "mcc": "5691",
+   "category": "Fashion",
+   "channel": "online",
+   "aliases": [
+    "ZALORA"
+   ],
+   "mccAlt": [
+    "5999"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "zalora"
+  },
+  {
+   "name": "HeyMax",
+   "service": "",
+   "mcc": "5311",
+   "category": "Vouchers",
+   "channel": "online",
+   "aliases": [
+    "HEYMAX"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://milelion.com/2025/07/28/what-are-the-best-cards-for-online-food-delivery",
+   "notes": "Gift card purchases code as department store — popular for filling 4 mpd caps.",
+   "id": "heymax"
+  },
+  {
+   "name": "iShopChangi",
+   "service": "",
+   "mcc": "4582",
+   "category": "Travel",
+   "channel": "online",
+   "aliases": [
+    "ISHOPCHANGI",
+    "ISHOP CHANGI"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "ishopchangi"
+  },
+  {
+   "name": "Changi Airport duty free",
+   "service": "",
+   "mcc": "5309",
+   "category": "Duty free",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "LOTTE DUTY FREE",
+    "DFS ",
+    "CHANGI DUTY FREE",
+    "THE SHILLA"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "changi-airport-duty-free"
+  },
+  {
+   "name": "Takashimaya",
+   "service": "",
+   "mcc": "5311",
+   "category": "Department store",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "TAKASHIMAYA"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "",
+   "id": "takashimaya"
+  },
+  {
+   "name": "Isetan",
+   "service": "",
+   "mcc": "5311",
+   "category": "Department store",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "ISETAN"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "isetan"
+  },
+  {
+   "name": "TANGS",
+   "service": "",
+   "mcc": "5311",
+   "category": "Department store",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "TANGS",
+    "C K TANG"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "tangs"
+  },
+  {
+   "name": "Robinsons",
+   "service": "",
+   "mcc": "5311",
+   "category": "Department store",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "ROBINSONS"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "robinsons"
+  },
+  {
+   "name": "Metro",
+   "service": "",
+   "mcc": "5311",
+   "category": "Department store",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "METRO "
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "metro"
+  },
+  {
+   "name": "BHG",
+   "service": "",
+   "mcc": "5311",
+   "category": "Department store",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "BHG"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "",
+   "id": "bhg"
+  },
+  {
+   "name": "OG",
+   "service": "",
+   "mcc": "5311",
+   "category": "Department store",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "OG ALBERT",
+    "OG PEOPLE",
+    "OG CHINATOWN"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "og"
+  },
+  {
+   "name": "Hands",
+   "service": "",
+   "mcc": "5311",
+   "category": "Department store",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "HANDS ",
+    "TOKYU HANDS"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "hands"
+  },
+  {
+   "name": "Daiso",
+   "service": "",
+   "mcc": "5331",
+   "category": "Retail",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "DAISO"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "daiso"
+  },
+  {
+   "name": "Mustafa Centre",
+   "service": "",
+   "mcc": "5311",
+   "category": "Department store",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "MUSTAFA"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "mustafa-centre"
+  },
+  {
+   "name": "Uniqlo",
+   "service": "",
+   "mcc": "5651",
+   "category": "Fashion",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "UNIQLO"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "uniqlo"
+  },
+  {
+   "name": "Bossini",
+   "service": "",
+   "mcc": "5651",
+   "category": "Fashion",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "BOSSINI"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "bossini"
+  },
+  {
+   "name": "Zara",
+   "service": "",
+   "mcc": "5691",
+   "category": "Fashion",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "ZARA"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "zara"
+  },
+  {
+   "name": "H&M",
+   "service": "",
+   "mcc": "5691",
+   "category": "Fashion",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "H&M",
+    "H & M",
+    "HENNES"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "h-m"
+  },
+  {
+   "name": "Cotton On",
+   "service": "",
+   "mcc": "5691",
+   "category": "Fashion",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "COTTON ON"
+   ],
+   "mccAlt": [
+    "5651"
+   ],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "cotton-on"
+  },
+  {
+   "name": "Cotton On Kids",
+   "service": "",
+   "mcc": "5641",
+   "category": "Kids",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "COTTON ON KIDS"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "cotton-on-kids"
+  },
+  {
+   "name": "G2000",
+   "service": "",
+   "mcc": "5691",
+   "category": "Fashion",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "G2000"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "g2000"
+  },
+  {
+   "name": "Love, Bonito",
+   "service": "",
+   "mcc": "5621",
+   "category": "Fashion",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "LOVE BONITO",
+    "LOVEBONITO"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "love-bonito"
+  },
+  {
+   "name": "Forever 21",
+   "service": "",
+   "mcc": "5621",
+   "category": "Fashion",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "FOREVER 21"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "forever-21"
+  },
+  {
+   "name": "Aldo",
+   "service": "",
+   "mcc": "5661",
+   "category": "Fashion",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "ALDO"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "aldo"
+  },
+  {
+   "name": "Pedro",
+   "service": "",
+   "mcc": "5661",
+   "category": "Fashion",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "PEDRO"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "pedro"
+  },
+  {
+   "name": "Charles & Keith",
+   "service": "",
+   "mcc": "5661",
+   "category": "Fashion",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "CHARLES & KEITH",
+    "CHARLES KEITH"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "charles-keith"
+  },
+  {
+   "name": "Mango",
+   "service": "",
+   "mcc": "5621",
+   "category": "Fashion",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "MANGO"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "mango"
+  },
+  {
+   "name": "Decathlon",
+   "service": "",
+   "mcc": "5941",
+   "category": "Sports",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "DECATHLON"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "decathlon"
+  },
+  {
+   "name": "Nike",
+   "service": "",
+   "mcc": "5661",
+   "category": "Sports",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "NIKE"
+   ],
+   "mccAlt": [
+    "5941"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "nike"
+  },
+  {
+   "name": "Adidas",
+   "service": "",
+   "mcc": "5661",
+   "category": "Sports",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "ADIDAS"
+   ],
+   "mccAlt": [
+    "5941"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "adidas"
+  },
+  {
+   "name": "Mothercare",
+   "service": "",
+   "mcc": "5641",
+   "category": "Kids",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "MOTHERCARE"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "mothercare"
+  },
+  {
+   "name": "Kiddy Palace",
+   "service": "",
+   "mcc": "5641",
+   "category": "Kids",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "KIDDY PALACE"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "kiddy-palace"
+  },
+  {
+   "name": "Baby Kingdom / Pupsik",
+   "service": "",
+   "mcc": "5641",
+   "category": "Kids",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "PUPSIK",
+    "BABY KINGDOM"
+   ],
+   "mccAlt": [
+    "5999"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "baby-kingdom-pupsik"
+  },
+  {
+   "name": "Toys\"R\"Us",
+   "service": "",
+   "mcc": "5945",
+   "category": "Kids",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "TOYS R US",
+    "TOYSRUS"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "toys-r-us"
+  },
+  {
+   "name": "Popular",
+   "service": "",
+   "mcc": "5942",
+   "category": "Books & stationery",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "POPULAR BOOK",
+    "POPULAR "
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "popular"
+  },
+  {
+   "name": "Kinokuniya",
+   "service": "",
+   "mcc": "5942",
+   "category": "Books & stationery",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "KINOKUNIYA"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "kinokuniya"
+  },
+  {
+   "name": "Challenger",
+   "service": "",
+   "mcc": "5732",
+   "category": "Electronics",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "CHALLENGER"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "challenger"
+  },
+  {
+   "name": "Best Denki",
+   "service": "",
+   "mcc": "5732",
+   "category": "Electronics",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "BEST DENKI"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "",
+   "id": "best-denki"
+  },
+  {
+   "name": "Courts",
+   "service": "",
+   "mcc": "5732",
+   "category": "Electronics",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "COURTS"
+   ],
+   "mccAlt": [
+    "5722"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "courts"
+  },
+  {
+   "name": "Harvey Norman",
+   "service": "",
+   "mcc": "5732",
+   "category": "Electronics",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "HARVEY NORMAN"
+   ],
+   "mccAlt": [
+    "5722",
+    "5712"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "harvey-norman"
+  },
+  {
+   "name": "Gain City",
+   "service": "",
+   "mcc": "5732",
+   "category": "Electronics",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "GAIN CITY"
+   ],
+   "mccAlt": [
+    "5722"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "gain-city"
+  },
+  {
+   "name": "Apple",
+   "service": "Apple Store",
+   "mcc": "5732",
+   "category": "Electronics",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "APPLE STORE",
+    "APPLE ORCHARD",
+    "APPLE JEWEL"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "apple-apple-store"
+  },
+  {
+   "name": "Apple",
+   "service": "App Store / iCloud",
+   "mcc": "5818",
+   "category": "Subscriptions",
+   "channel": "online",
+   "aliases": [
+    "APPLE.COM/BILL",
+    "APPLE COM BILL",
+    "ITUNES"
+   ],
+   "mccAlt": [
+    "5735"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "apple-app-store-icloud"
+  },
+  {
+   "name": "IKEA",
+   "service": "",
+   "mcc": "5712",
+   "category": "Home",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "IKEA"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "ikea"
+  },
+  {
+   "name": "Castlery",
+   "service": "",
+   "mcc": "5712",
+   "category": "Home",
+   "channel": "online",
+   "aliases": [
+    "CASTLERY"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "castlery"
+  },
+  {
+   "name": "Mr DIY",
+   "service": "",
+   "mcc": "5251",
+   "category": "Home",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "MR DIY",
+    "MR. DIY"
+   ],
+   "mccAlt": [
+    "5331"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "mr-diy"
+  },
+  {
+   "name": "Home-Fix",
+   "service": "",
+   "mcc": "5251",
+   "category": "Home",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "HOME FIX",
+    "HOME-FIX"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "home-fix"
+  },
+  {
+   "name": "Gojek",
+   "service": "",
+   "mcc": "4121",
+   "category": "Transport",
+   "channel": "online",
+   "aliases": [
+    "GOJEK",
+    "GO-JEK"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "yuu merchant.",
+   "id": "gojek"
+  },
+  {
+   "name": "ComfortDelGro",
+   "service": "",
+   "mcc": "4121",
+   "category": "Transport",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "COMFORTDELGRO",
+    "CDG ",
+    "COMFORT TAXI",
+    "CITYCAB"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "",
+   "id": "comfortdelgro"
+  },
+  {
+   "name": "TADA",
+   "service": "",
+   "mcc": "4121",
+   "category": "Transport",
+   "channel": "online",
+   "aliases": [
+    "TADA"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "tada"
+  },
+  {
+   "name": "Ryde",
+   "service": "",
+   "mcc": "5734",
+   "category": "Transport",
+   "channel": "online",
+   "aliases": [
+    "RYDE"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://blog.moneysmart.sg/credit-cards/mcc-codes-singapore/",
+   "notes": "Codes as software (5734), not taxi — transport bonuses usually miss.",
+   "id": "ryde"
+  },
+  {
+   "name": "Zig (CDG app)",
+   "service": "",
+   "mcc": "4121",
+   "category": "Transport",
+   "channel": "online",
+   "aliases": [
+    "ZIG "
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "zig-cdg-app"
+  },
+  {
+   "name": "SimplyGo",
+   "service": "",
+   "mcc": "4111",
+   "category": "Public transport",
+   "channel": "card_contactless",
+   "aliases": [
+    "BUS/MRT",
+    "BUS MRT",
+    "SIMPLYGO",
+    "TRANSIT"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "",
+   "id": "simplygo"
+  },
+  {
+   "name": "EZ-Link top-up",
+   "service": "",
+   "mcc": "6540",
+   "category": "Wallet top-up",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "EZ-LINK",
+    "EZLINK",
+    "EZ LINK"
+   ],
+   "mccAlt": [
+    "6051"
+   ],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "",
+   "id": "ez-link-top-up"
+  },
+  {
+   "name": "Shell",
+   "service": "",
+   "mcc": "5541",
+   "category": "Petrol",
+   "channel": "card_contactless",
+   "aliases": [
+    "SHELL"
+   ],
+   "mccAlt": [
+    "5542"
+   ],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "Excluded on UOB Visa Signature.",
+   "id": "shell"
+  },
+  {
+   "name": "Esso",
+   "service": "",
+   "mcc": "5541",
+   "category": "Petrol",
+   "channel": "card_contactless",
+   "aliases": [
+    "ESSO"
+   ],
+   "mccAlt": [
+    "5542"
+   ],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "",
+   "id": "esso"
+  },
+  {
+   "name": "Caltex",
+   "service": "",
+   "mcc": "5541",
+   "category": "Petrol",
+   "channel": "card_contactless",
+   "aliases": [
+    "CALTEX"
+   ],
+   "mccAlt": [
+    "5542"
+   ],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "",
+   "id": "caltex"
+  },
+  {
+   "name": "SPC",
+   "service": "",
+   "mcc": "5541",
+   "category": "Petrol",
+   "channel": "card_contactless",
+   "aliases": [
+    "SPC ",
+    "SINGAPORE PETROLEUM"
+   ],
+   "mccAlt": [
+    "5542"
+   ],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "Excluded on AMEX and UOB Visa Signature.",
+   "id": "spc"
+  },
+  {
+   "name": "Sinopec",
+   "service": "",
+   "mcc": "5541",
+   "category": "Petrol",
+   "channel": "card_contactless",
+   "aliases": [
+    "SINOPEC"
+   ],
+   "mccAlt": [
+    "5542"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "sinopec"
+  },
+  {
+   "name": "Charge+",
+   "service": "",
+   "mcc": "5552",
+   "category": "EV charging",
+   "channel": "online",
+   "aliases": [
+    "CHARGE+",
+    "CHARGEPLUS",
+    "CHARGE PLUS"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "yuu merchant (Visa).",
+   "id": "charge"
+  },
+  {
+   "name": "Parking (URA / HDB / private)",
+   "service": "",
+   "mcc": "7523",
+   "category": "Parking",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "PARKING",
+    "CARPARK",
+    "PARKING.SG",
+    "WILSON PARKING",
+    "SECURE PARKING"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "Excluded on UOB Visa Signature.",
+   "id": "parking-ura-hdb-private"
+  },
+  {
+   "name": "BlueSG / GetGo",
+   "service": "",
+   "mcc": "7512",
+   "category": "Car rental",
+   "channel": "online",
+   "aliases": [
+    "BLUESG",
+    "GETGO",
+    "TRIBECAR"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "bluesg-getgo"
+  },
+  {
+   "name": "Singapore Airlines",
+   "service": "",
+   "mcc": "3005",
+   "category": "Flights",
+   "channel": "online",
+   "aliases": [
+    "SINGAPORE AIRLINES",
+    "SINGAPORE AIR",
+    "SIA ",
+    "SINGAPOREAIR"
+   ],
+   "mccAlt": [
+    "3000",
+    "4511"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "Airline MCCs are 3000–3350; SIA uses its own code in this range. AMEX KrisFlyer 2 mpd.",
+   "id": "singapore-airlines"
+  },
+  {
+   "name": "Singapore Airlines",
+   "service": "KrisShop",
+   "mcc": "5999",
+   "category": "Online shopping",
+   "channel": "online",
+   "aliases": [
+    "KRISSHOP"
+   ],
+   "mccAlt": [
+    "5309"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "singapore-airlines-krisshop"
+  },
+  {
+   "name": "Scoot",
+   "service": "",
+   "mcc": "3000",
+   "category": "Flights",
+   "channel": "online",
+   "aliases": [
+    "SCOOT",
+    "FLYSCOOT",
+    "TIGERAIR"
+   ],
+   "mccAlt": [
+    "4511"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "scoot"
+  },
+  {
+   "name": "Pelago",
+   "service": "",
+   "mcc": "4722",
+   "category": "Travel",
+   "channel": "online",
+   "aliases": [
+    "PELAGO"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "pelago"
+  },
+  {
+   "name": "Agoda",
+   "service": "",
+   "mcc": "4722",
+   "category": "Travel",
+   "channel": "online",
+   "aliases": [
+    "AGODA"
+   ],
+   "mccAlt": [
+    "7011"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "agoda"
+  },
+  {
+   "name": "Booking.com",
+   "service": "",
+   "mcc": "4722",
+   "category": "Travel",
+   "channel": "online",
+   "aliases": [
+    "BOOKING.COM",
+    "BOOKING COM"
+   ],
+   "mccAlt": [
+    "7011"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "booking-com"
+  },
+  {
+   "name": "Expedia",
+   "service": "",
+   "mcc": "4722",
+   "category": "Travel",
+   "channel": "online",
+   "aliases": [
+    "EXPEDIA"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "expedia"
+  },
+  {
+   "name": "Trip.com",
+   "service": "",
+   "mcc": "4722",
+   "category": "Travel",
+   "channel": "online",
+   "aliases": [
+    "TRIP.COM",
+    "TRIP COM",
+    "CTRIP"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "trip-com"
+  },
+  {
+   "name": "Klook",
+   "service": "",
+   "mcc": "4722",
+   "category": "Travel",
+   "channel": "online",
+   "aliases": [
+    "KLOOK"
+   ],
+   "mccAlt": [
+    "7999"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "klook"
+  },
+  {
+   "name": "Airbnb",
+   "service": "",
+   "mcc": "7011",
+   "category": "Travel",
+   "channel": "online",
+   "aliases": [
+    "AIRBNB"
+   ],
+   "mccAlt": [
+    "4722"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "airbnb"
+  },
+  {
+   "name": "AirAsia",
+   "service": "",
+   "mcc": "3000",
+   "category": "Flights",
+   "channel": "online",
+   "aliases": [
+    "AIRASIA"
+   ],
+   "mccAlt": [
+    "4511"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "airasia"
+  },
+  {
+   "name": "Jetstar",
+   "service": "",
+   "mcc": "3000",
+   "category": "Flights",
+   "channel": "online",
+   "aliases": [
+    "JETSTAR"
+   ],
+   "mccAlt": [
+    "4511"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "jetstar"
+  },
+  {
+   "name": "Singtel",
+   "service": "",
+   "mcc": "4814",
+   "category": "Telco",
+   "channel": "online",
+   "aliases": [
+    "SINGTEL"
+   ],
+   "mccAlt": [
+    "4813"
+   ],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "yuu merchant.",
+   "id": "singtel"
+  },
+  {
+   "name": "StarHub",
+   "service": "",
+   "mcc": "4814",
+   "category": "Telco",
+   "channel": "online",
+   "aliases": [
+    "STARHUB"
+   ],
+   "mccAlt": [
+    "4813"
+   ],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "",
+   "id": "starhub"
+  },
+  {
+   "name": "M1",
+   "service": "",
+   "mcc": "4814",
+   "category": "Telco",
+   "channel": "online",
+   "aliases": [
+    "M1 LIMITED",
+    "M1 "
+   ],
+   "mccAlt": [
+    "4813"
+   ],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "",
+   "id": "m1"
+  },
+  {
+   "name": "SIMBA / GOMO / Circles.Life",
+   "service": "",
+   "mcc": "4814",
+   "category": "Telco",
+   "channel": "online",
+   "aliases": [
+    "SIMBA",
+    "GOMO",
+    "CIRCLES"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "simba-gomo-circles-life"
+  },
+  {
+   "name": "SP Group",
+   "service": "",
+   "mcc": "4900",
+   "category": "Utilities",
+   "channel": "online",
+   "aliases": [
+    "SP SERVICES",
+    "SP DIGITAL",
+    "SP GROUP"
+   ],
+   "mccAlt": [
+    "4911"
+   ],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "Excluded on most cards.",
+   "id": "sp-group"
+  },
+  {
+   "name": "Geneco / Senoko / Tuas Power",
+   "service": "",
+   "mcc": "4900",
+   "category": "Utilities",
+   "channel": "online",
+   "aliases": [
+    "GENECO",
+    "SENOKO",
+    "TUAS POWER",
+    "KEPPEL ELECTRIC"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "geneco-senoko-tuas-power"
+  },
+  {
+   "name": "Netflix",
+   "service": "",
+   "mcc": "5815",
+   "category": "Subscriptions",
+   "channel": "online",
+   "aliases": [
+    "NETFLIX"
+   ],
+   "mccAlt": [
+    "5968",
+    "4899"
+   ],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "",
+   "id": "netflix"
+  },
+  {
+   "name": "Spotify",
+   "service": "",
+   "mcc": "5815",
+   "category": "Subscriptions",
+   "channel": "online",
+   "aliases": [
+    "SPOTIFY"
+   ],
+   "mccAlt": [
+    "5968"
+   ],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "",
+   "id": "spotify"
+  },
+  {
+   "name": "Disney+",
+   "service": "",
+   "mcc": "5815",
+   "category": "Subscriptions",
+   "channel": "online",
+   "aliases": [
+    "DISNEY PLUS",
+    "DISNEYPLUS"
+   ],
+   "mccAlt": [
+    "4899",
+    "5968"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "disney"
+  },
+  {
+   "name": "YouTube Premium",
+   "service": "",
+   "mcc": "5815",
+   "category": "Subscriptions",
+   "channel": "online",
+   "aliases": [
+    "YOUTUBE",
+    "GOOGLE*YOUTUBE"
+   ],
+   "mccAlt": [
+    "5818"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "youtube-premium"
+  },
+  {
+   "name": "Google Play / Google One",
+   "service": "",
+   "mcc": "5818",
+   "category": "Subscriptions",
+   "channel": "online",
+   "aliases": [
+    "GOOGLE*",
+    "GOOGLE PLAY",
+    "GOOGLE ONE"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "google-play-google-one"
+  },
+  {
+   "name": "ChatGPT / Claude / AI subscriptions",
+   "service": "",
+   "mcc": "5734",
+   "category": "Subscriptions",
+   "channel": "online",
+   "aliases": [
+    "OPENAI",
+    "CHATGPT",
+    "ANTHROPIC",
+    "CLAUDE.AI"
+   ],
+   "mccAlt": [
+    "5817",
+    "7372"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "chatgpt-claude-ai-subscriptions"
+  },
+  {
+   "name": "Golden Village",
+   "service": "",
+   "mcc": "7832",
+   "category": "Entertainment",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "GOLDEN VILLAGE",
+    "GV "
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "golden-village"
+  },
+  {
+   "name": "Shaw Theatres",
+   "service": "",
+   "mcc": "7832",
+   "category": "Entertainment",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "SHAW THEATRES"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "shaw-theatres"
+  },
+  {
+   "name": "Cathay Cineplexes",
+   "service": "",
+   "mcc": "7832",
+   "category": "Entertainment",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "CATHAY CINE"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "cathay-cineplexes"
+  },
+  {
+   "name": "SISTIC",
+   "service": "",
+   "mcc": "7922",
+   "category": "Entertainment",
+   "channel": "online",
+   "aliases": [
+    "SISTIC"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "sistic"
+  },
+  {
+   "name": "Ticketmaster",
+   "service": "",
+   "mcc": "7922",
+   "category": "Entertainment",
+   "channel": "online",
+   "aliases": [
+    "TICKETMASTER",
+    "APACTIX"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "ticketmaster"
+  },
+  {
+   "name": "Mandai Wildlife (Zoo, Bird Paradise)",
+   "service": "",
+   "mcc": "7998",
+   "category": "Entertainment",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "MANDAI",
+    "WILDLIFE RESERVES",
+    "SINGAPORE ZOO"
+   ],
+   "mccAlt": [
+    "7999",
+    "7996"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "mandai-wildlife-zoo-bird-paradise"
+  },
+  {
+   "name": "Universal Studios / RWS",
+   "service": "",
+   "mcc": "7996",
+   "category": "Entertainment",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "RESORTS WORLD",
+    "UNIVERSAL STUDIOS",
+    "RWS "
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "universal-studios-rws"
+  },
+  {
+   "name": "Gardens by the Bay",
+   "service": "",
+   "mcc": "7996",
+   "category": "Entertainment",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "GARDENS BY THE BAY"
+   ],
+   "mccAlt": [
+    "7999"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "gardens-by-the-bay"
+  },
+  {
+   "name": "ActiveSG",
+   "service": "",
+   "mcc": "7997",
+   "category": "Fitness",
+   "channel": "online",
+   "aliases": [
+    "ACTIVESG",
+    "SPORT SINGAPORE"
+   ],
+   "mccAlt": [
+    "7941"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "activesg"
+  },
+  {
+   "name": "Anytime Fitness / Fitness First / Virgin Active",
+   "service": "",
+   "mcc": "7997",
+   "category": "Fitness",
+   "channel": "online",
+   "aliases": [
+    "ANYTIME FITNESS",
+    "FITNESS FIRST",
+    "VIRGIN ACTIVE",
+    "PURE FITNESS"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "Gyms/clubs are 7997 (HSBC Revolution bonus category).",
+   "id": "anytime-fitness-fitness-first-virgin-active"
+  },
+  {
+   "name": "Childcare / preschool",
+   "service": "",
+   "mcc": "8351",
+   "category": "Education",
+   "channel": "online",
+   "aliases": [
+    "SPARKLETOTS",
+    "PCF",
+    "MY FIRST SKOOL",
+    "LITTLE SKOOL",
+    "SKOOL",
+    "CHILDCARE",
+    "PRESCHOOL",
+    "KINDERGARTEN",
+    "MINDCHAMPS",
+    "E-BRIDGE"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "Excluded on most cards.",
+   "id": "childcare-preschool"
+  },
+  {
+   "name": "Enrichment / tuition classes",
+   "service": "",
+   "mcc": "8299",
+   "category": "Education",
+   "channel": "online",
+   "aliases": [
+    "ENRICHMENT",
+    "TUITION",
+    "SWIM SCHOOL",
+    "SWIMMING SCH",
+    "LEARNING CENTRE",
+    "ACADEMY"
+   ],
+   "mccAlt": [
+    "8244",
+    "7999"
+   ],
+   "confidence": "unverified",
+   "source": "",
+   "notes": "Often excluded as education; some coding as recreation (7999) does earn.",
+   "id": "enrichment-tuition-classes"
+  },
+  {
+   "name": "MOE / school fees",
+   "service": "",
+   "mcc": "8211",
+   "category": "Education",
+   "channel": "online",
+   "aliases": [
+    "MOE ",
+    "MINISTRY OF EDUCATION",
+    "SCHOOL FEES"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "moe-school-fees"
+  },
+  {
+   "name": "Pet Lovers Centre / Petfolio",
+   "service": "",
+   "mcc": "5995",
+   "category": "Pets",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "PET LOVERS",
+    "PETFOLIO",
+    "PET SAFARI"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "pet-lovers-centre-petfolio"
+  },
+  {
+   "name": "Vet clinic",
+   "service": "",
+   "mcc": "0742",
+   "category": "Pets",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "VETERINARY",
+    "VET CLINIC",
+    "ANIMAL CLINIC",
+    "MOUNT PLEASANT"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "vet-clinic"
+  },
+  {
+   "name": "Polyclinic / public hospital",
+   "service": "",
+   "mcc": "8062",
+   "category": "Healthcare",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "POLYCLINIC",
+    "SINGHEALTH",
+    "NUHS",
+    "KK WOMEN",
+    "SGH ",
+    "NUH ",
+    "KKH",
+    "CGH "
+   ],
+   "mccAlt": [
+    "8099"
+   ],
+   "confidence": "typical",
+   "source": "",
+   "notes": "Excluded on most cards.",
+   "id": "polyclinic-public-hospital"
+  },
+  {
+   "name": "GP clinic",
+   "service": "",
+   "mcc": "8011",
+   "category": "Healthcare",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "CLINIC",
+    "MEDICAL CENTRE",
+    "HEALTHWAY",
+    "RAFFLES MEDICAL",
+    "PARKWAY SHENTON"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "gp-clinic"
+  },
+  {
+   "name": "Dental",
+   "service": "",
+   "mcc": "8021",
+   "category": "Healthcare",
+   "channel": "mobile_contactless",
+   "aliases": [
+    "DENTAL"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "dental"
+  },
+  {
+   "name": "HealthHub",
+   "service": "",
+   "mcc": "9399",
+   "category": "Government",
+   "channel": "online",
+   "aliases": [
+    "HEALTHHUB"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "",
+   "id": "healthhub"
+  },
+  {
+   "name": "Insurance premiums",
+   "service": "",
+   "mcc": "6300",
+   "category": "Insurance",
+   "channel": "online",
+   "aliases": [
+    "PRUDENTIAL",
+    "AIA ",
+    "GREAT EASTERN",
+    "INCOME INSURANCE",
+    "NTUC INCOME",
+    "MANULIFE",
+    "AVIVA",
+    "SINGLIFE",
+    "FWD ",
+    "TOKIO MARINE",
+    "HSBC LIFE",
+    "ETIQA"
+   ],
+   "mccAlt": [],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "Excluded on most cards.",
+   "id": "insurance-premiums"
+  },
+  {
+   "name": "IRAS / CPF / HDB / Gov",
+   "service": "",
+   "mcc": "9311",
+   "category": "Government",
+   "channel": "online",
+   "aliases": [
+    "IRAS",
+    "CPF",
+    "HDB",
+    "LTA ",
+    "ICA ",
+    "GOV.SG"
+   ],
+   "mccAlt": [
+    "9399"
+   ],
+   "confidence": "reported",
+   "source": "https://themoneybees.co/blog/mcc-codes-singapore-for-credit-cards",
+   "notes": "",
+   "id": "iras-cpf-hdb-gov"
+  },
+  {
+   "name": "AXS",
+   "service": "",
+   "mcc": "9399",
+   "category": "Government",
+   "channel": "online",
+   "aliases": [
+    "AXS"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "Excluded on most cards.",
+   "id": "axs"
+  },
+  {
+   "name": "CardUp",
+   "service": "",
+   "mcc": "7399",
+   "category": "Bill payment",
+   "channel": "online",
+   "aliases": [
+    "CARDUP"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "Earns on DBS Altitude, UOB, AMEX; excluded on DBS WWMC, HSBC.",
+   "id": "cardup"
+  },
+  {
+   "name": "ipaymy",
+   "service": "",
+   "mcc": "7399",
+   "category": "Bill payment",
+   "channel": "online",
+   "aliases": [
+    "IPAYMY"
+   ],
+   "mccAlt": [],
+   "confidence": "typical",
+   "source": "",
+   "notes": "",
+   "id": "ipaymy"
+  }
+ ]
+}

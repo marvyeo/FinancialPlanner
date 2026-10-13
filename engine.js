@@ -674,12 +674,15 @@
     const servicesPerBrand = {};
     (merchantsDb || []).forEach((m) => { const b = norm(m.name); servicesPerBrand[b] = (servicesPerBrand[b] || 0) + 1; });
     (merchantsDb || []).forEach((m) => {
-      [m.service, m.name].filter(Boolean).forEach((nm, idx) => {
+      // statement aliases (e.g. "NTUC FP", "GRAB*A-") are as specific as a service name
+      const names = [m.service, m.name].concat(m.aliases || []);
+      names.forEach((nm, idx) => {
+        if (!nm) return;
         const k = norm(nm);
-        if (k.length >= 3 && k.length > bestLen && textHas(desc, [nm])) {
+        if (k.length >= 2 && k.length > bestLen && textHas(desc, [nm])) {
           best = m; bestLen = k.length;
           // matched only on the brand of a multi-service merchant (e.g. "Grab") → service is ambiguous
-          bestOnBrand = (idx === 1 || !m.service) && servicesPerBrand[norm(m.name)] > 1;
+          bestOnBrand = (idx === 1 || (idx === 0 && !m.service)) && servicesPerBrand[norm(m.name)] > 1;
         }
       });
     });
@@ -694,12 +697,13 @@
     if (best && bestLen >= kwLen) {
       const svc = best.service && best.service !== best.name ? best.service : '';
       const display = !svc ? best.name : (norm(svc).includes(norm(best.name)) ? svc : best.name + ' · ' + svc);
-      return { merchant: display, mcc: best.mcc, category: best.category || categoryForMcc(best.mcc), channel: (kw && kw[4]) || guessChannel(best), confidence: 'db', fcy };
+      return { merchant: display, mcc: best.mcc, category: best.category || categoryForMcc(best.mcc), channel: best.channel || (kw && kw[4]) || guessChannel(best), confidence: 'db', fcy,
+        mccAlt: best.mccAlt || [], mccConfidence: best.confidence || null, note: best.notes || '' };
     }
     if (kw) return { merchant: kw[1], mcc: kw[2], category: kw[3], channel: kw[4], confidence: 'keyword', fcy };
     return { merchant: titleCase(String(desc || '').replace(/\s{2,}.*/, '').slice(0, 40)), mcc: '', category: 'Other', channel: 'chip', confidence: 'none', fcy };
   }
-  function guessChannel(m) { return /online|delivery|app|subscription|e-?commerce/i.test((m.category || '') + ' ' + (m.service || '')) ? 'online' : 'mobile_contactless'; }
+  function guessChannel(m) { return /online|delivery|app|subscription|e-?commerce|ride|hail|stream|telco|utilit|insurance/i.test((m.category || '') + ' ' + (m.service || '')) ? 'online' : 'mobile_contactless'; }
   function titleCase(s) { return String(s).toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase()).trim(); }
 
   /* ---------------- statement parsing ---------------- */

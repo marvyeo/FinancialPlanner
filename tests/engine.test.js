@@ -263,6 +263,22 @@ test('a brand-only match on a multi-service merchant defers to the keyword table
   assert.strictEqual(E.categorise('SHOPEE SINGAPORE MP', db, []).merchant, 'Shopee · Online Retail');
 });
 
+test('curated merchant list: statement aliases resolve to the right merchant and MCC', () => {
+  const db = require(path.join(__dirname, '..', 'merchants-sg.json')).merchants;
+  const cases = [
+    ['NTUC FP-XTRA JURONG', '5411'], ['GRAB*A-8KX2 SINGAPORE SG', '4121'], ['GRABFOOD SINGAPORE', '5812'],
+    ['BUS/MRT 123456', '4111'], ['SHOPEE SINGAPORE MP', '5399'], ['7-ELEVEN #1234', '5499'],
+    ['RYDE TECHNOLOGIES', '5734'], ['KOPITIAM INVESTMENT PTE', '5812'], ['UNIQLO ION', '5651'],
+    ['SP DIGITAL PTE LTD', '4900'], ['COMMUNITY CLUB FEES', null],
+  ];
+  cases.forEach(([desc, mcc]) => {
+    const r = E.categorise(desc, db, []);
+    if (mcc) assert.strictEqual(r.mcc, mcc, desc + ' → ' + r.merchant);
+    else assert.notStrictEqual(r.confidence, 'db', desc + ' should not match ' + r.merchant);
+  });
+  const ids = new Set(); db.forEach((m) => { assert.ok(m.mcc && /^\d{4}$/.test(m.mcc), m.id); assert.ok(!ids.has(m.id), 'dup ' + m.id); ids.add(m.id); });
+});
+
 console.log('rules refresh');
 test('diff reports cap and rate changes', () => {
   const next = JSON.parse(JSON.stringify(rules));

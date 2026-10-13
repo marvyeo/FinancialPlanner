@@ -37,9 +37,16 @@ You can also run it by hand: paste this file into a Claude chat that has this re
 4. **Version.** Set `rulesVersion` to today's date (YYYY-MM-DD, SGT), `generatedAt` to now,
    and replace `changeLog` with one plain-English line per change, e.g.
    `"UOB Lady's: monthly cap S$1,000 → S$750 from 1 Dec 2026 (UOB T&C, 12 Nov)"`.
+4b. **Merchant list (`merchants-sg.json`).** Look for newly published MCCs for Singapore merchants
+   (MileLion, MoneySmart, The Money Bees, HWZ threads with MCC screenshots). For each find:
+   - update `mcc` / `mccAlt`, set `confidence: "reported"` and `source` to the URL;
+   - upgrade `"unverified"` entries (food courts, Kopitiam via FairPrice app, enrichment classes) when evidence appears;
+   - add common statement descriptors to `aliases` (upper case, the stable part only);
+   - never remove an entry; bump `_meta.version` and `_meta.lastUpdated` if anything changed.
+   The app merges this list under the household's own Drive list and flags disagreements on the Merchants page.
 5. **Check.** Run `node tests/engine.test.js`. If a test fails because a rule genuinely changed,
    update the test's expectation in the same commit and say so in the changeLog.
-6. **Publish.** If anything changed: commit `rules.json` (and tests if touched) to `main` with message
+6. **Publish.** If anything changed: commit `rules.json` / `merchants-sg.json` (and tests if touched) to `main` with message
    `rules: <rulesVersion> — <n> changes`, push. If nothing changed, don't commit.
 7. **Report.** Reply with the changeLog lines (or "No changes this week") and anything that
    needs a human decision (e.g. a card being discontinued, or a better card for a category the

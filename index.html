@@ -429,7 +429,7 @@ async function handleSignIn() {
 
 async function onSignedIn() {
   sessionStorage.setItem('fp_access_token', accessToken);
-  await Promise.all([loadFromDrive(), loadMerchantsDB()]);
+  await Promise.all([loadFromDrive(), loadMerchantsDB(), loadCuratedMerchants()]);
   await loadRules();
   ensureEngineData();
   rebuildMerchantDatalist();
@@ -638,7 +638,7 @@ function render() {
   else if (currentView === 'spend') content.innerHTML = renderSpend();
   else if (currentView === 'strategy') content.innerHTML = renderStrategy();
   else if (currentView === 'cards') content.innerHTML = renderCards();
-  else if (currentView === 'merchants') content.innerHTML = renderMerchants();
+  else if (currentView === 'merchants') { content.innerHTML = renderMerchants(); if (merchantFilter) filterMerchants(merchantFilter); }
   else if (currentView === 'settings') content.innerHTML = renderSettings();
 }
 
@@ -1265,48 +1265,176 @@ function doCardImport() {
 }
 
 /* =================== MERCHANTS =================== */
+// Three layers, highest priority first:
+//   data.merchants        — your one-off additions (saved in the main data file)
+//   SG_MERCHANTS          — your merchants.json on Drive
+//   CURATED_MERCHANTS     — merchants-sg.json in the repo (sourced MCCs + statement aliases, refreshed weekly)
+let CURATED_MERCHANTS = [], CURATED_META = null;
+async function loadCuratedMerchants() {
+  try {
+    const r = await fetch('merchants-sg.json?ts=' + Date.now(), { cache: 'no-store' });
+    if (r.ok) { const j = await r.json(); CURATED_MERCHANTS = j.merchants || []; CURATED_META = j._meta || null; }
+  } catch (e) { console.warn('merchants-sg.json not reachable', e); }
+}
+const mKey = m => (FPEngine.util.norm(m.name) + '|' + FPEngine.util.norm(m.service || '')).trim();
+
+/** Drive entries whose MCC disagrees with a sourced ("reported") curated entry for the same merchant. */
+function merchantConflicts() {
+  const norm = FPEngine.util.norm;
+  const out = [];
+  SG_MERCHANTS.forEach((d, idx) => {
+    const sameName = CURATED_MERCHANTS.filter(c => norm(c.name) === norm(d.name) || (c.aliases || []).some(a => norm(a) === norm(d.name)));
+    if (!sameName.length) return;
+    const c = sameName.find(c => norm(c.service || '') === norm(d.service || '')) ||
+              sameName.find(c => d.service && c.service && (norm(c.service).includes(norm(d.service)) || norm(d.service).includes(norm(c.service)))) ||
+              (sameName.length === 1 ? sameName[0] : null);
+    if (!c || c.confidence !== 'reported' || String(c.mcc) === String(d.mcc)) return;
+    if ((c.mccAlt || []).includes(String(d.mcc))) return; // yours is a known alternative — not a conflict
+    out.push({ idx, drive: d, curated: c });
+  });
+  return out;
+}
+async function useCuratedMcc(idxList) {
+  const conflicts = merchantConflicts();
+  idxList.forEach(i => {
+    const c = conflicts.find(x => x.idx === i); if (!c) return;
+    const d = SG_MERCHANTS[i];
+    d.notes = `${d.notes ? d.notes + ' ' : ''}[MCC ${d.mcc} → ${c.curated.mcc} on ${today()}, per ${c.curated.source.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}]`;
+    d.mcc = c.curated.mcc;
+    if (c.curated.mccAlt?.length) d.mccAlt = c.curated.mccAlt;
+  });
+  await saveMerchantsDB(true);
+}
+
+let merchantFilter = '';
 function renderMerchants() {
-  const dbRows = SG_MERCHANTS.slice(0,200).map(m => `
-    <tr style="opacity:0.7;">
-      <td style="font-weight:600;">${m.name}</td>
-      <td style="font-size:11.5px;color:#4A6580;">${m.service||'—'}</td>
-      <td class="tabnum text-muted">${m.mcc||'—'}</td>
-      <td>${m.category||'—'}</td>
-      <td style="color:#4A6580;font-size:11.5px;">${m.notes||'—'}</td>
-      <td style="color:#2A4A6B;font-size:11px;">DB</td>
+  const norm = FPEngine.util.norm;
+  const conflicts = merchantConflicts();
+  const pool = [
+    ...(data.merchants || []).map((m, i) => ({ m, src: 'yours', i })),
+    ...SG_MERCHANTS.map((m, i) => ({ m, src: 'drive', i })),
+  ];
+  const seen = new Set(pool.map(p => mKey(p.m)));
+  CURATED_MERCHANTS.forEach(m => { if (!seen.has(mKey(m))) pool.push({ m, src: 'curated' }); });
+  pool.sort((a, b) => a.m.name.localeCompare(b.m.name) || (a.m.service || '').localeCompare(b.m.service || ''));
+  const confPill = c => c === 'reported' ? '<span class="pill pill-green" title="Published by a named source">sourced</span>'
+    : c === 'unverified' ? '<span class="pill pill-red" title="Best guess — check your statement">check</span>'
+    : c === 'typical' ? '<span class="pill pill-blue" title="Standard MCC for this merchant type">typical</span>' : '';
+  const srcPill = s => s === 'yours' ? '<span class="pill pill-amber">yours</span>' : s === 'drive' ? '<span class="pill pill-blue">Drive</span>' : '<span class="pill" style="background:#1C2F45;color:#8AABBF;">curated</span>';
+  const rows = pool.map(({ m, src, i }) => {
+    const hay = norm([m.name, m.service, m.mcc, m.category, ...(m.aliases || [])].join(' '));
+    return `<tr data-hay="${esc(hay)}">
+      <td><strong>${esc(m.name)}</strong>${m.service ? `<div class="hint" style="margin-top:1px;">${esc(m.service)}</div>` : ''}</td>
+      <td class="tabnum">${esc(m.mcc || '—')}${(m.mccAlt || []).length ? `<div class="hint" style="margin-top:1px;">or ${esc(m.mccAlt.join(', '))}</div>` : ''}</td>
+      <td>${esc(m.category || FPEngine.categoryForMcc(m.mcc))}<div class="hint" style="margin-top:1px;">${m.channel ? channelLabel(m.channel) : ''}</div></td>
+      <td style="font-size:11.5px;color:#8AABBF;max-width:280px;">${esc(m.notes || '')}${(m.aliases || []).length ? `<div class="hint" style="margin-top:2px;">Statement: ${esc(m.aliases.slice(0, 4).join(' · '))}${m.aliases.length > 4 ? ' …' : ''}</div>` : ''}</td>
+      <td style="white-space:nowrap;">${srcPill(src)} ${confPill(m.confidence)}</td>
+      <td>${src === 'yours' ? `<button class="btn-danger" onclick="deleteMerchant(${i})">✕</button>` : ''}</td>
+    </tr>`;
+  }).join('');
+
+  const maps = (data.merchantMappings || []);
+  const aliasRows = maps.map((a, i) => `<tr>
+      <td><code style="background:#1C2F45;padding:1px 6px;border-radius:3px;">${esc(a.pattern)}</code></td>
+      <td><strong>${esc(a.merchant)}</strong></td>
+      <td class="tabnum">${esc(a.mcc || '—')}</td>
+      <td style="font-size:12px;">${channelLabel(a.channel)}</td>
+      <td class="hint">${a.learnedAt ? 'learned ' + esc(a.learnedAt) : 'added ' + esc(a.addedAt || '')}</td>
+      <td style="white-space:nowrap;"><button class="btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="openAliasModal(${i})">Edit</button> <button class="btn-danger" onclick="deleteAlias(${i})">✕</button></td>
     </tr>`).join('');
 
-  const customRows = data.merchants.map((m,i) => `
-    <tr>
-      <td style="font-weight:600;">${m.name}</td>
-      <td style="font-size:11.5px;color:#8AABBF;">${m.service||'—'}</td>
-      <td class="tabnum text-muted">${m.mcc||'—'}</td>
-      <td>${m.category||'—'}</td>
-      <td style="color:#8AABBF;font-size:11.5px;">${m.notes||'—'}</td>
-      <td><button class="btn-danger" onclick="deleteMerchant(${i})">✕</button></td>
+  const conflictRows = conflicts.map(c => `<tr>
+      <td><strong>${esc(c.drive.name)}</strong>${c.drive.service ? `<div class="hint">${esc(c.drive.service)}</div>` : ''}</td>
+      <td class="tabnum text-amber">${esc(c.drive.mcc)}</td>
+      <td class="tabnum text-green">${esc(c.curated.mcc)} <span class="hint">${esc(FPEngine.categoryForMcc(c.curated.mcc))}</span></td>
+      <td class="hint" style="max-width:260px;">${esc(c.curated.notes || '')} <a href="${esc(c.curated.source)}" target="_blank" rel="noopener" style="color:#00C896;">source</a></td>
+      <td><button class="btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="useCuratedMcc([${c.idx}])">Use ${esc(c.curated.mcc)}</button></td>
     </tr>`).join('');
 
   return `
     <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
       <button class="btn-primary" onclick="openMerchantModal()">+ Add merchant</button>
+      <button class="btn-secondary" onclick="openAliasModal()">+ Add statement alias</button>
       <button class="btn-secondary" onclick="downloadMerchantsDB()">↓ Download merchants.json</button>
       <button class="btn-secondary" onclick="saveMerchantsDB()">↑ Save to Drive</button>
-      <span style="font-size:12px;color:#4A6580;margin-left:4px;">${SG_MERCHANTS.length} merchants in DB · ${data.merchants.length} custom</span>
     </div>
-    <p style="font-size:12px;color:#4A6580;margin-bottom:16px;">
-      Merchants marked <strong style="color:#2A4A6B;">DB</strong> are from the shared <code style="background:#1C2F45;padding:1px 5px;border-radius:3px;">merchants.json</code> database.
-      Add new entries and click <em>Save merchant DB to Drive</em> to persist them for all sessions.
-    </p>
-    <div class="table-wrap">
-      <table class="data-table">
-        <thead><tr><th>Name</th><th>Service</th><th>MCC</th><th>Category</th><th>Notes</th><th></th></tr></thead>
-        <tbody>
-          ${customRows || ''}
-          ${dbRows}
-          ${!customRows && !dbRows ? `<tr><td colspan="6"><div class="empty"><div class="icon">◈</div>No merchants loaded</div></td></tr>` : ''}
-        </tbody>
-      </table>
-    </div>`;
+
+    ${conflicts.length ? `
+    <div class="section-header"><h2>MCC corrections available (${conflicts.length})</h2>
+      <button class="btn-primary" style="font-size:12px;padding:6px 14px;" onclick="useCuratedMcc([${conflicts.map(c => c.idx).join(',')}])">Apply all</button></div>
+    <p style="font-size:12.5px;color:#8AABBF;margin:-6px 0 12px;">Your Drive list disagrees with a published source for these merchants. The MCC decides which bonus applies, so a wrong one means wrong recommendations.</p>
+    <div class="table-wrap" style="overflow-x:auto;"><table class="data-table"><thead><tr><th>Merchant</th><th>Yours</th><th>Sourced</th><th>Note</th><th></th></tr></thead><tbody>${conflictRows}</tbody></table></div>` : ''}
+
+    <div class="section-header"><h2>Statement aliases (${maps.length})</h2></div>
+    <p style="font-size:12.5px;color:#8AABBF;margin:-6px 0 12px;">When a statement line contains the text on the left, it's recorded as the merchant on the right. Aliases are learned automatically when you correct an imported expense, and you can add your own.
+      The curated list adds ${CURATED_MERCHANTS.reduce((s, m) => s + (m.aliases || []).length, 0)} common SG statement descriptors on top of these.</p>
+    <div class="table-wrap" style="overflow-x:auto;"><table class="data-table"><thead><tr><th>Statement text contains</th><th>Becomes</th><th>MCC</th><th>Paid by</th><th></th><th></th></tr></thead>
+      <tbody>${aliasRows || `<tr><td colspan="6"><div class="empty" style="padding:20px;">No aliases yet — fix a merchant name on an imported expense and it's remembered here.</div></td></tr>`}</tbody></table></div>
+
+    <div class="section-header"><h2>All merchants (${pool.length})</h2>
+      <input id="mer-filter" placeholder="Search name, MCC, category, statement text…" value="${esc(merchantFilter)}" oninput="filterMerchants(this.value)"
+        style="background:#0D1B2A;border:1px solid #2A4A6B;color:#F0F4F8;border-radius:7px;padding:7px 12px;font-size:13px;width:min(320px,100%);"/></div>
+    <p class="hint" style="margin:-6px 0 10px;">${CURATED_META ? `Curated list ${esc(CURATED_META.version)}: <span class="pill pill-green">sourced</span> published by a named source · <span class="pill pill-blue">typical</span> standard code for that kind of merchant · <span class="pill pill-red">check</span> best guess. To confirm an MCC: ${esc(CURATED_META.howToCheck || '')}` : 'Curated list not loaded.'}</p>
+    <div class="table-wrap" style="overflow-x:auto;"><table class="data-table" id="mer-table">
+      <thead><tr><th>Merchant</th><th>MCC</th><th>Category</th><th>Notes</th><th>Source</th><th></th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="6"><div class="empty"><div class="icon">◈</div>No merchants loaded</div></td></tr>`}</tbody></table></div>`;
+}
+function filterMerchants(q) {
+  merchantFilter = q;
+  const k = FPEngine.util.norm(q);
+  document.querySelectorAll('#mer-table tbody tr[data-hay]').forEach(tr => { tr.style.display = !k || tr.dataset.hay.includes(k) ? '' : 'none'; });
+}
+
+/* ---- statement aliases ---- */
+function openAliasModal(i) {
+  const a = i != null ? data.merchantMappings[i] : { pattern: '', merchant: '', mcc: '', channel: 'chip' };
+  showModal(`
+    <h3>${i != null ? 'Edit' : 'Add'} statement alias</h3>
+    <p style="font-size:12.5px;color:#8AABBF;margin:-8px 0 14px;">Use the part of the statement text that stays the same each time — e.g. <code style="background:#1C2F45;padding:1px 5px;border-radius:3px;">FP GROUP APP</code>, not the outlet number.</p>
+    <div class="form-row"><label>Statement text contains</label><input id="al-pattern" value="${esc(a.pattern)}" placeholder="e.g. LPS FOOD"/></div>
+    <div class="form-row"><label>Merchant</label><input id="al-merchant" list="merchant-list" value="${esc(a.merchant)}" placeholder="e.g. Lau Pa Sat" oninput="aliasMerchantPicked()"/></div>
+    <div class="form-grid">
+      <div class="form-row"><label>MCC</label><input id="al-mcc" value="${esc(a.mcc)}" placeholder="5812"/><div class="hint" id="al-hint"></div></div>
+      <div class="form-row"><label>Usually paid by</label><select id="al-channel">${CHANNELS.map(c => `<option value="${c.id}" ${a.channel === c.id ? 'selected' : ''}>${c.label}</option>`).join('')}</select></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveAlias(${i != null ? i : 'null'})">Save alias</button>
+    </div>`);
+}
+function aliasMerchantPicked() {
+  const r = resolveMerchantInput(document.getElementById('al-merchant').value);
+  if (r && r.mcc && !document.getElementById('al-mcc').value) document.getElementById('al-mcc').value = r.mcc;
+  document.getElementById('al-hint').textContent = r && r.mcc ? `${r.category} · ${r.source === 'db' ? 'from merchant list' : 'guess'}` : '';
+}
+function saveAlias(i) {
+  const pattern = FPEngine.util.norm(document.getElementById('al-pattern').value);
+  const merchantText = document.getElementById('al-merchant').value.trim();
+  if (pattern.length < 2 || !merchantText) { alert('Enter the statement text and the merchant.'); return; }
+  const r = resolveMerchantInput(merchantText);
+  const mcc = document.getElementById('al-mcc').value.trim() || (r && r.mcc) || '';
+  const entry = { pattern, merchant: r && r.source === 'db' ? r.merchant : merchantText, mcc, category: FPEngine.categoryForMcc(mcc) !== 'Other' ? FPEngine.categoryForMcc(mcc) : (r && r.category) || 'Other',
+    channel: document.getElementById('al-channel').value, addedAt: today() };
+  data.merchantMappings = data.merchantMappings || [];
+  if (i != null) data.merchantMappings[i] = { ...data.merchantMappings[i], ...entry };
+  else { data.merchantMappings = data.merchantMappings.filter(m => m.pattern !== pattern); data.merchantMappings.unshift(entry); }
+  closeModal(); saveToDrive(); render();
+  const n = reapplyAliases();
+  toast(`Saved alias "${esc(pattern)}" → ${esc(entry.merchant)}` + (n ? ` · updated ${n} imported expense${n !== 1 ? 's' : ''}` : ''));
+}
+function deleteAlias(i) { data.merchantMappings.splice(i, 1); saveToDrive(); render(); }
+/** Re-categorise imported expenses that haven't been hand-edited, using the current aliases. */
+function reapplyAliases() {
+  let n = 0;
+  (data.transactions || []).forEach(t => {
+    if (t.source !== 'import' || !t.rawDescription || t.edited) return;
+    const hit = (data.merchantMappings || []).find(m => FPEngine.util.norm(t.rawDescription).includes(m.pattern));
+    if (hit && (t.merchant !== hit.merchant || t.mcc !== hit.mcc)) {
+      t.merchant = hit.merchant; t.mcc = hit.mcc; t.category = hit.category; if (hit.channel) t.channel = hit.channel; n++;
+    }
+  });
+  if (n) { saveToDrive(); render(); }
+  return n;
 }
 
 function downloadMerchantsDB() {
@@ -1327,7 +1455,7 @@ function downloadMerchantsDB() {
   a.click();
 }
 
-async function saveMerchantsDB() {
+async function saveMerchantsDB(quiet) {
   // Merge custom merchants into the DB and save as merchants.json on Drive
   const allEntries = [...SG_MERCHANTS];
   data.merchants.forEach(m => {
@@ -1371,7 +1499,8 @@ async function saveMerchantsDB() {
     data.merchants = []; // Moved to DB — clear custom list
     saveToDrive();
     render();
-    setTimeout(() => alert(`Saved ${allEntries.length} merchants to Drive merchants.json`), 300);
+    rebuildMerchantDatalist();
+    if (quiet) toast(`Updated your merchant list on Drive (${allEntries.length} merchants)`); else setTimeout(() => alert(`Saved ${allEntries.length} merchants to Drive merchants.json`), 300);
   } catch(e) { alert('Save failed: ' + e.message); }
 }
 
@@ -1723,7 +1852,11 @@ function savePolicy() {
 
 /* ---------------- merchants for the entry form ---------------- */
 let MERCHANT_BY_LABEL = new Map();
-function merchantPool() { return [...SG_MERCHANTS, ...(data.merchants || [])]; }
+function merchantPool() {
+  const own = [...(data.merchants || []), ...SG_MERCHANTS];
+  const seen = new Set(own.map(mKey));
+  return own.concat(CURATED_MERCHANTS.filter(m => !seen.has(mKey(m))));
+}
 function merchantLabel(m) { return m.service && m.service !== m.name ? `${m.name} — ${m.service}` : m.name; }
 // "GrabFood" when the service already names the brand, else "Shopee · Online Retail" (both words stay matchable by the engine)
 function merchantDisplayName(m) {
@@ -1931,7 +2064,7 @@ function saveExpense() {
   if (f.editId) {
     const i = data.transactions.findIndex(x => x.id === f.editId);
     const prev = data.transactions[i];
-    Object.assign(txn, { source: prev.source, rawDescription: prev.rawDescription, importBatch: prev.importBatch, createdAt: prev.createdAt });
+    Object.assign(txn, { source: prev.source, rawDescription: prev.rawDescription, importBatch: prev.importBatch, createdAt: prev.createdAt, edited: true });
     // Learn the correction for future statement imports
     if (prev.rawDescription && (prev.merchant !== txn.merchant || prev.mcc !== txn.mcc || prev.channel !== txn.channel)) learnMapping(prev.rawDescription, txn);
     data.transactions[i] = txn;
