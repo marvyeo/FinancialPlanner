@@ -396,6 +396,25 @@ test('pairTransfers with onlyIds never re-pairs confirmed history', () => {
   assert.strictEqual(L[1].kind, 'income');
 });
 
+test('migrateContra: one share repaid by several people; mislabelled "Collect from" rows; re-runnable', () => {
+  const sh = (o) => ({ source: 'spreadsheet', direction: 'out', ...o });
+  const L = [
+    sh({ id: 'b', cardId: 'c1', date: '2026-07-22', merchant: 'Mama Diam', amount: 66.91, kind: 'expense' }),
+    sh({ id: 'p', cardId: 'c1', date: '2026-07-22', merchant: 'Mama Diam', amount: 133.8, kind: 'paid_for_others' }),
+    sh({ id: 'v', accountId: 'u', date: '2026-07-22', rawDescription: 'Collect from Vivian', merchant: 'Collect from Vivian', amount: 66.9, kind: 'income', direction: 'in' }),
+    sh({ id: 'n', accountId: 'u', date: '2026-07-23', rawDescription: 'Collect from Naomi', merchant: 'Collect from Naomi', amount: 66.9, kind: 'income', direction: 'in' }),
+    sh({ id: 'r', cardId: 'c1', date: '2026-02-09', merchant: 'Ramen', amount: 39, kind: 'paid_for_others' }),
+    sh({ id: 'a', cardId: 'c1', date: '2026-02-24', rawDescription: 'Collect from Aaron', merchant: 'Collect from Aaron', amount: 39, kind: 'paid_for_others' }),
+  ];
+  const { ledger } = E.migrateContra(L, '2026-10-15');
+  const md = ledger.find((t) => t.id === 'b');
+  assert.deepStrictEqual(md.splits.map((x) => x.person + ':' + x.status).sort(), ['Naomi:collected', 'Vivian:collected']);
+  const ramen = ledger.find((t) => t.id === 'r');
+  assert.strictEqual(ramen.splits[0].person, 'Aaron'); assert.strictEqual(ramen.splits[0].status, 'collected');
+  const again = E.migrateContra(ledger, '2026-10-15');   // second run changes nothing material
+  assert.deepStrictEqual(E.owedSummary(again.ledger, '2026-10-15'), {});
+});
+
 console.log('rules refresh');
 test('diff reports cap and rate changes', () => {
   const next = JSON.parse(JSON.stringify(rules));

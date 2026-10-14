@@ -431,7 +431,11 @@
     const stats = { merged: 0, standalone: 0, linked: 0, linkedGroups: 0, assumed: 0, stillOwed: 0, repaymentsUnlinked: 0 };
     const isSheet = (t) => t.source === 'spreadsheet';
     const src = (t) => t.cardId || t.accountId || t.cardName || '';
-    let n = 0; const sid = () => 'sp_mig' + (++n);
+    let n = 0; const sid = () => 'sp_mig' + Date.now().toString(36) + (++n);
+    L.forEach((t) => {
+      if (isSheet(t) && /^collect(ed)?\s+from\b/i.test(t.rawDescription || '') && t.direction !== 'in') { t.direction = 'in'; t.kind = 'income'; delete t.splits; stats.fixedCollectRows = (stats.fixedCollectRows || 0) + 1; }
+      splitsOf(t).forEach((sp) => { if (sp.status === 'assumed') { sp.status = 'owed'; if (sp.person === 'Unassigned') sp.person = ''; } });
+    });
     // 1. merge "your share + friend's share" rows into one bill
     const groups = new Map();
     L.forEach((t) => { if (!isSheet(t)) return; const k = src(t) + '|' + t.date + '|' + norm(t.merchant); (groups.get(k) || groups.set(k, []).get(k)).push(t); });
@@ -457,7 +461,7 @@
     });
     // 3. link "Collect from X" (and work reimbursements of an exact bill) to splits
     const nameOf = (t) => { const m = String(t.rawDescription || '').match(/collect(?:ed)?\s+from\s+([^(]+)/i); return m ? m[1].trim() : (/reimburse/i.test(t.rawDescription || '') ? 'Work (reimbursement)' : ''); };
-    const cols = L.filter((t) => isSheet(t) && t.direction === 'in' && (kindOf(t) === 'income' || kindOf(t) === 'refund') && nameOf(t))
+    const cols = L.filter((t) => isSheet(t) && t.direction === 'in' && !t.repays && (kindOf(t) === 'income' || kindOf(t) === 'refund' || kindOf(t) === 'repayment') && nameOf(t))
       .sort((a, b) => (a.date < b.date ? -1 : 1));
     const open = () => { const o = []; L.forEach((t) => splitsOf(t).forEach((sp) => { if (sp.status === 'owed') o.push({ t, sp }); })); return o; };
     const settle = (c, picks, person) => {
@@ -477,6 +481,24 @@
         }
       }
       if (/collect/i.test(c.rawDescription || '')) { c.kind = 'repayment'; stats.repaymentsUnlinked++; }
+    });
+    // 3b. one share paid back by several people (each sends their part): split the share per person
+    const freeCols = () => cols.filter((c) => !c.repays && /collect/i.test(c.rawDescription || ''));
+    L.forEach((t) => {
+      const owedUnnamed = splitsOf(t).filter((sp) => sp.status === 'owed' && !sp.person);
+      owedUnnamed.forEach((sp) => {
+        const near = freeCols().filter((c) => c.date >= t.date && daysUntil(c.date, t.date) <= 14).slice(0, 12);
+        for (let k = 2; k <= 5; k++) {
+          for (const combo of combos(near, k)) {
+            if (Math.abs(combo.reduce((s2, c) => s2 + num(c.amount), 0) - num(sp.amount)) >= 0.005) continue;
+            const parts = combo.map((c) => ({ id: sid(), person: nameOf(c), amount: num(c.amount), status: 'collected', collectedOn: c.date, repaymentId: c.id }));
+            t.splits = splitsOf(t).filter((x) => x !== sp).concat(parts);
+            combo.forEach((c, i) => { c.kind = 'repayment'; c.repays = [{ txnId: t.id, splitId: parts[i].id, amount: parts[i].amount }]; });
+            stats.multiPayer = (stats.multiPayer || 0) + 1;
+            return;
+          }
+        }
+      });
     });
     // 4. older unmatched splits: assume settled outside the records
     L.forEach((t) => splitsOf(t).forEach((sp) => {

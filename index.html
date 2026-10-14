@@ -1756,10 +1756,13 @@ function ensureEngineData() {
   FPEngine.autoLink(data.cards, RULES);
   data.cardNameMap = data.cardNameMap || {};
   data.migrations = data.migrations || {};
-  if (!data.migrations.contraSplits && data.transactions.some(t => t.source === 'spreadsheet' && FPEngine.kindOf(t) === 'paid_for_others')) {
+  const needsContra = !data.migrations.contraSplits && data.transactions.some(t => t.source === 'spreadsheet' && FPEngine.kindOf(t) === 'paid_for_others');
+  const needsContraV2 = data.migrations.contraSplits && !data.migrations.contraSplitsV2;   // re-run with multi-payer matching
+  if (needsContra || needsContraV2) {
     const { ledger, stats } = FPEngine.migrateContra(data.transactions, today());
     data.transactions = ledger;
-    data.migrations.contraSplits = { at: today(), stats };
+    data.migrations.contraSplits = data.migrations.contraSplits || { at: today(), stats };
+    data.migrations.contraSplitsV2 = { at: today(), stats };
     setTimeout(() => { saveToDrive(); toast(`Converted your Contra history: ${stats.merged + stats.standalone} shared bills, ${stats.linked + stats.linkedGroups} repayments linked. See "Owed to me".`, 6000); }, 1500);
   }
   const n = relinkOrphanTxns();
