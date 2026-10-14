@@ -339,6 +339,63 @@ test('bank statements: "BILL PAYMENT" / "FAST PAYMENT" are money out; card "PAYM
   assert.strictEqual(E.categorise('PAYNOW TO AH LIANG HOR FUN', [], []).merchant, 'Ah Liang Hor Fun');
 });
 
+console.log('splits & owed money');
+test('your share excludes what others owe; the card still earns on the full bill', () => {
+  const cards = household(); E.autoLink(cards, rules);
+  const c = card(cards, "UOB Lady's Mastercard (Marvin)");
+  const bill = txn({ id: 'bill', cardId: c.id, amount: 100, mcc: '5812', merchant: 'Restaurant', date: '2026-10-02',
+    splits: [{ id: 's1', person: 'Vanessa Lim', amount: 30 }, { id: 's2', person: 'Aaron', amount: 30, status: 'collected' }] });
+  close(E.yourShare(bill), 40);
+  assert.strictEqual(E.openSplits(bill).length, 1);
+  close(E.cardStatus(c, rules, [bill], '2026-10-13').caps[0].used, 100);
+  const owed = E.owedSummary([bill], '2026-10-13');
+  close(owed['Vanessa Lim'].owed, 30); assert.strictEqual(owed['Vanessa Lim'].items[0].ageDays, 11);
+});
+test('matchRepayments links PayNow-in by name and amount (single split or the person\'s total)', () => {
+  const L = [
+    { id: 'b1', date: '2026-09-01', amount: 60, kind: 'expense', splits: [{ id: 'x1', person: 'Vanessa', amount: 20 }] },
+    { id: 'b2', date: '2026-09-05', amount: 45, kind: 'expense', splits: [{ id: 'x2', person: 'Vanessa', amount: 15 }, { id: 'x3', person: 'Sze Yin', amount: 15 }] },
+    { id: 'i1', date: '2026-09-07', amount: 35, direction: 'in', kind: 'income', rawDescription: 'PAYNOW FROM VANESSA LIM' },
+    { id: 'i2', date: '2026-09-08', amount: 15, direction: 'in', kind: 'income', rawDescription: 'PAYNOW FROM TAN SZE YIN' },
+    { id: 'i3', date: '2026-09-08', amount: 15, direction: 'in', kind: 'income', rawDescription: 'PAYNOW FROM SOMEONE ELSE' },
+  ];
+  const m = E.matchRepayments(L);
+  assert.strictEqual(m.length, 2);
+  assert.deepStrictEqual(m[0].items.map((x) => x.splitId).sort(), ['x1', 'x2']);
+  assert.strictEqual(m[1].items[0].splitId, 'x3');
+  assert.ok(!E.personMatches('PAYNOW FROM VANESSALIM', 'Aaron'));
+});
+
+test('migrateContra merges share rows, names splits from "Collect from", assumes old unmatched settled', () => {
+  const sh = (o) => ({ source: 'spreadsheet', direction: 'out', ...o });
+  const L = [
+    sh({ id: 'a', cardId: 'c1', date: '2026-03-01', merchant: 'Ramen', amount: 40, kind: 'expense', importKey: 'k1' }),
+    sh({ id: 'b', cardId: 'c1', date: '2026-03-01', merchant: 'Ramen', amount: 40, kind: 'paid_for_others', importKey: 'k2' }),
+    sh({ id: 'c', accountId: 'u1', date: '2026-03-03', merchant: 'Collect from Vanessa', rawDescription: 'Collect from Vanessa', amount: 40, kind: 'income', direction: 'in' }),
+    sh({ id: 'd', cardId: 'c1', date: '2026-01-05', merchant: 'Pizza', amount: 30, kind: 'paid_for_others' }),
+    sh({ id: 'e', cardId: 'c1', date: '2026-10-01', merchant: 'Dinner', amount: 25, kind: 'paid_for_others' }),
+  ];
+  const { ledger, stats } = E.migrateContra(L, '2026-10-15');
+  assert.strictEqual(ledger.length, 4);
+  const ramen = ledger.find((t) => t.id === 'a');
+  close(ramen.amount, 80); close(E.yourShare(ramen), 40); assert.deepStrictEqual(ramen.importKeys, ['k1', 'k2']);
+  assert.strictEqual(ramen.splits[0].person, 'Vanessa'); assert.strictEqual(ramen.splits[0].status, 'collected');
+  assert.strictEqual(ledger.find((t) => t.id === 'c').kind, 'repayment');
+  assert.strictEqual(ledger.find((t) => t.id === 'd').splits[0].status, 'assumed');
+  assert.strictEqual(ledger.find((t) => t.id === 'e').splits[0].status, 'owed');
+  assert.strictEqual(stats.stillOwed, 1);
+});
+
+test('pairTransfers with onlyIds never re-pairs confirmed history', () => {
+  const L = [
+    { id: 'h1', accountId: 'a', date: '2026-03-01', amount: 500, kind: 'transfer', direction: 'out', source: 'spreadsheet', reviewed: true },
+    { id: 'h2', accountId: 'b', date: '2026-03-02', amount: 500, kind: 'income', direction: 'in', source: 'spreadsheet', reviewed: true },
+    { id: 'n1', accountId: 'b', date: '2026-10-15', amount: 40, kind: 'income', direction: 'in', source: 'import', review: ['incoming'] },
+  ];
+  assert.strictEqual(E.pairTransfers(L, { onlyIds: ['n1'] }), 0);
+  assert.strictEqual(L[1].kind, 'income');
+});
+
 console.log('rules refresh');
 test('diff reports cap and rate changes', () => {
   const next = JSON.parse(JSON.stringify(rules));

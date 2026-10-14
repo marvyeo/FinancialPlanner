@@ -358,12 +358,151 @@
    *   income           — salary, interest, repayments, reimbursements
    *   refund           — merchant refund / reversal
    */
-  const KINDS = ['expense', 'paid_for_others', 'transfer', 'income', 'refund'];
+  const KINDS = ['expense', 'paid_for_others', 'transfer', 'income', 'refund', 'repayment'];
   const kindOf = (t) => (t && KINDS.includes(t.kind) ? t.kind : 'expense');
   /** Does this txn count toward card caps, minimum spend and rewards? */
   const earnsOnCard = (t) => { const k = kindOf(t); return k === 'expense' || k === 'paid_for_others'; };
   /** Does this txn count as household spending? */
   const isSpending = (t) => kindOf(t) === 'expense';
+
+  /* ---------------- splits: you paid the bill, others owe you their share ---------------- */
+  // t.splits = [{ id, person, amount, status: 'owed'|'collected'|'forgiven', collectedOn, repaymentId }]
+  const splitsOf = (t) => (t && Array.isArray(t.splits) ? t.splits : []);
+  /** Your own share of a transaction (what counts as your spending). */
+  function yourShare(t) {
+    const k = kindOf(t);
+    if (k === 'paid_for_others') return 0;
+    if (k !== 'expense') return 0;
+    return r2(Math.max(0, num(t.amount) - splitsOf(t).reduce((s, x) => s + num(x.amount), 0)));
+  }
+  /** Amounts others owe you on this transaction that haven't come back yet. */
+  function openSplits(t) { return splitsOf(t).filter((x) => (x.status || 'owed') === 'owed'); }
+  function normPerson(s) { return norm(s).replace(/\b(mr|ms|mrs|dr)\b/g, '').trim(); }
+  /** Does a statement description / name refer to this person? (first name or full name, either order) */
+  function personMatches(text, person) {
+    const t = ' ' + norm(text) + ' ', p = normPerson(person);
+    if (!p) return false;
+    if (t.includes(' ' + p + ' ')) return true;                 // full name as written
+    const parts = p.split(' ').filter((w) => w.length >= 3);
+    if (!parts.length) return false;
+    if (parts.length === 1) return t.includes(' ' + parts[0] + ' '); // "Vanessa" in "PAYNOW FROM VANESSA LIM"
+    return parts.every((w) => t.includes(' ' + w + ' '));        // all name parts, any order
+  }
+  /**
+   * Suggest links between incoming money (income/repayment not yet linked) and open splits.
+   * Match on person name in the description and amount = one split or the sum of that person's open splits,
+   * within `days` after the bill. Returns [{ incomingId, person, amount, items:[{txnId, splitId, amount}] }].
+   */
+  function matchRepayments(ledger, opts) {
+    opts = opts || {};
+    const days = opts.days || 90;
+    const open = [];
+    (ledger || []).forEach((t) => openSplits(t).forEach((sp) => open.push({ t, sp })));
+    const incoming = (ledger || []).filter((t) => t.direction === 'in' && !t.repays && (kindOf(t) === 'income' || kindOf(t) === 'repayment' || kindOf(t) === 'transfer' && (t.review || []).length));
+    const used = new Set(), out = [];
+    incoming.sort((a, b) => (a.date < b.date ? -1 : 1)).forEach((inc) => {
+      const desc = (inc.rawDescription || '') + ' ' + (inc.merchant || '') + ' ' + (inc.note || '');
+      const cands = open.filter((o) => !used.has(o.sp.id) && personMatches(desc, o.sp.person) &&
+        o.t.date <= inc.date && daysUntil(inc.date, o.t.date) <= days);
+      if (!cands.length) return;
+      const amt = num(inc.amount);
+      // single split with the same amount (closest bill first)
+      let pick = cands.filter((o) => Math.abs(num(o.sp.amount) - amt) < 0.005).sort((a, b) => (a.t.date > b.t.date ? -1 : 1)).slice(0, 1);
+      // or all of that person's open splits together
+      if (!pick.length) {
+        const byPerson = {};
+        cands.forEach((o) => (byPerson[normPerson(o.sp.person)] = byPerson[normPerson(o.sp.person)] || []).push(o));
+        for (const list of Object.values(byPerson)) if (Math.abs(list.reduce((s, o) => s + num(o.sp.amount), 0) - amt) < 0.005) { pick = list; break; }
+      }
+      if (!pick.length) return;
+      pick.forEach((o) => used.add(o.sp.id));
+      out.push({ incomingId: inc.id, person: pick[0].sp.person, amount: amt, items: pick.map((o) => ({ txnId: o.t.id, splitId: o.sp.id, amount: num(o.sp.amount) })) });
+    });
+    return out;
+  }
+  /**
+   * One-time conversion of spreadsheet "Contra" history into splits + linked repayments.
+   * Mutates and returns { ledger, stats }. Only touches rows with source === 'spreadsheet'.
+   */
+  function migrateContra(ledger, asOf, opts) {
+    opts = opts || {};
+    const settleAfterDays = opts.settleAfterDays == null ? 60 : opts.settleAfterDays;
+    let L = ledger.slice();
+    const stats = { merged: 0, standalone: 0, linked: 0, linkedGroups: 0, assumed: 0, stillOwed: 0, repaymentsUnlinked: 0 };
+    const isSheet = (t) => t.source === 'spreadsheet';
+    const src = (t) => t.cardId || t.accountId || t.cardName || '';
+    let n = 0; const sid = () => 'sp_mig' + (++n);
+    // 1. merge "your share + friend's share" rows into one bill
+    const groups = new Map();
+    L.forEach((t) => { if (!isSheet(t)) return; const k = src(t) + '|' + t.date + '|' + norm(t.merchant); (groups.get(k) || groups.set(k, []).get(k)).push(t); });
+    const drop = new Set();
+    groups.forEach((g) => {
+      const own = g.filter((t) => kindOf(t) === 'expense');
+      const others = g.filter((t) => kindOf(t) === 'paid_for_others');
+      if (!own.length || !others.length) return;
+      const base = own[0];
+      base.splits = splitsOf(base).concat(others.map((o) => ({ id: sid(), person: '', amount: num(o.amount), status: 'owed', fromRow: o.importKey })));
+      base.amount = r2(num(base.amount) + others.reduce((s, o) => s + num(o.amount), 0));
+      base.importKeys = [base.importKey].concat(others.map((o) => o.importKey)).filter(Boolean);
+      others.forEach((o) => drop.add(o.id));
+      stats.merged += others.length;
+    });
+    L = L.filter((t) => !drop.has(t.id));
+    // 2. standalone "paid for others" → bill with the whole amount owed
+    L.forEach((t) => {
+      if (!isSheet(t) || kindOf(t) !== 'paid_for_others') return;
+      t.kind = 'expense';
+      t.splits = [{ id: sid(), person: '', amount: num(t.amount), status: 'owed' }];
+      stats.standalone++;
+    });
+    // 3. link "Collect from X" (and work reimbursements of an exact bill) to splits
+    const nameOf = (t) => { const m = String(t.rawDescription || '').match(/collect(?:ed)?\s+from\s+([^(]+)/i); return m ? m[1].trim() : (/reimburse/i.test(t.rawDescription || '') ? 'Work (reimbursement)' : ''); };
+    const cols = L.filter((t) => isSheet(t) && t.direction === 'in' && (kindOf(t) === 'income' || kindOf(t) === 'refund') && nameOf(t))
+      .sort((a, b) => (a.date < b.date ? -1 : 1));
+    const open = () => { const o = []; L.forEach((t) => splitsOf(t).forEach((sp) => { if (sp.status === 'owed') o.push({ t, sp }); })); return o; };
+    const settle = (c, picks, person) => {
+      picks.forEach(({ sp }) => { sp.person = sp.person || person; sp.status = 'collected'; sp.collectedOn = c.date; sp.repaymentId = c.id; });
+      c.kind = 'repayment'; c.repays = picks.map(({ t, sp }) => ({ txnId: t.id, splitId: sp.id, amount: num(sp.amount) }));
+    };
+    cols.forEach((c) => {
+      const person = nameOf(c), amt = num(c.amount);
+      const cand = open().filter(({ t, sp }) => t.date <= c.date && daysUntil(c.date, t.date) <= 90 && (!sp.person || personMatches(person, sp.person)))
+        .sort((a, b) => (a.t.date > b.t.date ? -1 : 1));
+      const one = cand.find(({ sp }) => Math.abs(num(sp.amount) - amt) < 0.005);
+      if (one) { settle(c, [one], person); stats.linked++; return; }
+      const near = cand.filter(({ t }) => daysUntil(c.date, t.date) <= 31).slice(0, 10);
+      for (let k = 2; k <= 4; k++) {
+        for (const combo of combos(near, k)) {
+          if (Math.abs(combo.reduce((s, x) => s + num(x.sp.amount), 0) - amt) < 0.005) { settle(c, combo, person); stats.linkedGroups++; return; }
+        }
+      }
+      if (/collect/i.test(c.rawDescription || '')) { c.kind = 'repayment'; stats.repaymentsUnlinked++; }
+    });
+    // 4. older unmatched splits: assume settled outside the records
+    L.forEach((t) => splitsOf(t).forEach((sp) => {
+      if (sp.status !== 'owed') return;
+      if (!sp.person) sp.person = 'Unassigned';
+      if (daysUntil(asOf, t.date) > settleAfterDays) { sp.status = 'assumed'; stats.assumed++; } else stats.stillOwed++;
+    }));
+    return { ledger: L, stats };
+  }
+  function* combos(arr, k, start) {
+    start = start || 0;
+    if (k === 0) { yield []; return; }
+    for (let i = start; i <= arr.length - k; i++) for (const rest of combos(arr, k - 1, i + 1)) yield [arr[i]].concat(rest);
+  }
+
+  /** Outstanding by person: { person: { owed, items:[{txn, split, ageDays}] } } */
+  function owedSummary(ledger, asOf) {
+    const out = {};
+    (ledger || []).forEach((t) => openSplits(t).forEach((sp) => {
+      const k = sp.person || 'Unnamed';
+      const o = out[k] || (out[k] = { person: k, owed: 0, items: [] });
+      o.owed = r2(o.owed + num(sp.amount));
+      o.items.push({ txn: t, split: sp, ageDays: asOf ? daysUntil(asOf, t.date) : null });
+    }));
+    return out;
+  }
 
   function cardTxns(ledger, card) {
     return (ledger || []).filter((t) => (t.cardId === card.id || (!t.cardId && t.cardName === card.name)) && earnsOnCard(t));
@@ -902,14 +1041,18 @@
   function pairTransfers(ledger, opts) {
     opts = opts || {};
     const days = opts.days == null ? 4 : opts.days;
+    const fresh = opts.onlyIds ? new Set(opts.onlyIds) : null;          // at least one side must be newly imported
     const acctOf = (t) => t.cardId || t.accountId || t.cardName || '';
-    const open = (ledger || []).filter((t) => !t.transferPair && t.date && num(t.amount) > 0 && kindOf(t) !== 'refund');
+    // a side is "open" if it's new, or not yet confirmed by you (unreviewed / flagged), and isn't already linked
+    const pairable = (t) => !t.transferPair && !t.repays && t.date && num(t.amount) > 0 && kindOf(t) !== 'refund' && kindOf(t) !== 'repayment' &&
+      (fresh ? (fresh.has(t.id) || (t.source === 'import' && !t.reviewed) || (t.review || []).length) : true);
+    const open = (ledger || []).filter(pairable);
     const outs = open.filter((t) => t.direction !== 'in' && (kindOf(t) === 'transfer' || (t.review || []).includes('paynow')));
     const ins = open.filter((t) => t.direction === 'in');
     let n = 0;
     outs.forEach((o) => {
       const m = ins.find((i) => !i.transferPair && acctOf(i) !== acctOf(o) && Math.abs(num(i.amount) - num(o.amount)) < 0.005 &&
-        Math.abs(daysUntil(i.date, o.date)) <= days);
+        Math.abs(daysUntil(i.date, o.date)) <= days && (!fresh || fresh.has(i.id) || fresh.has(o.id)));
       if (!m) return;
       o.kind = 'transfer'; m.kind = 'transfer';
       o.transferPair = m.id; m.transferPair = o.id;
@@ -951,6 +1094,7 @@
     matchWhen, isExcluded, allocate, cycleState, cardStatus, candidateCards,
     recommend, analyseLedger, ledgerEarnings, strategy, bestProgramme, diffRules, validateRules,
     KINDS, kindOf, earnsOnCard, isSpending, classifyFlow, pairTransfers,
+    splitsOf, yourShare, openSplits, personMatches, matchRepayments, owedSummary, migrateContra,
     categorise, categoryForMcc, parseStatementText, parseCSV, guessCsvMapping, csvToRows, txnFingerprint,
     util: { norm, mccIn, expandList, r2, ymd, parseYmd, daysUntil },
   };

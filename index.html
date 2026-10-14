@@ -332,6 +332,7 @@
     <div class="nav-section">Overview</div>
     <div class="nav-item active" data-nav="dashboard" onclick="navigate('dashboard')"><span class="icon">⊞</span> Dashboard</div>
     <div class="nav-item" data-nav="spend" onclick="navigate('spend')"><span class="icon">≡</span> Spending</div>
+    <div class="nav-item" data-nav="owed" onclick="navigate('owed')"><span class="icon">⇄</span> Owed to me <span id="owed-badge" style="margin-left:auto;font-size:11px;color:#F59E0B;"></span></div>
     <div class="nav-section">Profiles</div>
     <div class="nav-item" data-nav="profile:marvin" onclick="navigate('profile','marvin')"><span class="icon">👤</span> Marvin</div>
     <div class="nav-item" data-nav="profile:wife" onclick="navigate('profile','wife')"><span class="icon">👤</span> Caroline</div>
@@ -378,6 +379,7 @@
 <div id="modal-container"></div>
 <div id="toast"></div>
 <datalist id="merchant-list"></datalist>
+<datalist id="people-list"></datalist>
 
 <script>
 /* =================== GOOGLE OAUTH =================== */
@@ -625,7 +627,7 @@ function toggleSidebar() {
 
 /* =================== RENDER DISPATCHER =================== */
 function render() {
-  const titles = { dashboard: 'Dashboard', spend: 'Spending', smartspend: 'Which card?', strategy: 'Strategy', cards: 'Cards', merchants: 'Merchants', settings: 'Settings' };
+  const titles = { dashboard: 'Dashboard', spend: 'Spending', owed: 'Owed to me', smartspend: 'Which card?', strategy: 'Strategy', cards: 'Cards', merchants: 'Merchants', settings: 'Settings' };
   document.getElementById('page-title').textContent =
     currentView === 'profile' ? profileLabel(currentProfile) : titles[currentView] || '';
   const content = document.getElementById('page-content');
@@ -635,10 +637,12 @@ function render() {
   else if (currentView === 'profile') { content.innerHTML = renderProfile(currentProfile); renderProfileCaps(currentProfile); }
   else if (currentView === 'smartspend') { content.innerHTML = renderSmartSpend(); restoreForm('ss'); }
   else if (currentView === 'spend') content.innerHTML = renderSpend();
+  else if (currentView === 'owed') content.innerHTML = renderOwed();
   else if (currentView === 'strategy') content.innerHTML = renderStrategy();
   else if (currentView === 'cards') content.innerHTML = renderCards();
   else if (currentView === 'merchants') { content.innerHTML = renderMerchants(); if (merchantFilter) filterMerchants(merchantFilter); }
   else if (currentView === 'settings') content.innerHTML = renderSettings();
+  try { const o = Object.values(FPEngine.owedSummary(data.transactions || [])).reduce((s, p) => s + p.owed, 0); document.getElementById('owed-badge').textContent = o > 0 ? '$' + Math.round(o) : ''; } catch (e) {}
 }
 
 /* =================== DASHBOARD =================== */
@@ -701,6 +705,10 @@ function renderDashboard() {
         <div class="label">Rewards this month</div>
         <div class="value tabnum text-green">${Math.round(mtd.miles).toLocaleString()} mi</div>
         <div class="sub">${mtd.cashback ? '+ $' + fmtAmt(mtd.cashback) + ' cashback' : 'miles across all cards'}</div>
+      </div>
+      <div class="stat-card" style="cursor:pointer;" onclick="navigate('owed')">
+        <div class="label">Owed to you</div>
+        ${(() => { const o = Object.values(FPEngine.owedSummary(data.transactions || [], today())); const t = o.reduce((s, p) => s + p.owed, 0); return `<div class="value tabnum ${t > 0 ? 'text-amber' : 'text-green'}">$${fmtAmt(t)}</div><div class="sub">${o.length ? o.length + ' ' + (o.length === 1 ? 'person' : 'people') + ' · tap to see' : 'all settled'}</div>`; })()}
       </div>
       <div class="stat-card">
         <div class="label">Missed by using the wrong card</div>
@@ -1747,6 +1755,13 @@ function ensureEngineData() {
   data.cards.forEach(c => { if (!c.id) c.id = 'card_' + uid(); c.options = c.options || {}; });
   FPEngine.autoLink(data.cards, RULES);
   data.cardNameMap = data.cardNameMap || {};
+  data.migrations = data.migrations || {};
+  if (!data.migrations.contraSplits && data.transactions.some(t => t.source === 'spreadsheet' && FPEngine.kindOf(t) === 'paid_for_others')) {
+    const { ledger, stats } = FPEngine.migrateContra(data.transactions, today());
+    data.transactions = ledger;
+    data.migrations.contraSplits = { at: today(), stats };
+    setTimeout(() => { saveToDrive(); toast(`Converted your Contra history: ${stats.merged + stats.standalone} shared bills, ${stats.linked + stats.linkedGroups} repayments linked. See "Owed to me".`, 6000); }, 1500);
+  }
   const n = relinkOrphanTxns();
   if (n) setTimeout(() => { saveToDrive(); toast(`Linked ${n} transaction${n!==1?'s':''} to your cards — their miles are now counted`, 5000); }, 800);
 }
@@ -2085,6 +2100,7 @@ function openExpenseModal(init) {
     <div class="form-row"><label>Note (optional)</label><input id="qa-note" value="${esc((init||{}).note||'')}" placeholder="e.g. Cobae's swimming class"/></div>
     <div style="font-size:11.5px;font-weight:600;color:#4A6580;letter-spacing:.06em;margin:8px 0 2px;">RECOMMENDATION — tap a card to choose it</div>
     <div id="qa-rec"></div>
+    <div id="qa-split-wrap">${splitEditorHtml(editing ? editing.splits : [])}</div>
     <div class="modal-footer">
       ${editing ? `<button class="btn-danger" style="margin-right:auto;" onclick="deleteExpense('${editing.id}')">Delete</button>` : ''}
       <button class="btn-secondary" onclick="closeModal()">Cancel</button>
@@ -2092,6 +2108,8 @@ function openExpenseModal(init) {
     </div>`);
   document.querySelector('#modal-container .modal').classList.add('wide');
   if (init && init.merchantText && !editing) spendFormMerchant('qa'); else spendFormRefresh('qa');
+  rememberPeople([]); splitRender();
+  document.getElementById('qa-amount')?.addEventListener('input', splitShare);
   if (!editing) setTimeout(() => document.getElementById(init && init.merchantText ? 'qa-amount' : 'qa-merchant')?.focus(), 50);
 }
 function qaSyncCardSelect() {
@@ -2113,6 +2131,9 @@ function saveExpense() {
   const t = spendFormRead('qa');
   if (!t.realAmount) { alert('Enter the amount.'); return; }
   if (!t.merchant) { alert('Enter the merchant.'); return; }
+  const owedSum = QA_SPLITS.reduce((s, x) => s + (Number(x.amount) || 0), 0);
+  if (owedSum > t.realAmount + 0.005) { alert('Others owe more than the bill amount.'); return; }
+  rememberPeople(QA_SPLITS.map(x => x.person && x.person.trim()));
   const card = cardById(f.cardId);
   const acct = f.cardId && f.cardId.startsWith('acct:') ? accountById(f.cardId.slice(5)) : null;
   const rec = f.lastRec;
@@ -2123,6 +2144,7 @@ function saveExpense() {
     channel: t.channel, fcy: t.fcy, wallet: t.wallet, forProfile: t.forProfile,
     cardId: card ? card.id : null, accountId: acct ? acct.id : null, cardName: card ? card.name : acct ? acct.name : 'Cash / non-card', paidBy: card ? card.profile : acct ? (acct.owner || t.forProfile) : t.forProfile,
     kind: document.getElementById('qa-kind').value, direction: 'out', review: [], reviewed: true,
+    splits: QA_SPLITS.filter(x => x.person && Number(x.amount) > 0).map(x => ({ id: x.id || 'sp_' + uid(), person: x.person.trim(), amount: Math.round(Number(x.amount) * 100) / 100, status: x.status || 'owed', collectedOn: x.collectedOn, repaymentId: x.repaymentId })),
     recommendedCardId: rec && rec.pick ? rec.pick.card.id : null,
     note: document.getElementById('qa-note').value.trim(),
     source: 'manual', createdAt: new Date().toISOString(),
@@ -2131,7 +2153,7 @@ function saveExpense() {
     const i = data.transactions.findIndex(x => x.id === f.editId);
     const prev = data.transactions[i];
     Object.assign(txn, { source: prev.source, rawDescription: prev.rawDescription, importBatch: prev.importBatch, createdAt: prev.createdAt, edited: true,
-      direction: prev.direction || 'out', transferPair: prev.transferPair, postDate: prev.postDate, importKey: prev.importKey });
+      direction: prev.direction || 'out', transferPair: prev.transferPair, postDate: prev.postDate, importKey: prev.importKey, repays: prev.repays });
     if (prev.rawDescription && FPEngine.kindOf(prev) !== txn.kind) learnKindRule(prev.rawDescription, txn.kind);
     // Learn the correction for future statement imports
     if (prev.rawDescription && (prev.merchant !== txn.merchant || prev.mcc !== txn.mcc || prev.channel !== txn.channel)) learnMapping(prev.rawDescription, txn);
@@ -2332,7 +2354,7 @@ function monthSummary(ym, profileFilter, cardFilter) {
     const r = byId.get(t.id) || { txn: t, actual: null, best: null, missedCents: 0 };
     const k = FPEngine.kindOf(t), amt = Number(t.amount) || 0;
     res.byKind[k] = (res.byKind[k] || 0) + 1;
-    if (k === 'expense') { res.spend += amt; res.count++; }
+    if (k === 'expense') { res.spend += FPEngine.yourShare(t); res.count++; res.owedOut = (res.owedOut || 0) + FPEngine.openSplits(t).reduce((s, x) => s + Number(x.amount), 0); }
     else if (k === 'paid_for_others') res.othersPaid += amt;
     else if (k === 'transfer') res.transfers += amt;
     else if (k === 'income' || k === 'refund') res.income += amt;
@@ -2342,12 +2364,17 @@ function monthSummary(ym, profileFilter, cardFilter) {
   });
   return res;
 }
+function splitLine(t) {
+  const sp = FPEngine.splitsOf(t); if (!sp.length) return '';
+  const open = sp.filter(x => (x.status || 'owed') === 'owed');
+  return `<div class="hint" style="margin-top:1px;">your share $${fmtAmt(FPEngine.yourShare(t))} · ${sp.map(x => `${esc(x.person)} $${fmtAmt(x.amount)}${(x.status || 'owed') === 'owed' ? '' : ' ✓'}`).join(', ')}${open.length ? ' <span class="pill pill-amber">owed</span>' : ''}</div>`;
+}
 function renderSpend() {
   spendMonth = spendMonth || today().slice(0,7);
   const sum = monthSummary(spendMonth, spendFilter, spendCard);
   const spendTx = sum.txns.filter(FPEngine.isSpending);
   const byCat = {}, byWho = {};
-  spendTx.forEach(t => { byCat[t.category || 'Other'] = (byCat[t.category || 'Other'] || 0) + Number(t.amount); byWho[t.forProfile] = (byWho[t.forProfile] || 0) + Number(t.amount); });
+  spendTx.forEach(t => { const v = FPEngine.yourShare(t); byCat[t.category || 'Other'] = (byCat[t.category || 'Other'] || 0) + v; byWho[t.forProfile] = (byWho[t.forProfile] || 0) + v; });
   const bars = (obj, labelFn) => {
     const entries = Object.entries(obj).sort((a,b) => b[1]-a[1]);
     const max = entries[0] ? entries[0][1] : 1;
@@ -2360,7 +2387,7 @@ function renderSpend() {
     const missed = r.missedCents > 0.5 ? `<div class="hint text-amber" title="${esc(r.best.card.name)} would have earned ${esc(r.best.unitLine)}">−$${fmtAmt(r.missedCents/100)} vs ${esc(r.best.card.name)}</div>` : '';
     return `<tr style="cursor:pointer;" onclick="openExpenseModal('${t.id}')">
       <td class="tabnum" style="white-space:nowrap;">${esc(t.date.slice(5))}</td>
-      <td>${esc(t.merchant)} ${kindPill(t)} ${needsReview(t) ? '<span class="pill pill-red">review</span>' : ''}<div class="hint" style="margin-top:1px;">${esc(t.category||'')}${t.mcc ? ' · ' + esc(t.mcc) : ''}${t.channel ? ' · ' + channelLabel(t.channel) : ''}${t.fcy ? ' · FCY' : ''}${t.note ? ' · ' + esc(t.note) : ''}</div></td>
+      <td>${esc(t.merchant)} ${kindPill(t)} ${needsReview(t) ? '<span class="pill pill-red">review</span>' : ''}${splitLine(t)}<div class="hint" style="margin-top:1px;">${esc(t.category||'')}${t.mcc ? ' · ' + esc(t.mcc) : ''}${t.channel ? ' · ' + channelLabel(t.channel) : ''}${t.fcy ? ' · FCY' : ''}${t.note ? ' · ' + esc(t.note) : ''}</div></td>
       <td>${profileLabel(t.forProfile)}</td>
       <td style="font-size:12.5px;">${esc(txnSourceName(t))}</td>
       <td class="tabnum" style="text-align:right;">${t.direction === 'in' ? '+' : ''}$${fmtAmt(t.amount)}</td>
@@ -2381,11 +2408,12 @@ function renderSpend() {
       <select onchange="spendCard=this.value;render()" style="${sel}max-width:220px;"><option value="all">All cards & accounts</option>${srcOpts}</select>
     </div>
     ${orphanBlockHtml()}
+    ${repaymentSuggestionsHtml()}
     ${reviewQueueHtml()}
     <div class="stat-row">
       <div class="stat-card"><div class="label">Spent</div><div class="value tabnum">$${fmtAmt(sum.spend)}</div><div class="sub">${sum.count} expense${sum.count!==1?'s':''}${sum.othersPaid ? ` · +$${fmtAmt(sum.othersPaid)} paid for others` : ''}</div></div>
       <div class="stat-card"><div class="label">Miles earned</div><div class="value tabnum text-green">${Math.round(sum.miles).toLocaleString()}</div><div class="sub">${sum.cashback ? '+ $' + fmtAmt(sum.cashback) + ' cashback' : 'on card spending'}</div></div>
-      <div class="stat-card"><div class="label">Money in</div><div class="value tabnum">$${fmtAmt(sum.income)}</div><div class="sub">income, repayments, refunds</div></div>
+      <div class="stat-card"><div class="label">Money in</div><div class="value tabnum">$${fmtAmt(sum.income)}</div><div class="sub">income &amp; refunds (repayments are under Owed to me)</div></div>
       <div class="stat-card"><div class="label">Missed value</div><div class="value tabnum ${sum.missed>0.5?'text-amber':'text-green'}">$${fmtAmt(sum.missed)}</div><div class="sub">${sum.missedCount} sub-optimal card choice${sum.missedCount!==1?'s':''}</div></div>
     </div>
     <div class="form-grid" style="gap:20px;margin-bottom:24px;">
@@ -2511,7 +2539,7 @@ function commitImport() {
     if (r.kind !== r.guess.kind && learnKindRule(r.description, r.kind)) learned++;
     data.transactions.push(txn); n++;
   });
-  const paired = FPEngine.pairTransfers(data.transactions);
+  const paired = FPEngine.pairTransfers(data.transactions, { onlyIds: data.transactions.filter(t => t.importBatch === IMPORT.batch).map(t => t.id) });
   const skipped = IMPORT.rows.length - n;
   IMPORT = null; closeModal(); saveToDrive();
   spendMonth = null; navigate('spend');
@@ -2557,8 +2585,8 @@ async function pdfToText(file) {
 /* =====================================================================
    ACCOUNTS, TRANSACTION TYPES, TRANSFERS & REVIEW QUEUE
    ===================================================================== */
-const KIND_LABELS = { expense: 'Spending', paid_for_others: 'Paid for others', transfer: 'Transfer', income: 'Income', refund: 'Refund' };
-const KIND_PILL = { expense: '', paid_for_others: 'pill-amber', transfer: 'pill-blue', income: 'pill-green', refund: 'pill-green' };
+const KIND_LABELS = { expense: 'Spending', paid_for_others: 'Paid for others', transfer: 'Transfer', income: 'Income', refund: 'Refund', repayment: 'Repayment' };
+const KIND_PILL = { expense: '', paid_for_others: 'pill-amber', transfer: 'pill-blue', income: 'pill-green', refund: 'pill-green', repayment: 'pill-green' };
 const kindPill = t => { const k = FPEngine.kindOf(t); return k === 'expense' ? '' : `<span class="pill ${KIND_PILL[k]}">${KIND_LABELS[k]}</span>`; };
 const ACCOUNT_TYPES = { bank: 'Bank account', wallet: 'Wallet / stored value', card: 'Card not in engine', other: 'Other' };
 function accountById(id) { return (data.accounts || []).find(a => a.id === id); }
@@ -2695,7 +2723,7 @@ function importTransactionsFile(e) {
     // cards: resolve cardHint → held card (prefer the hint's owner)
     const unresolved = new Set();
     const resolveCard = (hint, owner) => resolveCardName(hint, owner);
-    const existing = new Set(data.transactions.map(t => t.importKey).filter(Boolean));
+    const existing = new Set(data.transactions.flatMap(t => [t.importKey].concat(t.importKeys || [])).filter(Boolean));
     let added = 0, skipped = 0;
     txns.forEach(t => {
       if (t.importKey && existing.has(t.importKey)) { skipped++; return; }
@@ -2712,6 +2740,174 @@ function importTransactionsFile(e) {
     saveToDrive(); spendMonth = null; navigate('spend');
     toast(`Imported ${added} transactions${skipped ? ` · ${skipped} already there` : ''}${unresolved.size ? ` · not matched to a card: ${esc([...unresolved].join(', '))}` : ''}`, 6000);
   });
+}
+
+/* =====================================================================
+   SPLITS & MONEY OWED TO YOU
+   ===================================================================== */
+function peopleList() {
+  const s = new Set(data.people || []);
+  (data.transactions || []).forEach(t => FPEngine.splitsOf(t).forEach(x => x.person && s.add(x.person)));
+  return [...s].sort((a, b) => a.localeCompare(b));
+}
+function rememberPeople(names) {
+  data.people = [...new Set([...(data.people || []), ...names.filter(Boolean)])];
+  const dl = document.getElementById('people-list');
+  if (dl) dl.innerHTML = peopleList().map(p => `<option value="${esc(p)}">`).join('');
+}
+
+/* ---- split editor inside the expense modal ---- */
+function splitEditorHtml(splits) {
+  QA_SPLITS = (splits || []).map(x => ({ ...x }));
+  return `<div style="border:1px solid #1C2F45;border-radius:8px;padding:10px 12px;margin-top:6px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span style="font-size:12px;font-weight:600;color:#8AABBF;">Others owe me <span class="hint" style="font-weight:400;">· for bills you paid in full</span></span>
+      <span style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn-secondary" style="font-size:11px;padding:3px 9px;" onclick="splitAdd()">+ Person</button>
+        <button class="btn-secondary" style="font-size:11px;padding:3px 9px;" onclick="splitEvenly()">Split evenly…</button>
+      </span>
+    </div>
+    <div id="qa-splits" style="margin-top:6px;"></div>
+    <div id="qa-share" class="hint" style="margin-top:4px;"></div>
+  </div>`;
+}
+let QA_SPLITS = [];
+function splitTotalAmount() { return parseFloat(document.getElementById('qa-amount')?.value) || 0; }
+function splitRender() {
+  const el = document.getElementById('qa-splits'); if (!el) return;
+  const inp = 'background:#0D1B2A;border:1px solid #2A4A6B;color:#F0F4F8;border-radius:5px;padding:5px 8px;font-size:12.5px;';
+  el.innerHTML = QA_SPLITS.map((x, i) => `<div style="display:flex;gap:6px;align-items:center;margin-top:5px;">
+      <input list="people-list" placeholder="Name" value="${esc(x.person || '')}" oninput="QA_SPLITS[${i}].person=this.value" style="${inp}flex:1;min-width:0;"/>
+      <input type="number" step="0.01" placeholder="0.00" value="${x.amount || ''}" oninput="QA_SPLITS[${i}].amount=parseFloat(this.value)||0;splitShare()" style="${inp}width:86px;"/>
+      ${(x.status || 'owed') === 'owed' ? '<span class="pill pill-amber">owed</span>' : `<span class="pill pill-green">${x.status}${x.collectedOn ? ' ' + esc(x.collectedOn.slice(5)) : ''}</span>`}
+      <button class="btn-danger" style="padding:3px 8px;" onclick="QA_SPLITS.splice(${i},1);splitRender()">✕</button></div>`).join('');
+  splitShare();
+}
+function splitShare() {
+  const el = document.getElementById('qa-share'); if (!el) return;
+  const owed = QA_SPLITS.reduce((s, x) => s + (Number(x.amount) || 0), 0), total = splitTotalAmount();
+  el.innerHTML = QA_SPLITS.length ? `Your share: <strong style="color:${owed > total + 0.005 ? '#EF4444' : '#F0F4F8'};">$${fmtAmt(Math.max(0, total - owed))}</strong> of $${fmtAmt(total)} · others owe $${fmtAmt(owed)}. The card still earns on the full $${fmtAmt(total)}.` : '';
+}
+function splitAdd() { QA_SPLITS.push({ id: 'sp_' + uid(), person: '', amount: 0, status: 'owed' }); splitRender(); }
+function splitEvenly() {
+  const total = splitTotalAmount();
+  if (!total) { alert('Enter the bill amount first.'); return; }
+  const n = parseInt(prompt('How many people in total, including you?', '2'), 10);
+  if (!n || n < 2) return;
+  const each = Math.floor(total / n * 100) / 100;
+  const others = n - 1;
+  while (QA_SPLITS.filter(x => (x.status || 'owed') === 'owed').length < others) QA_SPLITS.push({ id: 'sp_' + uid(), person: '', amount: 0, status: 'owed' });
+  QA_SPLITS.filter(x => (x.status || 'owed') === 'owed').slice(0, others).forEach(x => { x.amount = each; });
+  splitRender();
+}
+
+/* ---- linking repayments ---- */
+function linkRepayment(incomingId, items) {
+  const inc = data.transactions.find(t => t.id === incomingId); if (!inc) return;
+  items.forEach(it => {
+    const t = data.transactions.find(x => x.id === it.txnId);
+    const sp = t && FPEngine.splitsOf(t).find(s => s.id === it.splitId);
+    if (sp) { sp.status = 'collected'; sp.collectedOn = inc.date; sp.repaymentId = inc.id; }
+  });
+  inc.kind = 'repayment'; inc.repays = items; inc.review = []; inc.reviewed = true;
+  saveToDrive(); render();
+  toast(`Linked $${fmtAmt(inc.amount)} as repayment — marked ${items.length} share${items.length !== 1 ? 's' : ''} collected`);
+}
+function repaymentSuggestionsHtml() {
+  const sug = FPEngine.matchRepayments(data.transactions || []).filter(s => !(data.dismissedRepayments || []).includes(s.incomingId));
+  if (!sug.length) return '';
+  const byId = new Map(data.transactions.map(t => [t.id, t]));
+  window._repSug = sug;
+  return `<div class="section-header"><h2>Repayments to link (${sug.length})</h2></div>
+    <div class="table-wrap" style="overflow-x:auto;margin-bottom:24px;"><table class="data-table mini-table"><tbody>
+    ${sug.map((s, i) => { const inc = byId.get(s.incomingId); return `<tr>
+      <td class="tabnum">${esc(inc.date.slice(5))}</td>
+      <td><strong>+$${fmtAmt(s.amount)}</strong> ${esc(inc.rawDescription || inc.merchant)}<div class="hint">looks like <strong>${esc(s.person)}</strong> paying back ${s.items.map(it => { const t = byId.get(it.txnId); return `$${fmtAmt(it.amount)} for ${esc(t.merchant)} (${esc(t.date.slice(5))})`; }).join(' + ')}</div></td>
+      <td style="white-space:nowrap;"><button class="btn-primary" style="font-size:11px;padding:4px 10px;" onclick="linkRepayment(window._repSug[${i}].incomingId, window._repSug[${i}].items)">Link</button>
+        <button class="btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="(data.dismissedRepayments=data.dismissedRepayments||[]).push('${s.incomingId}');saveToDrive();render()">Not this</button></td></tr>`; }).join('')}
+    </tbody></table></div>`;
+}
+
+/* ---- Owed to me page ---- */
+let owedShowSettled = false;
+function renderOwed() {
+  const summ = FPEngine.owedSummary(data.transactions || [], today());
+  const people = Object.values(summ).sort((a, b) => b.owed - a.owed);
+  const total = people.reduce((s, p) => s + p.owed, 0);
+  const n = people.reduce((s, p) => s + p.items.length, 0);
+  const oldest = people.flatMap(p => p.items).reduce((m, x) => Math.max(m, x.ageDays || 0), 0);
+  const settled = [];
+  (data.transactions || []).forEach(t => FPEngine.splitsOf(t).forEach(sp => { if ((sp.status || 'owed') !== 'owed') settled.push({ t, sp }); }));
+  const ytdCollected = settled.filter(x => x.sp.status === 'collected' && (x.sp.collectedOn || '').slice(0, 4) === today().slice(0, 4)).reduce((s, x) => s + Number(x.sp.amount), 0);
+  const personBlocks = people.map(p => `
+    <div class="card-tile">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div><div style="font-weight:700;font-size:15px;">${esc(p.person)}</div><div class="hint">${p.items.length} bill${p.items.length !== 1 ? 's' : ''} · oldest ${Math.max(...p.items.map(x => x.ageDays || 0))} days</div></div>
+        <div style="display:flex;gap:10px;align-items:center;"><span class="tabnum text-amber" style="font-size:18px;font-weight:700;">$${fmtAmt(p.owed)}</span>
+          <button class="btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="openCollectModal(${esc(JSON.stringify(p.items.map(x => ({ txnId: x.txn.id, splitId: x.split.id }))))})">Collected all</button></div>
+      </div>
+      <table class="data-table mini-table" style="margin-top:8px;"><tbody>
+      ${p.items.sort((a, b) => (a.txn.date < b.txn.date ? -1 : 1)).map(x => `<tr>
+        <td class="tabnum" style="white-space:nowrap;">${esc(x.txn.date)}</td>
+        <td style="cursor:pointer;" onclick="openExpenseModal('${x.txn.id}')">${esc(x.txn.merchant)}<div class="hint">bill $${fmtAmt(x.txn.amount)} on ${esc(txnSourceName(x.txn))}</div></td>
+        <td class="tabnum ${x.ageDays > 30 ? 'text-red' : x.ageDays > 14 ? 'text-amber' : ''}">${x.ageDays}d</td>
+        <td class="tabnum" style="text-align:right;">$${fmtAmt(x.split.amount)}</td>
+        <td style="white-space:nowrap;"><button class="btn-secondary" style="font-size:11px;padding:3px 9px;" onclick="openCollectModal([{txnId:'${x.txn.id}',splitId:'${x.split.id}'}])">Collected</button>
+          <button class="btn-secondary" style="font-size:11px;padding:3px 9px;" onclick="settleSplits([{txnId:'${x.txn.id}',splitId:'${x.split.id}'}],'forgiven')">Write off</button></td></tr>`).join('')}
+      </tbody></table>
+    </div>`).join('');
+  const settledRows = settled.sort((a, b) => ((b.sp.collectedOn || b.t.date) > (a.sp.collectedOn || a.t.date) ? 1 : -1)).slice(0, 60).map(x => `<tr>
+      <td class="tabnum">${esc(x.t.date)}</td><td>${esc(x.sp.person)}</td><td>${esc(x.t.merchant)}</td>
+      <td class="tabnum" style="text-align:right;">$${fmtAmt(x.sp.amount)}</td>
+      <td>${x.sp.status === 'collected' ? `<span class="pill pill-green">collected ${esc((x.sp.collectedOn || '').slice(5))}</span>${x.sp.repaymentId ? '' : ' <span class="hint">no statement link</span>'}` : x.sp.status === 'assumed' ? '<span class="pill pill-blue" title="From your spreadsheet; no repayment on record">assumed settled</span>' : '<span class="pill" style="background:#1C2F45;color:#8AABBF;">written off</span>'}</td>
+      <td><button class="btn-secondary" style="font-size:11px;padding:3px 9px;" onclick="reopenSplit('${x.t.id}','${x.sp.id}')">Reopen</button></td></tr>`).join('');
+  return `
+    <p style="font-size:13px;color:#8AABBF;margin-bottom:16px;line-height:1.6;">Bills you paid in full where others owe you their share. Split a bill from its edit screen (<em>Others owe me</em>). Incoming PayNow from those people is matched automatically and shows under <em>Repayments to link</em>.</p>
+    <div class="stat-row">
+      <div class="stat-card"><div class="label">Owed to you</div><div class="value tabnum ${total > 0 ? 'text-amber' : 'text-green'}">$${fmtAmt(total)}</div><div class="sub">${n} share${n !== 1 ? 's' : ''} from ${people.length} ${people.length === 1 ? 'person' : 'people'}</div></div>
+      <div class="stat-card"><div class="label">Oldest unpaid</div><div class="value tabnum ${oldest > 30 ? 'text-red' : ''}">${n ? oldest + 'd' : '—'}</div><div class="sub">days since the bill</div></div>
+      <div class="stat-card"><div class="label">Collected this year</div><div class="value tabnum text-green">$${fmtAmt(ytdCollected)}</div><div class="sub">${settled.filter(x => x.sp.status === 'collected').length} shares</div></div>
+    </div>
+    ${repaymentSuggestionsHtml()}
+    <div class="section-header"><h2>Still owed</h2></div>
+    ${personBlocks || '<div class="empty"><div class="icon">✓</div>Nobody owes you anything right now.</div>'}
+    <div class="section-header" style="margin-top:24px;"><h2>Settled</h2><button class="btn-secondary" style="font-size:12px;padding:5px 12px;" onclick="owedShowSettled=!owedShowSettled;render()">${owedShowSettled ? 'Hide' : 'Show'} (${settled.length})</button></div>
+    ${owedShowSettled ? `<div class="table-wrap" style="overflow-x:auto;"><table class="data-table mini-table"><thead><tr><th>Bill date</th><th>Person</th><th>Bill</th><th style="text-align:right;">Share</th><th>Status</th><th></th></tr></thead><tbody>${settledRows || '<tr><td colspan="6" class="hint">Nothing yet</td></tr>'}</tbody></table></div>` : ''}`;
+}
+function settleSplits(items, status, date, repaymentId) {
+  items.forEach(it => {
+    const t = data.transactions.find(x => x.id === it.txnId);
+    const sp = t && FPEngine.splitsOf(t).find(s => s.id === it.splitId);
+    if (sp) { sp.status = status; sp.collectedOn = date || today(); if (repaymentId) sp.repaymentId = repaymentId; }
+  });
+  saveToDrive(); render();
+}
+function reopenSplit(txnId, splitId) {
+  const t = data.transactions.find(x => x.id === txnId);
+  const sp = t && FPEngine.splitsOf(t).find(s => s.id === splitId); if (!sp) return;
+  if (sp.repaymentId) {
+    const inc = data.transactions.find(x => x.id === sp.repaymentId);
+    if (inc) { inc.repays = (inc.repays || []).filter(r => r.splitId !== splitId); if (!inc.repays.length) { inc.kind = 'income'; delete inc.repays; } }
+  }
+  sp.status = 'owed'; delete sp.collectedOn; delete sp.repaymentId;
+  saveToDrive(); render();
+}
+function openCollectModal(items) {
+  const byId = new Map(data.transactions.map(t => [t.id, t]));
+  const amt = items.reduce((s, it) => s + Number(FPEngine.splitsOf(byId.get(it.txnId)).find(x => x.id === it.splitId)?.amount || 0), 0);
+  const first = byId.get(items[0].txnId);
+  const cands = data.transactions.filter(t => t.direction === 'in' && !t.repays && t.date >= first.date && Math.abs(Number(t.amount) - amt) < 0.005)
+    .sort((a, b) => (a.date < b.date ? -1 : 1)).slice(0, 12);
+  window._collectItems = items;
+  showModal(`
+    <h3>Collected $${fmtAmt(amt)}</h3>
+    ${cands.length ? `<p style="font-size:12.5px;color:#8AABBF;margin:-8px 0 10px;">Pick the payment it came in as, so it isn't counted as income:</p>
+      ${cands.map(c => `<div class="rec-row selectable" onclick="linkRepayment('${c.id}', window._collectItems);closeModal()"><div class="rec-body"><div class="rec-card-name">+$${fmtAmt(c.amount)} · ${esc(c.date)}</div><div class="rec-detail">${esc(c.rawDescription || c.merchant)} · ${esc(txnSourceName(c))}</div></div></div>`).join('')}` :
+      '<p style="font-size:12.5px;color:#8AABBF;margin:-8px 0 10px;">No matching incoming payment found in your statements yet.</p>'}
+    <div class="form-row" style="margin-top:12px;"><label>…or record it as received without a statement line (cash, PayLah!, offset against something)</label>
+      <input id="col-date" type="date" value="${today()}" style="background:#0D1B2A;border:1px solid #2A4A6B;color:#F0F4F8;border-radius:7px;padding:8px 10px;"/></div>
+    <div class="modal-footer"><button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="settleSplits(window._collectItems,'collected',document.getElementById('col-date').value);closeModal()">Mark collected</button></div>`);
 }
 
 /* =================== MODAL UTILS =================== */
