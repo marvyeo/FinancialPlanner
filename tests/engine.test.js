@@ -149,6 +149,19 @@ test('Insurance (6300) is excluded on every card', () => {
   assert.ok(rec.ranked.every((o) => o.excluded), rec.ranked.filter((o) => !o.excluded).map((o) => o.card.name).join(','));
 });
 
+test('OCBC 6 mpd promo: Shopee 6 mpd, promo cap S$1,000 then 4 mpd to S$1,110, ends 31 Mar 2027', () => {
+  const cards = household(); E.autoLink(cards, rules);
+  const c = card(cards, 'OCBC Rewards Mastercard');
+  const t = (o) => txn({ mcc: '5399', merchant: 'Shopee', channel: 'online', ...o });
+  close(earn(cards, c.name, t({ amount: 100 })).mpd, 6);
+  const ledger = [t({ id: 'p', cardId: c.id, amount: 950, date: '2026-10-02' })];
+  close(earn(cards, c.name, t({ amount: 100 }), ledger).miles, 50 * 6 + 50 * 4, 'crosses promo cap');
+  const ledger2 = [t({ id: 'q', cardId: c.id, amount: 1100, date: '2026-10-02' })];
+  close(earn(cards, c.name, t({ amount: 100 }), ledger2).miles, 10 * 4 + 90 * 0.4, 'crosses regular cap');
+  close(earn(cards, c.name, t({ amount: 100, date: '2027-04-02' })).mpd, 4, 'after promo ends');
+  close(earn(cards, c.name, t({ amount: 100, merchant: 'Uniqlo', mcc: '5651', channel: 'chip' })).mpd, 4, 'regular category');
+});
+
 console.log('recommendation policy');
 test('Dining tap: picks a 4 mpd card worth 6¢/$ (UOB) over HSBC 5.6¢/$', () => {
   const cards = household(); E.autoLink(cards, rules);

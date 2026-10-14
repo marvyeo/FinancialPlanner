@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
-  "rulesVersion": "2026-10-13",
-  "generatedAt": "2026-10-13T23:40:00+08:00",
-  "generatedBy": "Claude weekly rules refresh (baseline)",
+  "rulesVersion": "2026-10-14",
+  "generatedAt": "2026-10-14T23:30:00+08:00",
+  "generatedBy": "Manual update (requested by Marvin)",
   "notes": "mpd = miles per S$ for the card's best airline programme, including the base rate. pct = total cashback % including base. Caps are in S$ of spend unless the cap group says cashback. Items with verify:true need a T&C check.",
   "sharedLists": {
     "GENERAL_EXCLUSIONS": [
@@ -878,6 +878,37 @@
       },
       "bonuses": [
         {
+          "id": "ocbc-6mpd-promo",
+          "label": "6 mpd promo: Watsons, Shopee, Lazada, TikTok Shop, Taobao",
+          "mpd": 6,
+          "cap": [
+            "ocbc-promo",
+            "ocbc"
+          ],
+          "validFrom": "2026-07-01",
+          "validTo": "2027-03-31",
+          "when": {
+            "merchants": [
+              "watsons",
+              "shopee",
+              "lazada",
+              "tiktok",
+              "taobao"
+            ],
+            "merchantsExclude": [
+              "shopeepay",
+              "shopee pay",
+              "lazada wallet"
+            ],
+            "mccExclude": [
+              "5411",
+              "5262",
+              "6540"
+            ]
+          },
+          "notes": "SGD and FCY, online and in-store, no registration. Extra 2 mpd capped at S$1,000/calendar month; that spend also uses the regular S$1,110 cap. Above S$1,000 it earns the regular 4 mpd. Matched by merchant name, so paying via Amaze or another processor that renames the merchant may miss it."
+        },
+        {
           "id": "ocbc-shopping",
           "label": "Shopping (MCC or named merchant)",
           "mpd": 4,
@@ -917,6 +948,9 @@
       "capGroups": {
         "ocbc": {
           "spend": 1110
+        },
+        "ocbc-promo": {
+          "spend": 1000
         }
       },
       "transfer": {
@@ -924,9 +958,10 @@
         "feeSGD": 25
       },
       "sources": [
-        "https://milelion.com/2026/05/29/review-ocbc-titanium-rewards-card/"
+        "https://milelion.com/2026/05/29/review-ocbc-titanium-rewards-card/",
+        "https://milelion.com/2026/07/01/ocbc-rewards-card-offering-6-mpd-for-watsons-and-selected-e-commerce-platforms/"
       ],
-      "notes": "OCBC runs a rotating quarterly +2 mpd promo at Shopee/Lazada/TikTok Shop/Taobao/Watsons. Not included until the current quarter's T&Cs are confirmed."
+      "notes": "Grocery (MCC 5411) orders on Shopee/Lazada earn no OCBC$ at all; the engine only removes the bonus for them."
     },
     {
       "id": "citi-rewards",
@@ -1384,13 +1419,6 @@
     }
   ],
   "changeLog": [
-    "Baseline for the rules engine, researched 13 Oct 2026.",
-    "UOB Visa Signature: two separate S$1,000 minimums (FCY; contactless/petrol/SimplyGo) and two S$1,200 caps per statement.",
-    "UOB Preferred Platinum Visa is now UOB Preferred Visa: S$600 mobile-contactless cap + S$600 online cap; SimplyGo earns 4 mpd.",
-    "HSBC Revolution: 4 mpd capped ~S$1,000/month; 8 mpd tier (S$1,200 cap) with S$50K in an HSBC Everyday Global Account.",
-    "DBS yuu: 10 mpd needs S$800 card spend + 4 different yuu merchants; bonus capped at ~S$823/month.",
-    "AMEX Platinum Credit: ~0.57 mpd base, 2.84 mpd at 10Xcelerator after the Feb 2026 transfer devaluation.",
-    "Citi Rewards Visa ends 15 Oct 2026; Citi Rewards Mastercard keeps a S$1,000/statement 4 mpd cap.",
-    "CIMB Visa Signature: 10% cashback needs S$800/statement; S$20 per category, S$100 total."
+    "OCBC Rewards: 6 mpd at Watsons, Shopee, Lazada, TikTok Shop and Taobao from 1 Jul 2026 to 31 Mar 2027 (extra 2 mpd capped at S$1,000/month, then 4 mpd up to the regular S$1,110 cap). Source: MileLion, 1 Jul 2026."
   ]
 }
