@@ -496,7 +496,7 @@ async function loadFromDrive() {
 }
 
 async function saveToDrive() {
-  computeUpcoming();
+  try { computeUpcoming(); } catch (e) { console.error('computeUpcoming failed — saving anyway', e); }
   const icon = document.getElementById('save-icon');
   icon.textContent = '⟳';
   try {
@@ -523,9 +523,8 @@ async function saveToDrive() {
 
 /* =================== UPCOMING ENGINE =================== */
 function computeUpcoming() {
-  const today = new Date(); today.setHours(0,0,0,0);
-  const in30 = new Date(today); in30.setDate(today.getDate()+30);
-  const in7 = new Date(today); in7.setDate(today.getDate()+7);
+  const todayD = new Date(); todayD.setHours(0,0,0,0);
+  const in30 = new Date(todayD); in30.setDate(todayD.getDate()+30);
   const items = [];
   const allBills = [
     ...data.profiles.marvin.bills.map(b=>({...b,_profile:'marvin'})),
@@ -540,8 +539,8 @@ function computeUpcoming() {
   allBills.forEach(b => {
     if (!b.dueDate) return;
     const d = new Date(b.dueDate); d.setHours(0,0,0,0);
-    const overdue = d < today && b.status !== 'paid';
-    const upcoming = d >= today && d <= in30;
+    const overdue = d < todayD && b.status !== 'paid';
+    const upcoming = d >= todayD && d <= in30;
     if (overdue || upcoming) {
       items.push({
         label: `${b.name} — $${fmtAmt(b.amount)} due ${b.dueDate}`,
@@ -725,6 +724,7 @@ function renderDashboard() {
       </div>
     </div>
     ${alerts}
+    ${orphanBlockHtml()}
     ${capAlertsHtml()}
     <div class="section-header"><h2>Which card should I use?</h2><a href="#" onclick="navigate('strategy');return false;" style="font-size:12px;color:#00C896;">Full cheat sheet →</a></div>
     <div class="smart-spend-box">
@@ -1710,6 +1710,7 @@ function handleImport(e) {
    ===================================================================== */
 let RULES = { cards: [] };     // the rules the household has approved
 let RULES_PENDING = null;      // newer published rules awaiting review
+let PUBLISHED_RULES = null;    // what's on the site now (used for card-name matching even before you apply it)
 const PROFILES = ['marvin','wife','cobae','joint'];
 const CHANNELS = [
   { id: 'mobile_contactless', label: 'Tap phone' },
@@ -1745,6 +1746,53 @@ function ensureEngineData() {
   PROFILES.forEach(p => { data.profiles[p] = data.profiles[p] || { bills: [], subscriptions: [] }; });
   data.cards.forEach(c => { if (!c.id) c.id = 'card_' + uid(); c.options = c.options || {}; });
   FPEngine.autoLink(data.cards, RULES);
+  data.cardNameMap = data.cardNameMap || {};
+  const n = relinkOrphanTxns();
+  if (n) setTimeout(() => { saveToDrive(); toast(`Linked ${n} transaction${n!==1?'s':''} to your cards — their miles are now counted`, 5000); }, 800);
+}
+
+/** Transactions that name a card but aren't linked to one (e.g. spreadsheet short names like "DBS WW"). */
+function orphanTxns() { return (data.transactions || []).filter(t => t.cardName && !t.cardId && !t.accountId && t.cardName !== 'Cash / non-card'); }
+function resolveCardName(name, owner) {
+  if (data.cardNameMap && data.cardNameMap[name]) return cardById(data.cardNameMap[name]) || null;
+  const exact = data.cards.find(c => c.name.toLowerCase() === String(name).toLowerCase());
+  if (exact) return exact;
+  for (const rules of [RULES, PUBLISHED_RULES, RULES_PENDING].filter(Boolean)) {
+    const def = FPEngine.matchDefByName(rules, name);
+    if (!def) continue;
+    const held = data.cards.filter(c => c.ruleId === def.id || FPEngine.resolveDef(c, RULES).id === def.id);
+    const c = held.find(c => c.profile === (owner || 'marvin')) || held[0];
+    if (c) return c;
+  }
+  return null;
+}
+function relinkOrphanTxns() {
+  let n = 0;
+  orphanTxns().forEach(t => {
+    const c = resolveCardName(t.cardName, t.paidBy);
+    if (c) { t.cardId = c.id; t.cardName = c.name; t.paidBy = c.profile; n++; }
+  });
+  return n;
+}
+function orphanBlockHtml() {
+  const groups = {};
+  orphanTxns().forEach(t => { (groups[t.cardName] = groups[t.cardName] || []).push(t); });
+  const names = Object.keys(groups);
+  if (!names.length) return '';
+  const opts = data.cards.map(c => `<option value="${c.id}">${esc(c.name)} (${profileLabel(c.profile)})</option>`).join('');
+  return `<div class="alert-bar upcoming" style="display:block;">
+    <strong>${names.reduce((s, k) => s + groups[k].length, 0)} transactions are on a card the app doesn't recognise</strong> — they earn no miles until linked.
+    ${names.map(k => `<div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;">
+      <span style="min-width:140px;">"${esc(k)}" · ${groups[k].length}</span>
+      <select id="orph-${esc(k).replace(/[^a-z0-9]/gi,'_')}" style="background:#0D1B2A;border:1px solid #2A4A6B;color:#F0F4F8;border-radius:5px;padding:4px 6px;font-size:12px;">${opts}</select>
+      <button class="btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="linkCardName(${JSON.stringify(k).replace(/"/g,'&quot;')}, document.getElementById('orph-${esc(k).replace(/[^a-z0-9]/gi,'_')}').value)">Link</button></div>`).join('')}
+  </div>`;
+}
+function linkCardName(name, cardId) {
+  data.cardNameMap[name] = cardId;
+  const n = relinkOrphanTxns();
+  saveToDrive(); render();
+  toast(`Linked ${n} transaction${n!==1?'s':''} to ${esc(cardById(cardId).name)}. Future imports of "${esc(name)}" will use it too.`);
 }
 
 /* ---------------- rules: load, review, apply ---------------- */
@@ -1769,7 +1817,10 @@ async function loadRules() {
     rs.applied = published; rs.appliedVersion = published.rulesVersion; rs.appliedAt = today();
     rs.history = [{ version: published.rulesVersion, appliedAt: today(), changes: null }];
   }
-  RULES_PENDING = (published && published.rulesVersion !== RULES.rulesVersion && published.rulesVersion > (RULES.rulesVersion || '') && published.rulesVersion !== rs.dismissedVersion) ? published : null;
+  PUBLISHED_RULES = published;
+  const differs = published && JSON.stringify(published.cards) !== JSON.stringify(RULES.cards);
+  const newer = published && (published.rulesVersion > (RULES.rulesVersion || '') || (published.rulesVersion === RULES.rulesVersion && differs));
+  RULES_PENDING = (newer && differs && published.rulesVersion !== rs.dismissedVersion) ? published : null;
 }
 
 function rulesBanner() {
@@ -1817,6 +1868,8 @@ function applyRules() {
   rs.history = (rs.history || []).concat([{ version: next.rulesVersion, appliedAt: today(), changes }]).slice(-24);
   if (RULES_PENDING && RULES_PENDING.rulesVersion === next.rulesVersion) RULES_PENDING = null;
   FPEngine.autoLink(data.cards, RULES);
+  const linked = relinkOrphanTxns();
+  if (linked) setTimeout(() => toast(`Also linked ${linked} transaction${linked!==1?'s':''} to your cards`, 4000), 3300);
   closeModal(); saveToDrive(); render();
   toast(`Applied card rules ${esc(next.rulesVersion)} (${changes} change${changes!==1?'s':''}).`);
 }
@@ -2327,6 +2380,7 @@ function renderSpend() {
       <select onchange="spendFilter=this.value;render()" style="${sel}"><option value="all">Everyone</option>${PROFILES.map(p => `<option value="${p}" ${spendFilter===p?'selected':''}>${profileLabel(p)}</option>`).join('')}</select>
       <select onchange="spendCard=this.value;render()" style="${sel}max-width:220px;"><option value="all">All cards & accounts</option>${srcOpts}</select>
     </div>
+    ${orphanBlockHtml()}
     ${reviewQueueHtml()}
     <div class="stat-row">
       <div class="stat-card"><div class="label">Spent</div><div class="value tabnum">$${fmtAmt(sum.spend)}</div><div class="sub">${sum.count} expense${sum.count!==1?'s':''}${sum.othersPaid ? ` · +$${fmtAmt(sum.othersPaid)} paid for others` : ''}</div></div>
@@ -2640,12 +2694,7 @@ function importTransactionsFile(e) {
     });
     // cards: resolve cardHint → held card (prefer the hint's owner)
     const unresolved = new Set();
-    const resolveCard = (hint, owner) => {
-      const def = FPEngine.matchDefByName(RULES, hint);
-      if (!def) return null;
-      const held = data.cards.filter(c => FPEngine.resolveDef(c, RULES).id === def.id);
-      return held.find(c => c.profile === owner) || held[0] || null;
-    };
+    const resolveCard = (hint, owner) => resolveCardName(hint, owner);
     const existing = new Set(data.transactions.map(t => t.importKey).filter(Boolean));
     let added = 0, skipped = 0;
     txns.forEach(t => {
