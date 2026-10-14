@@ -350,8 +350,23 @@
   }
 
   /* ---------------- card state from the ledger ---------------- */
+  /**
+   * Transaction kinds:
+   *   expense          — household spending (default)
+   *   paid_for_others  — you paid, someone pays you back; earns on the card but isn't your spending
+   *   transfer         — money moving between your own accounts (card bill payments, top-ups, savings)
+   *   income           — salary, interest, repayments, reimbursements
+   *   refund           — merchant refund / reversal
+   */
+  const KINDS = ['expense', 'paid_for_others', 'transfer', 'income', 'refund'];
+  const kindOf = (t) => (t && KINDS.includes(t.kind) ? t.kind : 'expense');
+  /** Does this txn count toward card caps, minimum spend and rewards? */
+  const earnsOnCard = (t) => { const k = kindOf(t); return k === 'expense' || k === 'paid_for_others'; };
+  /** Does this txn count as household spending? */
+  const isSpending = (t) => kindOf(t) === 'expense';
+
   function cardTxns(ledger, card) {
-    return (ledger || []).filter((t) => t.cardId === card.id || (!t.cardId && t.cardName === card.name));
+    return (ledger || []).filter((t) => (t.cardId === card.id || (!t.cardId && t.cardName === card.name)) && earnsOnCard(t));
   }
 
   /**
@@ -701,7 +716,9 @@
         mccAlt: best.mccAlt || [], mccConfidence: best.confidence || null, note: best.notes || '' };
     }
     if (kw) return { merchant: kw[1], mcc: kw[2], category: kw[3], channel: kw[4], confidence: 'keyword', fcy };
-    return { merchant: titleCase(String(desc || '').replace(/\s{2,}.*/, '').slice(0, 40)), mcc: '', category: 'Other', channel: 'chip', confidence: 'none', fcy };
+    const cleaned = String(desc || '').replace(/\s{2,}.*/, '')
+      .replace(/^(paynow|pay now|fast|ibg|giro|nets|funds?)\s*(transfer|payment|trf)?\s*(to|from)?\s*[:\-]?\s*/i, '').replace(/\b(pte|ltd|sg|singapore)\b\.?/gi, '').trim();
+    return { merchant: titleCase((cleaned || String(desc || '')).slice(0, 40)), mcc: '', category: 'Other', channel: 'chip', confidence: 'none', fcy };
   }
   function guessChannel(m) { return /online|delivery|app|subscription|e-?commerce|ride|hail|stream|telco|utilit|insurance/i.test((m.category || '') + ' ' + (m.service || '')) ? 'online' : 'mobile_contactless'; }
   function titleCase(s) { return String(s).toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase()).trim(); }
@@ -757,7 +774,10 @@
       if (!desc) return;
       const rawAmt = am[1];
       let amount = num(rawAmt.replace(/[^\d.]/g, ''));
-      const credit = /CR/i.test(am[2] || '') || /^-|\(/.test(rawAmt.trim()) || /\b(payment|refund|reversal|rebate|cash ?back|thank you)\b/i.test(desc);
+      // On card statements, payments/refunds are credits even without a CR marker. On bank statements "payment" usually means money out.
+      const credit = /CR/i.test(am[2] || '') || /^-|\(/.test(rawAmt.trim()) ||
+        (opts.isCard !== false && /\b(payment thank you|payment - thank you|payment received|refund|reversal|rebate|cash ?back|thank you)\b/i.test(desc)) ||
+        (opts.isCard !== false && /^payment\b/i.test(desc));
       rows.push({ date, postDate, description: desc, amount, credit });
     });
     return rows;
@@ -816,10 +836,88 @@
         amount = Math.abs(v);
       }
       if (!amount) return;
-      if (/\b(payment|refund|reversal|thank you)\b/i.test(desc)) credit = true;
+      if (opts.isCard !== false && map.credit < 0 && /\b(payment thank you|refund|reversal|thank you)\b/i.test(desc)) credit = true;
       out.push({ date, description: desc, amount, credit });
     });
     return out;
+  }
+
+  /* ---------------- money flow classification (transfers, income, review) ---------------- */
+  const FLOW_PATTERNS = [
+    // [regex on normalised description, kind, reason, direction: 'out'|'in'|'any']
+    [/\b(bill payment|bill pymt|payment thank you|payment received|card payment|cc payment|credit card payment|autopay|giro payment card)\b/, 'transfer', 'Card bill payment', 'any'],
+    [/\b(endowus|moomoo|futu|saxo|tiger brokers|tiger trade|poems|phillip securities|cdp|syfe|stashaway|ibkr|interactive brokers|crypto com|coinhako|gemini|srs contribution|cpf|medisave|ma top ?up)\b/, 'transfer', 'Investment / CPF / SRS', 'any'],
+    [/\b(grabpay top ?up|youtrip|shopback pay|revolut|wise|trust bank|instarem|amaze|top ?up)\b/, 'transfer', 'Wallet top-up', 'out'],
+    [/\b(atm|cash withdrawal|cash wdl|nets cash ?out)\b/, 'transfer', 'Cash withdrawal', 'out'],
+    [/\b(salary|payroll|sal cr|giro salary)\b/, 'income', 'Salary', 'in'],
+    [/\b(interest|bonus interest|int credit|interest earned|dividend|cash ?back|rebate)\b/, 'income', 'Interest / dividend / cashback', 'in'],
+    [/\b(refund|reversal|reversed|chargeback)\b/, 'refund', 'Refund', 'in'],
+    [/\b(reimburse|claim)\b/, 'income', 'Reimbursement', 'in'],
+  ];
+  const TRANSFERISH = /\b(fast|funds? transfer|fund trf|trf|transfer|paynow|pay now|ibg|giro|inter ?bank|own account|i bank|ib transfer)\b/;
+
+  /**
+   * Classify one statement row. ctx: { accounts:[{id,name,patterns:[],owner}], ownerNames:[], transferRules:[{pattern,kind,accountId}] , isCard }
+   * Returns { kind, reason, counterpartyId, review: [] }.
+   */
+  function classifyFlow(row, ctx) {
+    ctx = ctx || {};
+    const d = norm(row.description || row.rawDescription || '');
+    const dir = row.credit || num(row.amount) < 0 ? 'in' : 'out';
+    const review = [];
+    // 1. learned / user rules win
+    for (const r of ctx.transferRules || []) {
+      if (r.pattern && d.includes(norm(r.pattern))) return { kind: r.kind || 'transfer', reason: 'Your rule: "' + r.pattern + '"', counterpartyId: r.accountId || null, review };
+    }
+    // 2. own accounts named in the description (account names, last-4 digits, your own names)
+    const acct = (ctx.accounts || []).find((a) => a.id !== ctx.accountId && [a.name].concat(a.patterns || []).some((p) => p && norm(p).length >= 3 && d.includes(norm(p))));
+    const ownName = (ctx.ownerNames || []).some((n) => n && norm(n).length >= 3 && d.includes(norm(n)));
+    if (acct || (ownName && TRANSFERISH.test(d))) {
+      return { kind: 'transfer', reason: acct ? 'To/from your ' + acct.name : 'Transfer to your own name', counterpartyId: acct ? acct.id : null, review };
+    }
+    // 3. built-in patterns
+    for (const [re, kind, reason, pdir] of FLOW_PATTERNS) {
+      if ((pdir === 'any' || pdir === dir) && re.test(d)) {
+        // on a card statement, a credit "payment" is the bill being paid; elsewhere it's a transfer out to the card
+        return { kind, reason, counterpartyId: null, review };
+      }
+    }
+    // 4. defaults by direction
+    if (dir === 'in') {
+      if (ctx.isCard) return { kind: 'refund', reason: 'Card credit', counterpartyId: null, review: ['check'] };
+      review.push('incoming');
+      return { kind: 'income', reason: 'Money in', counterpartyId: null, review };
+    }
+    if (!ctx.isCard && TRANSFERISH.test(d)) {
+      review.push('paynow'); // PayNow/FAST to someone: spending, paying for others, or your own account?
+      return { kind: 'expense', reason: 'PayNow / transfer out', counterpartyId: null, review };
+    }
+    return { kind: 'expense', reason: '', counterpartyId: null, review };
+  }
+
+  /**
+   * Pair an outflow on one of your accounts with an inflow of the same amount on another within `days`.
+   * Mutates matching txns: kind='transfer', transferPair=<other id>. Returns number of pairs made.
+   */
+  function pairTransfers(ledger, opts) {
+    opts = opts || {};
+    const days = opts.days == null ? 4 : opts.days;
+    const acctOf = (t) => t.cardId || t.accountId || t.cardName || '';
+    const open = (ledger || []).filter((t) => !t.transferPair && t.date && num(t.amount) > 0 && kindOf(t) !== 'refund');
+    const outs = open.filter((t) => t.direction !== 'in' && (kindOf(t) === 'transfer' || (t.review || []).includes('paynow')));
+    const ins = open.filter((t) => t.direction === 'in');
+    let n = 0;
+    outs.forEach((o) => {
+      const m = ins.find((i) => !i.transferPair && acctOf(i) !== acctOf(o) && Math.abs(num(i.amount) - num(o.amount)) < 0.005 &&
+        Math.abs(daysUntil(i.date, o.date)) <= days);
+      if (!m) return;
+      o.kind = 'transfer'; m.kind = 'transfer';
+      o.transferPair = m.id; m.transferPair = o.id;
+      o.review = (o.review || []).filter((r) => r !== 'paynow' && r !== 'incoming');
+      m.review = (m.review || []).filter((r) => r !== 'paynow' && r !== 'incoming');
+      n++;
+    });
+    return n;
   }
 
   function txnFingerprint(t) {
@@ -852,6 +950,7 @@
     cycleFor, resolveDef, autoLink, matchDefByName, legacyToDef, optionValue,
     matchWhen, isExcluded, allocate, cycleState, cardStatus, candidateCards,
     recommend, analyseLedger, ledgerEarnings, strategy, bestProgramme, diffRules, validateRules,
+    KINDS, kindOf, earnsOnCard, isSpending, classifyFlow, pairTransfers,
     categorise, categoryForMcc, parseStatementText, parseCSV, guessCsvMapping, csvToRows, txnFingerprint,
     util: { norm, mccIn, expandList, r2, ymd, parseYmd, daysUntil },
   };

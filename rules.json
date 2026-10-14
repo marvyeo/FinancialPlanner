@@ -75,7 +75,8 @@
       "names": [
         "amex platinum credit",
         "american express platinum credit",
-        "amex plat credit"
+        "amex plat credit",
+        "amex platinum"
       ],
       "issuer": "American Express",
       "reward": {
@@ -129,7 +130,8 @@
         "amex krisflyer",
         "american express krisflyer",
         "krisflyer credit card",
-        "kf amex"
+        "kf amex",
+        "amex kf"
       ],
       "issuer": "American Express",
       "reward": {
@@ -247,7 +249,8 @@
         "dbs woman s world",
         "dbs womans world",
         "dbs wwmc",
-        "woman s world"
+        "woman s world",
+        "dbs ww"
       ],
       "issuer": "DBS",
       "reward": {
@@ -845,7 +848,8 @@
       "id": "ocbc-rewards",
       "names": [
         "ocbc rewards",
-        "ocbc titanium rewards"
+        "ocbc titanium rewards",
+        "ocbc titanium"
       ],
       "issuer": "OCBC",
       "reward": {

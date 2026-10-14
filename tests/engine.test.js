@@ -279,6 +279,53 @@ test('curated merchant list: statement aliases resolve to the right merchant and
   const ids = new Set(); db.forEach((m) => { assert.ok(m.mcc && /^\d{4}$/.test(m.mcc), m.id); assert.ok(!ids.has(m.id), 'dup ' + m.id); ids.add(m.id); });
 });
 
+console.log('transfers & kinds');
+test('transfers, income and refunds do not count toward caps; paid-for-others does', () => {
+  const cards = household(); E.autoLink(cards, rules);
+  const c = card(cards, "UOB Lady's Mastercard (Marvin)");
+  const base = { cardId: c.id, mcc: '5812', merchant: 'Restaurant', date: '2026-10-02' };
+  const ledger = [
+    txn({ ...base, id: 'a', amount: 500, kind: 'paid_for_others' }),
+    txn({ ...base, id: 'b', amount: 400, kind: 'refund' }),
+    txn({ ...base, id: 'c', amount: 900, kind: 'transfer' }),
+  ];
+  const st = E.cardStatus(c, rules, ledger, '2026-10-13');
+  close(st.caps[0].used, 500);
+});
+test('classifyFlow: bill payments, investments, own accounts, salary, PayNow', () => {
+  const ctx = { accounts: [{ id: 'joint', name: 'Joint Account', patterns: ['0123-4567'] }, { id: 'uob1', name: 'UOB One' }], ownerNames: ['Marvin Yeo'], accountId: 'uob1' };
+  const k = (desc, extra) => E.classifyFlow({ description: desc, amount: 100, ...extra }, ctx);
+  assert.strictEqual(k('BILL PAYMENT MBK-UOB CARDS 1234').kind, 'transfer');
+  assert.strictEqual(k('FAST PAYMENT TO ENDOWUS').reason, 'Investment / CPF / SRS');
+  assert.strictEqual(k('FUNDS TRANSFER 0123-4567').counterpartyId, 'joint');
+  assert.strictEqual(k('PAYNOW TRANSFER MARVIN YEO').kind, 'transfer');
+  assert.strictEqual(k('GIRO SALARY AMAZON', { credit: true }).kind, 'income');
+  const p = k('PAYNOW TO AH LIANG HOR FUN');
+  assert.strictEqual(p.kind, 'expense'); assert.ok(p.review.includes('paynow'));
+  assert.strictEqual(E.classifyFlow({ description: 'PAYMENT - THANK YOU', credit: true, amount: 500 }, { isCard: true }).kind, 'transfer');
+  assert.strictEqual(E.classifyFlow({ description: 'ODD THING', credit: true, amount: 5 }, { isCard: true }).kind, 'refund');
+  const ruled = E.classifyFlow({ description: 'PAYNOW TO CAROLINE TAN', amount: 50 }, { transferRules: [{ pattern: 'caroline tan', kind: 'transfer' }] });
+  assert.strictEqual(ruled.kind, 'transfer');
+});
+test('pairTransfers matches an outflow to an equal inflow on another account within 4 days', () => {
+  const L = [
+    { id: 'o', accountId: 'uob1', date: '2026-10-01', amount: 2000, kind: 'expense', review: ['paynow'], direction: 'out' },
+    { id: 'i', accountId: 'joint', date: '2026-10-02', amount: 2000, kind: 'income', review: ['incoming'], direction: 'in' },
+    { id: 'x', accountId: 'joint', date: '2026-10-20', amount: 2000, kind: 'income', direction: 'in' },
+  ];
+  assert.strictEqual(E.pairTransfers(L), 1);
+  assert.strictEqual(L[0].kind, 'transfer'); assert.strictEqual(L[1].transferPair, 'o');
+  assert.deepStrictEqual(L[0].review, []); assert.strictEqual(L[2].kind, 'income');
+});
+
+test('bank statements: "BILL PAYMENT" / "FAST PAYMENT" are money out; card "PAYMENT - THANK YOU" is a credit', () => {
+  const bank = E.parseStatementText('02 OCT  BILL PAYMENT MBK-UOB CARDS 4321   826.84\n06 OCT  FAST PAYMENT ENDOWUS   400.00\n07 OCT  PAYNOW FROM VANESSA   7.30 CR', { refDate: '2026-10-13', isCard: false });
+  assert.deepStrictEqual(bank.map((r) => r.credit), [false, false, true]);
+  const card = E.parseStatementText('03 OCT  PAYMENT - THANK YOU   500.00', { refDate: '2026-10-13' });
+  assert.strictEqual(card[0].credit, true);
+  assert.strictEqual(E.categorise('PAYNOW TO AH LIANG HOR FUN', [], []).merchant, 'Ah Liang Hor Fun');
+});
+
 console.log('rules refresh');
 test('diff reports cap and rate changes', () => {
   const next = JSON.parse(JSON.stringify(rules));
