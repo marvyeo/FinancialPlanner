@@ -1089,6 +1089,187 @@
     return [t.cardId || t.cardName || '', t.date, r2(num(t.amount)).toFixed(2), norm(t.rawDescription || t.merchant).slice(0, 24)].join('|');
   }
 
+  /* ---------------- month-end reconciliation ---------------- */
+  /**
+   * Match statement lines to what you already logged for the same card / account.
+   * lines: [{ date, amount, description, credit }] (amount positive; credit = money in / refund)
+   * opts: { cardId, accountId, cardName, dayTol (default 4) }
+   * Returns { matched:[{ i, txnIds, how }], differs:[{ i, txnId, diff }], unmatched:[i], duplicates:[i], missing:[txnId], from, to }
+   *  - matched: same amount within a few days (or 2–3 logged lines that add up to one statement line)
+   *  - differs: same day-ish, amount a little different (tips, FX, typo) — you pick which is right
+   *  - unmatched: on the statement but you never logged it → ask
+   *  - missing: logged on this card in the statement period but not on the statement (pending, wrong card, cancelled)
+   */
+  function reconcileStatement(lines, ledger, opts) {
+    opts = opts || {};
+    const tol = opts.dayTol == null ? 4 : opts.dayTol;
+    const sameSource = (t) => (opts.cardId && t.cardId === opts.cardId) || (opts.accountId && t.accountId === opts.accountId) ||
+      (!opts.cardId && !opts.accountId && opts.cardName && t.cardName === opts.cardName);
+    const dirOf = (t) => (t.direction === 'in' || kindOf(t) === 'refund' ? 'in' : 'out');
+    const pool = (ledger || []).filter((t) => t.date && sameSource(t));
+    const fps = new Set(pool.filter((t) => t.rawDescription).map((t) => txnFingerprint({ cardId: t.cardId, cardName: t.cardId ? null : t.cardName, date: t.date, amount: t.amount, rawDescription: t.rawDescription })));
+    const L = (lines || []).map((l, i) => ({ ...l, i, dir: l.credit ? 'in' : 'out', amt: r2(num(l.amount)) })).filter((l) => l.amt > 0);
+    const dates = L.map((l) => l.date).filter(Boolean).sort();
+    const from = opts.from || dates[0], to = opts.to || dates[dates.length - 1];
+    const res = { matched: [], differs: [], unmatched: [], duplicates: [], missing: [], from, to };
+    const used = new Set();
+    const lineDone = new Set();
+    // already imported from this statement before (same date, amount, description)
+    L.forEach((l) => {
+      const fp = txnFingerprint({ cardId: opts.cardId || null, cardName: opts.cardId ? null : (opts.cardName || null), date: l.date, amount: l.amt, rawDescription: l.description });
+      if (fps.has(fp)) {
+        const t = pool.find((x) => !used.has(x.id) && x.rawDescription && x.date === l.date && Math.abs(num(x.amount) - l.amt) < 0.005);
+        if (t) used.add(t.id);
+        res.duplicates.push(l.i); lineDone.add(l.i);
+      }
+    });
+    // a line from an earlier reconciliation is spoken for
+    pool.filter((t) => t.reconciled && t.stmtLine).forEach((t) => used.add(t.id));
+    const open = () => pool.filter((t) => !used.has(t.id));
+    for (let d = 0; d <= tol; d++) {
+      L.forEach((l) => {
+        if (lineDone.has(l.i)) return;
+        const c = open().filter((t) => dirOf(t) === l.dir && Math.abs(num(t.amount) - l.amt) < 0.005 && Math.abs(daysUntil(t.date, l.date)) === d);
+        if (c.length) { used.add(c[0].id); lineDone.add(l.i); res.matched.push({ i: l.i, txnIds: [c[0].id], how: d <= 1 ? 'exact' : `${d} days apart` }); }
+      });
+    }
+    // you split one bill into several logged lines (e.g. part yours, part Joint)
+    L.forEach((l) => {
+      if (lineDone.has(l.i)) return;
+      const c = open().filter((t) => dirOf(t) === l.dir && num(t.amount) < l.amt && Math.abs(daysUntil(t.date, l.date)) <= 3).slice(0, 12);
+      for (let k = 2; k <= 3 && !lineDone.has(l.i); k++) {
+        const pick = (start, left, acc) => {
+          if (acc.length === k) return Math.abs(acc.reduce((s, t) => s + num(t.amount), 0) - l.amt) < 0.005 ? acc : null;
+          for (let j = start; j < c.length; j++) { const r = pick(j + 1, left, acc.concat(c[j])); if (r) return r; }
+          return null;
+        };
+        const hit = pick(0, k, []);
+        if (hit) { hit.forEach((t) => used.add(t.id)); lineDone.add(l.i); res.matched.push({ i: l.i, txnIds: hit.map((t) => t.id), how: `split into ${k}` }); }
+      }
+    });
+    // you logged several statement lines as one (e.g. two Grab rides as "Grab")
+    open().forEach((t) => {
+      const c = L.filter((l) => !lineDone.has(l.i) && l.dir === dirOf(t) && l.amt < num(t.amount) && Math.abs(daysUntil(t.date, l.date)) <= 2).slice(0, 10);
+      for (let k = 2; k <= 4; k++) {
+        const pick = (start, acc) => {
+          if (acc.length === k) return Math.abs(acc.reduce((s2, l) => s2 + l.amt, 0) - num(t.amount)) < 0.005 ? acc : null;
+          for (let j = start; j < c.length; j++) { const r = pick(j + 1, acc.concat(c[j])); if (r) return r; }
+          return null;
+        };
+        const hit = pick(0, []);
+        if (hit) { used.add(t.id); hit.forEach((l) => { lineDone.add(l.i); res.matched.push({ i: l.i, txnIds: [t.id], how: `grouped (${k} lines)` }); }); break; }
+      }
+    });
+    // close but not equal
+    L.forEach((l) => {
+      if (lineDone.has(l.i)) return;
+      const c = open().filter((t) => dirOf(t) === l.dir && Math.abs(daysUntil(t.date, l.date)) <= 2 && Math.abs(num(t.amount) - l.amt) <= Math.max(5, 0.15 * l.amt))
+        .sort((a, b) => Math.abs(num(a.amount) - l.amt) - Math.abs(num(b.amount) - l.amt));
+      if (c.length) { used.add(c[0].id); lineDone.add(l.i); res.differs.push({ i: l.i, txnId: c[0].id, diff: r2(l.amt - num(c[0].amount)) }); }
+    });
+    L.forEach((l) => { if (!lineDone.has(l.i)) res.unmatched.push(l.i); });
+    res.missing = open().filter((t) => !t.reconciled && from && to && t.date >= from && t.date <= to && kindOf(t) !== 'transfer').map((t) => t.id);
+    return res;
+  }
+
+  /* ---------------- two people, one data file ---------------- */
+  const itemKey = (x) => (x && typeof x === 'object' ? (x.id || x.key || (x.name ? 'n:' + x.name + '|' + (x.service || '') : null)) : null);
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  /**
+   * Three-way merge for when both of you saved since this device loaded the file.
+   * base = what this device loaded, local = what it has now, remote = what's on Drive now.
+   * Lists of objects with ids merge item by item (adds, edits and deletes from both sides survive);
+   * anything else takes this device's version only if this device changed it.
+   */
+  function mergeData(base, local, remote) {
+    const walk = (b, l, r) => {
+      if (same(l, b)) return clone(r === undefined ? l : r);
+      if (same(r, b) || r === undefined) return clone(l);
+      if (Array.isArray(l) && Array.isArray(r)) {
+        const keyed = (arr) => arr.length && arr.every((x) => itemKey(x));
+        if (!keyed(l) && !keyed(r)) return clone(l);
+        const bArr = Array.isArray(b) ? b : [];
+        const bMap = new Map(bArr.filter(itemKey).map((x) => [itemKey(x), x]));
+        const lMap = new Map(l.filter(itemKey).map((x) => [itemKey(x), x]));
+        const out = [];
+        const seen = new Set();
+        r.forEach((x) => {
+          const k = itemKey(x); if (!k) { out.push(x); return; }
+          seen.add(k);
+          const inBase = bMap.has(k), inLocal = lMap.has(k);
+          if (inBase && !inLocal) { if (!same(bMap.get(k), x)) out.push(x); return; } // deleted here; keep only if they edited it
+          if (!inLocal) { out.push(x); return; }                                   // added there
+          out.push(walk(bMap.get(k), lMap.get(k), x));
+        });
+        l.forEach((x) => { const k = itemKey(x); if (k && !seen.has(k) && !bMap.has(k)) out.push(x); });   // added here
+        return clone(out);
+      }
+      if (l && r && typeof l === 'object' && typeof r === 'object' && !Array.isArray(l) && !Array.isArray(r)) {
+        const o = {};
+        new Set([...Object.keys(l), ...Object.keys(r)]).forEach((k) => {
+          const bk = b && typeof b === 'object' ? b[k] : undefined;
+          if (!(k in l) && bk !== undefined) { if (!same(bk, r[k])) o[k] = clone(r[k]); return; }   // deleted here
+          if (!(k in r) && bk !== undefined) { if (!same(bk, l[k])) o[k] = clone(l[k]); return; }   // deleted there
+          o[k] = walk(bk, l[k], r[k]);
+        });
+        return o;
+      }
+      return clone(l);   // both changed a plain value: this device wins
+    };
+    return walk(base, local, remote);
+  }
+
+  /* ---------------- advice & ghost tracking ---------------- */
+  /** Price on or before a date from a series [{date, price}] (sorted or not). */
+  function priceAt(series, date) {
+    const s = (series || []).filter((p) => p.date <= date).sort((a, b) => (a.date < b.date ? -1 : 1));
+    return s.length ? s[s.length - 1] : null;
+  }
+  /**
+   * What a recommendation did (accepted) or would have done (not taken) since it was made.
+   * rec.ghost kinds:
+   *  - { kind:'position', ticker, ccy, amountSgd, date, price? , fx? }  — buy amountSgd of ticker on date
+   *  - { kind:'rate', amountSgd, fromRate, toRate, date, months? }      — move money to a better rate (both % p.a.)
+   *  - { kind:'switch', from:{ticker,ccy}, to:{ticker,ccy}, amountSgd, date } — hold B instead of A
+   * prices: { TICKER: [{date, price}], USDSGD: [{date, price}] }
+   */
+  function ghostResult(rec, prices, asOf) {
+    const g = rec && rec.ghost; if (!g) return null;
+    asOf = asOf || ymd(new Date());
+    const fxAt = (ccy, d) => { if (!ccy || ccy === 'SGD') return 1; const p = priceAt(prices[ccy + 'SGD'], d); return p ? num(p.price) : null; };
+    const leg = (ticker, ccy, amountSgd, d0, p0, fx0) => {
+      const start = p0 ? { date: d0, price: p0 } : priceAt(prices[ticker], d0) || ((prices[ticker] || []).slice().sort((a, b) => (a.date < b.date ? -1 : 1))[0]);
+      const now = priceAt(prices[ticker], asOf);
+      const f0 = fx0 || fxAt(ccy, start ? start.date : d0), f1 = fxAt(ccy, asOf);
+      if (!start || !now || !f0 || !f1) return null;
+      const units = amountSgd / f0 / num(start.price);
+      const value = units * num(now.price) * f1;
+      return { units, startPrice: num(start.price), startDate: start.date, nowPrice: num(now.price), priceDate: now.date, value: r2(value), gain: r2(value - amountSgd), ret: value / amountSgd - 1 };
+    };
+    if (g.kind === 'position') {
+      const r = leg(g.ticker, g.ccy, num(g.amountSgd), g.date, g.price, g.fx);
+      return r ? { kind: g.kind, ...r, amountSgd: num(g.amountSgd) } : { kind: g.kind, pending: 'no price yet for ' + g.ticker };
+    }
+    if (g.kind === 'rate') {
+      const end = g.months ? ymd(new Date(parseYmd(g.date).getTime() + g.months * 30.44 * 86400000)) : asOf;
+      const days = Math.max(0, daysUntil(end < asOf ? end : asOf, g.date));
+      const extra = num(g.amountSgd) * (num(g.toRate) - num(g.fromRate)) / 100 * days / 365;
+      return { kind: g.kind, days, gain: r2(extra), perYear: r2(num(g.amountSgd) * (num(g.toRate) - num(g.fromRate)) / 100), amountSgd: num(g.amountSgd) };
+    }
+    if (g.kind === 'switch') {
+      const a = leg(g.from.ticker, g.from.ccy, num(g.amountSgd), g.date), b = leg(g.to.ticker, g.to.ccy, num(g.amountSgd), g.date);
+      if (!a || !b) return { kind: g.kind, pending: 'need prices for ' + [!a && g.from.ticker, !b && g.to.ticker].filter(Boolean).join(' and ') };
+      return { kind: g.kind, gain: r2(b.value - a.value), from: a, to: b, amountSgd: num(g.amountSgd) };
+    }
+    return null;
+  }
+  /** Totals for the advice page: what you gained from advice you took, and what you'd have gained from advice you didn't. */
+  function adviceSummary(recs, prices, asOf) {
+    const rows = (recs || []).map((r) => ({ rec: r, result: ghostResult(r, prices || {}, asOf) }));
+    const tot = (st) => r2(rows.filter((x) => st.includes(x.rec.status) && x.result && x.result.gain != null).reduce((s, x) => s + x.result.gain, 0));
+    return { rows, taken: tot(['accepted', 'done']), notTaken: tot(['rejected']), open: rows.filter((x) => !x.rec.status || x.rec.status === 'proposed').length };
+  }
+
   /* ---------------- investments ---------------- */
   const MON3 = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
   const toNum = (s) => Number(String(s).replace(/[,\s]/g, ''));
@@ -1515,6 +1696,7 @@
     splitsOf, yourShare, openSplits, personMatches, matchRepayments, owedSummary, migrateContra,
     parseDigiPortfolio, classifyHolding, mergeInvestmentStatement, mergeInvestmentData, investFlows, investmentSummary, investmentInsights, xirr,
     categorise, categoryForMcc, parseStatementText, parseCSV, guessCsvMapping, csvToRows, txnFingerprint,
+    reconcileStatement, mergeData, priceAt, ghostResult, adviceSummary,
     util: { norm, mccIn, expandList, r2, ymd, parseYmd, daysUntil },
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

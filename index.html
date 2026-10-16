@@ -323,6 +323,22 @@
     .sf-top .sf-merchant { grid-column: 1 / -1; }
   }
   @media (max-width: 768px) { .bar-row { grid-template-columns: 100px 1fr 70px; } .modal { padding: 20px 18px; } }
+  /* phone: modals become full-screen sheets with the main button always reachable; 16px inputs stop iOS zooming */
+  @media (max-width: 768px) {
+    .modal-bg { align-items: stretch; }
+    .modal, .modal.wide { width: 100%; max-width: 100%; max-height: none; height: 100dvh; border-radius: 0; border: none; padding: 16px 16px 0; }
+    .modal .modal-footer { position: sticky; bottom: 0; background: #0A1520; margin: 18px -16px 0; padding: 12px 16px max(12px, env(safe-area-inset-bottom)); border-top: 1px solid #1C2F45; }
+    .modal .modal-footer .btn-primary { flex: 1; justify-content: center; padding: 13px 16px; font-size: 15px; }
+    .form-row input, .form-row select, .form-row textarea { font-size: 16px; }
+    #qa-amount { font-size: 22px; font-weight: 700; }
+  }
+  .quick-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .quick-btn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 16px 10px; border-radius: 12px; font-weight: 700; font-size: 15px; cursor: pointer; border: 1px solid #1F5070; background: #102536; color: #F0F4F8; }
+  .quick-btn.primary { background: #00C896; color: #0D1B2A; border-color: #00C896; }
+  @media (min-width: 769px) { .quick-row.mobile-only { display: none; } }
+  .recent-chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin: -4px 0 8px; }
+  .recent-chips .chip { white-space: nowrap; flex: none; }
+  .claude-box { background: #0D1B2A; border: 1px dashed #2A4A6B; border-radius: 8px; padding: 10px 12px; margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -337,7 +353,8 @@
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
       <span id="sign-in-label">Loading…</span>
     </button>
-    <p style="margin-top:16px;font-size:11.5px;color:#2A4A6B;">drive.file scope only — accesses financialplanner-data.json</p>
+    <p id="auth-msg" style="margin:14px 0 0;font-size:12.5px;color:#F59E0B;"></p>
+    <p style="margin-top:16px;font-size:11.5px;color:#2A4A6B;">drive.file scope only — the app can open only the planner files it created or that you picked</p>
   </div>
 </div>
 
@@ -349,6 +366,8 @@
     <div class="nav-item active" data-nav="dashboard" onclick="navigate('dashboard')"><span class="icon">⊞</span> Dashboard</div>
     <div class="nav-item" data-nav="spend" onclick="navigate('spend')"><span class="icon">≡</span> Spending</div>
     <div class="nav-item" data-nav="invest" onclick="navigate('invest')"><span class="icon">↗</span> Investments</div>
+    <div class="nav-item" data-nav="recon" onclick="navigate('recon')"><span class="icon">☑</span> Month-end check <span id="recon-badge" style="margin-left:auto;font-size:11px;color:#F59E0B;"></span></div>
+    <div class="nav-item" data-nav="advice" onclick="navigate('advice')"><span class="icon">✧</span> Advice</div>
     <div class="nav-item" data-nav="owed" onclick="navigate('owed')"><span class="icon">⇄</span> Owed to me <span id="owed-badge" style="margin-left:auto;font-size:11px;color:#F59E0B;"></span></div>
     <div class="nav-section">Profiles</div>
     <div class="nav-item" data-nav="profile:marvin" onclick="navigate('profile','marvin')"><span class="icon">👤</span> Marvin</div>
@@ -404,53 +423,79 @@ const CLIENT_ID = '669494100250-gvromuq72r7j0djmkd4vdbdq5damncj7.apps.googleuser
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 const DRIVE_FILE = 'financialplanner-data.json';
 const GITHUB_URL = 'https://marvyeo.github.io/FinancialPlanner/';
+// Lets a second person open the household file that was shared with them (Google Picker).
+// One-time setup: Google Cloud console → APIs & Services → enable "Google Picker API" → Credentials → Create API key,
+// restrict it to the Picker API and to https://marvyeo.github.io/*. Paste it here.
+const PICKER_API_KEY = '';
+const GCP_APP_ID = '669494100250';
 
 let tokenClient, accessToken = null, driveFileId = null;
+let ME = { email: '', name: '', profile: 'marvin' };
+let DATA_BASE = null, DATA_VERSION = null, SAVING = null, SAVE_AGAIN = false;
+const LS = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }, del: (k) => { try { localStorage.removeItem(k); } catch (e) {} } };
 
+function savedToken() { try { return JSON.parse(LS.get('fp_token') || 'null'); } catch (e) { return null; } }
 function init() {
-  if (typeof gapi === 'undefined' || typeof google === 'undefined') {
-    setTimeout(init, 100);
-    return;
-  }
+  if (typeof gapi === 'undefined' || typeof google === 'undefined') { setTimeout(init, 100); return; }
   gapi.load('client', async () => {
-    // Skip discoveryDocs — avoids network stall; Drive calls use fetch() directly
     await gapi.client.init({});
     tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID, scope: SCOPES,
       callback: (resp) => {
-        if (resp.error) return;
+        if (resp.error) { authMessage('Sign-in was cancelled. Tap the button to try again.'); return; }
         accessToken = resp.access_token;
+        LS.set('fp_token', JSON.stringify({ t: accessToken, exp: Date.now() + (Number(resp.expires_in) || 3599) * 1000, email: (savedToken() || {}).email || '' }));
         onSignedIn();
       }
     });
-    // Try restoring session token
-    const existing = sessionStorage.getItem('fp_access_token');
-    if (existing) {
-      accessToken = existing;
-      onSignedIn();
-      return;
-    }
-    // Ready — enable button
-    const btn = document.getElementById('sign-in-btn');
-    const lbl = document.getElementById('sign-in-label');
-    btn.disabled = false;
-    btn.style.opacity = '1';
-    btn.style.cursor = 'pointer';
-    lbl.textContent = 'Sign in with Google';
+    // Stay signed in on this device: a Google token lasts about an hour; after that one tap gets a new one.
+    const tok = savedToken();
+    if (tok && tok.t && tok.exp > Date.now() + 60000) { accessToken = tok.t; onSignedIn(); return; }
+    const btn = document.getElementById('sign-in-btn'), lbl = document.getElementById('sign-in-label');
+    btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer';
+    lbl.textContent = tok && tok.email ? 'Continue as ' + tok.email : 'Sign in with Google';
   });
 }
-
 async function handleSignIn() {
-  const lbl = document.getElementById('sign-in-label');
-  lbl.textContent = 'Connecting…';
-  tokenClient.requestAccessToken({ prompt: 'consent' });
+  const tok = savedToken();
+  document.getElementById('sign-in-label').textContent = 'Connecting…';
+  tokenClient.requestAccessToken(tok && tok.email ? { prompt: '', login_hint: tok.email } : { prompt: 'consent' });
+}
+function authMessage(msg) {
+  const o = document.getElementById('auth-overlay'); o.style.display = 'flex';
+  const btn = document.getElementById('sign-in-btn'); btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer';
+  const tok = savedToken();
+  document.getElementById('sign-in-label').textContent = tok && tok.email ? 'Continue as ' + tok.email : 'Sign in with Google';
+  document.getElementById('auth-msg').textContent = msg || '';
+}
+function signOut() {
+  if (accessToken && google.accounts.oauth2.revoke) google.accounts.oauth2.revoke(accessToken, () => {});
+  LS.del('fp_token'); LS.del('fp_file_id'); accessToken = null; location.reload();
+}
+/** fetch() to Google Drive with the token; an expired session sends you back to the one-tap sign-in. */
+async function driveFetch(url, opts) {
+  opts = opts || {};
+  const res = await fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: `Bearer ${accessToken}` } });
+  if (res.status === 401) {
+    const tok = savedToken(); if (tok) { tok.exp = 0; LS.set('fp_token', JSON.stringify(tok)); }
+    authMessage('Your Google session timed out. Tap to continue — nothing you entered is lost.');
+    throw new Error('session expired');
+  }
+  return res;
 }
 
 async function onSignedIn() {
-  sessionStorage.setItem('fp_access_token', accessToken);
-  await Promise.all([loadFromDrive(), loadMerchantsDB(), loadCuratedMerchants()]);
+  try {
+    const me = await (await driveFetch('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)')).json();
+    ME.email = (me.user && me.user.emailAddress || '').toLowerCase(); ME.name = me.user && me.user.displayName || '';
+    const tok = savedToken() || {}; tok.email = ME.email; LS.set('fp_token', JSON.stringify(tok));
+  } catch (e) { if (String(e.message).includes('session')) return; }
+  const ok = await loadFromDrive();
+  if (!ok) return;                       // waiting on "join household" choice
+  await Promise.all([loadMerchantsDB(), loadCuratedMerchants()]);
   await loadRules();
   ensureEngineData();
+  identifyMe();
   rebuildMerchantDatalist();
   document.getElementById('auth-overlay').style.display = 'none';
   setDriveStatus(true);
@@ -460,7 +505,7 @@ async function onSignedIn() {
 function setDriveStatus(connected) {
   const el = document.getElementById('drive-status-sidebar');
   const txt = document.getElementById('drive-status-text');
-  if (connected) { el.classList.add('connected'); txt.textContent = 'Drive connected'; }
+  if (connected) { el.classList.add('connected'); txt.textContent = ME.email ? `${profileLabel(ME.profile)} · ${ME.email}` : 'Drive connected'; }
   else { el.classList.remove('connected'); txt.textContent = 'Not connected'; }
 }
 
@@ -486,59 +531,191 @@ const DEFAULT_DATA = {
 };
 let data = JSON.parse(JSON.stringify(DEFAULT_DATA));
 
+
+/** Find the household file: the one this device used last, else one shared with you, else your own. */
+async function findDataFile() {
+  const remembered = LS.get('fp_file_id');
+  if (remembered) {
+    const r = await driveFetch(`https://www.googleapis.com/drive/v3/files/${remembered}?fields=id,name,trashed,version,ownedByMe`);
+    if (r.ok) { const j = await r.json(); if (!j.trashed) return j; }
+  }
+  const q = encodeURIComponent(`name='${DRIVE_FILE}' and trashed=false`);
+  const json = await (await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&orderBy=modifiedTime desc&fields=files(id,name,version,ownedByMe)`)).json();
+  const files = json.files || [];
+  return files.find(f => !f.ownedByMe) || files[0] || null;
+}
 async function loadFromDrive() {
   try {
-    const q = encodeURIComponent(`name='${DRIVE_FILE}' and trashed=false`);
-    const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`, {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-    const json = await res.json();
-    const files = json.files || [];
-    if (files.length > 0) {
-      driveFileId = files[0].id;
-      const dl = await fetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`, {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
-      data = await dl.json();
-      // Ensure structure
-      ['marvin','wife','joint','cobae'].forEach(p => {
-        if (!data.profiles[p]) data.profiles[p] = { bills: [], subscriptions: [] };
-        if (!data.profiles[p].bills) data.profiles[p].bills = [];
-        if (!data.profiles[p].subscriptions) data.profiles[p].subscriptions = [];
-      });
-      if (!data.cards) data.cards = [];
-      if (!data.merchants) data.merchants = [];
-      if (!data.settings) data.settings = DEFAULT_DATA.settings;
-      if (!data.settings.mile_valuations) data.settings.mile_valuations = DEFAULT_DATA.settings.mile_valuations;
-    }
-  } catch(e) { console.warn('Drive load failed', e); }
+    const f = await findDataFile();
+    if (!f) { showJoinScreen(); return false; }
+    await openDataFile(f.id);
+    return true;
+  } catch (e) { console.warn('Drive load failed', e); if (String(e.message).includes('session')) return false; return true; }
+}
+async function openDataFile(id) {
+  const meta = await (await driveFetch(`https://www.googleapis.com/drive/v3/files/${id}?fields=id,version`)).json();
+  const dl = await driveFetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`);
+  data = await dl.json();
+  driveFileId = id; DATA_VERSION = meta.version; LS.set('fp_file_id', id);
+  normaliseData();
+  DATA_BASE = JSON.parse(JSON.stringify(data));
+}
+function normaliseData() {
+  data.profiles = data.profiles || {};
+  ['marvin','wife','joint','cobae'].forEach(p => {
+    if (!data.profiles[p]) data.profiles[p] = { bills: [], subscriptions: [] };
+    if (!data.profiles[p].bills) data.profiles[p].bills = [];
+    if (!data.profiles[p].subscriptions) data.profiles[p].subscriptions = [];
+  });
+  if (!data.cards) data.cards = [];
+  if (!data.merchants) data.merchants = [];
+  if (!data.settings) data.settings = JSON.parse(JSON.stringify(DEFAULT_DATA.settings));
+  if (!data.settings.mile_valuations) data.settings.mile_valuations = DEFAULT_DATA.settings.mile_valuations;
 }
 
-async function saveToDrive() {
-  try { computeUpcoming(); } catch (e) { console.error('computeUpcoming failed — saving anyway', e); }
-  const icon = document.getElementById('save-icon');
-  icon.textContent = '⟳';
-  try {
-    const body = JSON.stringify(data, null, 2);
-    const meta = { name: DRIVE_FILE, mimeType: 'application/json' };
-    if (driveFileId) {
-      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=multipart`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'multipart/related; boundary=bound' },
-        body: `--bound\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(meta)}\r\n--bound\r\nContent-Type: application/json\r\n\r\n${body}\r\n--bound--`
-      });
-    } else {
-      const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'multipart/related; boundary=bound' },
-        body: `--bound\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(meta)}\r\n--bound\r\nContent-Type: application/json\r\n\r\n${body}\r\n--bound--`
-      });
-      const j = await res.json(); driveFileId = j.id;
-    }
-    icon.textContent = '✓';
-    setTimeout(() => { icon.textContent = '💾'; }, 1800);
-  } catch(e) { icon.textContent = '✗'; console.error(e); }
+/* ---- household: two Google accounts, one file ---- */
+function showJoinScreen() {
+  const card = document.querySelector('#auth-overlay .auth-card');
+  card.innerHTML = `
+    <div style="font-size:28px;margin-bottom:10px;">🏠</div>
+    <h2>Join your household planner</h2>
+    <p style="margin-bottom:16px;">Signed in as <strong style="color:#F0F4F8;">${esc(ME.email)}</strong>. If your partner has shared the planner with you, open it once here and this device remembers it.</p>
+    <button class="btn-primary" style="width:100%;justify-content:center;margin-bottom:10px;" onclick="joinViaPicker()">Open the shared planner</button>
+    <button class="btn-secondary" style="width:100%;margin-bottom:10px;" onclick="startFresh()">Start a new, empty planner</button>
+    <button class="btn-secondary" style="width:100%;" onclick="signOut()">Use a different Google account</button>
+    <p id="join-msg" style="margin:14px 0 0;font-size:12px;"></p>`;
+  document.getElementById('auth-overlay').style.display = 'flex';
 }
+function joinViaPicker() {
+  const msg = document.getElementById('join-msg');
+  if (!PICKER_API_KEY) { msg.innerHTML = 'The file picker isn\'t set up yet. Ask Marvin to add the Picker API key (see Settings → Household), then try again.'; return; }
+  gapi.load('picker', () => {
+    const view = new google.picker.DocsView(google.picker.ViewId.DOCS).setMode(google.picker.DocsViewMode.LIST).setOwnedByMe(false).setMimeTypes('application/json');
+    const picker = new google.picker.PickerBuilder().addView(view).enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
+      .setTitle('Pick financialplanner-data.json (and merchants.json)').setOAuthToken(accessToken).setDeveloperKey(PICKER_API_KEY).setAppId(GCP_APP_ID)
+      .setCallback(async (d) => {
+        if (d.action !== google.picker.Action.PICKED) return;
+        const docs = d.docs || [];
+        const main = docs.find(x => x.name === DRIVE_FILE) || docs[0];
+        const merch = docs.find(x => x.name === 'merchants.json');
+        if (merch) LS.set('fp_merchants_id', merch.id);
+        try { await openDataFile(main.id); location.reload(); } catch (e) { msg.textContent = 'Could not open that file: ' + e.message; }
+      }).build();
+    picker.setVisible(true);
+  });
+}
+async function startFresh() {
+  if (!confirm('Create a new, empty planner in your Drive? Choose this only if nobody has shared one with you.')) return;
+  data = JSON.parse(JSON.stringify(DEFAULT_DATA));
+  data.settings.household = Object.assign({}, data.settings.household, { members: [{ email: ME.email, profile: 'marvin' }] });
+  await saveToDrive(); location.reload();
+}
+function identifyMe() {
+  const hh = data.settings.household;
+  hh.members = hh.members || [];
+  let m = hh.members.find(x => (x.email || '').toLowerCase() === ME.email);
+  if (!m && ME.email) {
+    if (!hh.members.length) { m = { email: ME.email, profile: 'marvin' }; hh.members.push(m); setTimeout(saveToDrive, 500); }
+    else setTimeout(() => askWhoAmI(), 300);
+  }
+  ME.profile = m ? m.profile : (LS.get('fp_me') || 'marvin');
+}
+function askWhoAmI() {
+  showModal(`<h3>Who's using this device?</h3>
+    <p style="font-size:13px;color:#8AABBF;margin:-6px 0 16px;">${esc(ME.email)} — the app uses this to fill in "for whom" and to show your own reconciliation list first.</p>
+    <div class="chip-row">${['marvin','wife'].map(p => `<span class="chip" onclick="setWhoAmI('${p}')">${profileLabel(p)}</span>`).join('')}</div>`);
+}
+function setWhoAmI(p) {
+  const hh = data.settings.household; hh.members = (hh.members || []).filter(x => x.email !== ME.email); hh.members.push({ email: ME.email, profile: p });
+  ME.profile = p; LS.set('fp_me', p); closeModal(); saveToDrive(); setDriveStatus(true); render();
+}
+async function shareHousehold() {
+  const email = document.getElementById('hh-share-email').value.trim().toLowerCase();
+  const who = document.getElementById('hh-share-who').value;
+  if (!/@/.test(email)) { alert('Enter a Google account email.'); return; }
+  if (!driveFileId) { alert('Save once first.'); return; }
+  const share = async (id, label) => {
+    const r = await driveFetch(`https://www.googleapis.com/drive/v3/files/${id}/permissions?sendNotificationEmail=true&emailMessage=${encodeURIComponent('Open ' + GITHUB_URL + ', sign in with this account and choose "Open the shared planner".')}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'user', role: 'writer', emailAddress: email }) });
+    if (!r.ok) throw new Error(label + ': ' + ((await r.json()).error || {}).message);
+  };
+  try {
+    await share(driveFileId, DRIVE_FILE);
+    const mid = await merchantsFileId(); if (mid) await share(mid, 'merchants.json');
+    const hh = data.settings.household; hh.members = (hh.members || []).filter(x => x.email !== email); hh.members.push({ email, profile: who });
+    await saveToDrive(); render();
+    toast(`Shared with ${esc(email)}. They'll get an email; on first sign-in they tap "Open the shared planner".`, 7000);
+  } catch (e) { alert('Sharing failed — ' + e.message); }
+}
+function householdSettingsHtml() {
+  const hh = data.settings.household || {};
+  const members = (hh.members || []).map(m => `<tr><td>${esc(m.email)}</td><td>${profileLabel(m.profile)}</td><td>${m.email === ME.email ? '<span class="pill pill-green">this device</span>' : ''}</td></tr>`).join('');
+  const recon = hh.reconDay || { marvin: 'end', wife: 'mid' };
+  return `
+    <div class="section-header" style="margin-top:28px;"><h2>Household</h2><button class="btn-secondary" onclick="signOut()">Sign out on this device</button></div>
+    <p style="font-size:13px;color:#8AABBF;margin-bottom:12px;">You and Caroline each sign in with your own Google account and see the same planner. Edits made at the same time on two phones are merged when either of you saves.</p>
+    <div class="table-wrap"><table class="data-table"><thead><tr><th>Google account</th><th>Person</th><th></th></tr></thead><tbody>${members || '<tr><td colspan="3"><div class="empty" style="padding:14px;">Only you so far</div></td></tr>'}</tbody></table></div>
+    <div class="smart-spend-box">
+      <div class="form-grid">
+        <div class="form-row"><label>Share the planner with</label><input id="hh-share-email" value="${esc((hh.members || []).some(m => m.email === 'carol.tan.jx@gmail.com') ? '' : 'carol.tan.jx@gmail.com')}" placeholder="name@gmail.com"/></div>
+        <div class="form-row"><label>They are</label><select id="hh-share-who">${['wife','marvin'].map(p => `<option value="${p}">${profileLabel(p)}</option>`).join('')}</select></div>
+      </div>
+      <button class="btn-primary" onclick="shareHousehold()">Share</button>
+      <div class="hint" style="margin-top:8px;">${PICKER_API_KEY ? 'File picker is set up.' : '<span class="text-amber">One-time setup still needed so the other person can open the shared file — see “Household setup” in the project notes (Google Cloud: enable Picker API, create an API key, add it to index.html as PICKER_API_KEY; and add their email as a test user on the OAuth consent screen).</span>'}</div>
+    </div>
+    <div class="form-grid" style="margin-top:6px;">
+      ${['marvin','wife'].map(p => `<div class="form-row"><label>${profileLabel(p)} reconciles</label><select onchange="data.settings.household.reconDay=Object.assign({marvin:'end',wife:'mid'},data.settings.household.reconDay||{}, {${p}:this.value});saveToDrive()">
+        <option value="end" ${recon[p] === 'end' ? 'selected' : ''}>at month end</option><option value="mid" ${recon[p] === 'mid' ? 'selected' : ''}>mid-month</option></select></div>`).join('')}
+    </div>`;
+}
+
+/** Save; if the other person saved in the meantime, merge their changes in first. */
+async function saveToDrive() {
+  if (SAVING) { SAVE_AGAIN = true; return SAVING; }
+  SAVING = (async () => {
+    try { computeUpcoming(); } catch (e) { console.error('computeUpcoming failed — saving anyway', e); }
+    const icon = document.getElementById('save-icon');
+    icon.textContent = '⟳';
+    try {
+      let merged = false;
+      if (driveFileId && DATA_VERSION) {
+        const m = await (await driveFetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?fields=version`)).json();
+        if (m.version && String(m.version) !== String(DATA_VERSION)) {
+          const remote = await (await driveFetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`)).json();
+          data = FPEngine.mergeData(DATA_BASE || {}, data, remote);
+          normaliseData(); merged = true;
+        }
+      }
+      const body = JSON.stringify(data, null, 2);
+      const meta = { name: DRIVE_FILE, mimeType: 'application/json' };
+      const multipart = `--bound\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(meta)}\r\n--bound\r\nContent-Type: application/json\r\n\r\n${body}\r\n--bound--`;
+      const url = driveFileId ? `https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=multipart&fields=id,version` : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,version';
+      const res = await driveFetch(url, { method: driveFileId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'multipart/related; boundary=bound' }, body: multipart });
+      if (!res.ok) throw new Error('Drive said ' + res.status);
+      const j = await res.json();
+      driveFileId = j.id || driveFileId; DATA_VERSION = j.version; LS.set('fp_file_id', driveFileId);
+      DATA_BASE = JSON.parse(body);
+      icon.textContent = '✓';
+      setTimeout(() => { icon.textContent = '💾'; }, 1800);
+      if (merged) { render(); toast('Merged in changes saved from the other phone'); }
+    } catch (e) { icon.textContent = '✗'; console.error(e); }
+  })();
+  try { await SAVING; } finally { SAVING = null; }
+  if (SAVE_AGAIN) { SAVE_AGAIN = false; return saveToDrive(); }
+}
+/** Coming back to the app: pick up what the other person saved. */
+async function refreshFromDrive() {
+  if (!accessToken || !driveFileId || SAVING || document.querySelector('#modal-container .modal')) return;
+  try {
+    const m = await (await driveFetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?fields=version`)).json();
+    if (!m.version || String(m.version) === String(DATA_VERSION)) return;
+    const remote = await (await driveFetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`)).json();
+    data = FPEngine.mergeData(DATA_BASE || {}, data, remote); normaliseData();
+    DATA_BASE = JSON.parse(JSON.stringify(remote)); DATA_VERSION = m.version;
+    ensureEngineData(); rebuildMerchantDatalist(); render();
+  } catch (e) {}
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshFromDrive(); });
 
 /* =================== UPCOMING ENGINE =================== */
 function computeUpcoming() {
@@ -644,7 +821,7 @@ function toggleSidebar() {
 
 /* =================== RENDER DISPATCHER =================== */
 function render() {
-  const titles = { dashboard: 'Dashboard', spend: 'Spending', owed: 'Owed to me', invest: 'Investments', smartspend: 'Which card?', strategy: 'Strategy', cards: 'Cards', merchants: 'Merchants', settings: 'Settings' };
+  const titles = { recon: 'Month-end check', advice: 'Advice & ghost tracker', dashboard: 'Dashboard', spend: 'Spending', owed: 'Owed to me', invest: 'Investments', smartspend: 'Which card?', strategy: 'Strategy', cards: 'Cards', merchants: 'Merchants', settings: 'Settings' };
   document.getElementById('page-title').textContent =
     currentView === 'profile' ? profileLabel(currentProfile) : titles[currentView] || '';
   const content = document.getElementById('page-content');
@@ -655,6 +832,8 @@ function render() {
   else if (currentView === 'smartspend') { content.innerHTML = renderSmartSpend(); restoreForm('ss'); }
   else if (currentView === 'spend') content.innerHTML = renderSpend();
   else if (currentView === 'owed') content.innerHTML = renderOwed();
+  else if (currentView === 'recon') content.innerHTML = renderRecon();
+  else if (currentView === 'advice') content.innerHTML = renderAdvice();
   else if (currentView === 'invest') content.innerHTML = renderInvest();
   else if (currentView === 'strategy') content.innerHTML = renderStrategy();
   else if (currentView === 'cards') content.innerHTML = renderCards();
@@ -711,8 +890,15 @@ function renderDashboard() {
     </tr>`).join('') : `<tr><td colspan="4"><div class="empty" style="padding:24px">No bills due this week</div></td></tr>`;
 
   const mtd = monthSummary(today().slice(0,7));
+  const rm = reconMonthFor(ME.profile), rp = reconProgress(ME.profile, rm);
+  const reconDue = rp.items && rp.done < rp.items && rm === today().slice(0, 7);
   return `
     ${rulesBanner()}
+    <div class="quick-row mobile-only">
+      <div class="quick-btn primary" onclick="openExpenseModal()">＋ Log expense</div>
+      <div class="quick-btn" onclick="navigate('smartspend')">✦ Which card?</div>
+    </div>
+    ${reconDue ? `<div class="banner" style="cursor:pointer;" onclick="reconPerson='${ME.profile}';reconMonth='${rm}';navigate('recon')">☑ <div><strong>Month-end check:</strong> ${rp.done} of ${rp.items} statements done for ${profileLabel(ME.profile)}. Tap to continue.</div></div>` : ''}
     <div class="stat-row">
       <div class="stat-card">
         <div class="label">Spent this month</div>
@@ -1033,28 +1219,27 @@ function updateBill(profile, type, idx) {
 // SG merchant database — loaded from merchants.json at runtime
 let SG_MERCHANTS = [];
 
-async function loadMerchantsDB() {
-  // Load merchants.json from Google Drive (same Drive scope as main data file)
-  try {
-    const q = encodeURIComponent("name='merchants.json' and trashed=false");
-    const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`, {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-    const json = await res.json();
-    if (json.files && json.files.length > 0) {
-      const fileId = json.files[0].id;
-      const dl = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
-      const db = await dl.json();
-      SG_MERCHANTS = db.merchants || [];
-      console.log('Loaded ' + SG_MERCHANTS.length + ' merchants from Drive merchants.json');
-    } else {
-      console.warn('merchants.json not found in Drive — upload it via Settings > Upload merchant DB');
-    }
-  } catch(e) {
-    console.warn('Drive merchants.json load failed', e);
+/** merchants.json: the household's copy (shared along with the planner), else one in your own Drive. */
+async function merchantsFileId() {
+  const known = [LS.get('fp_merchants_id'), data.settings && data.settings.household && data.settings.household.merchantsFileId].filter(Boolean);
+  for (const id of known) {
+    try { const r = await driveFetch(`https://www.googleapis.com/drive/v3/files/${id}?fields=id,trashed`); if (r.ok && !(await r.json()).trashed) return id; } catch (e) {}
   }
+  const q = encodeURIComponent("name='merchants.json' and trashed=false");
+  const json = await (await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&orderBy=modifiedTime desc&fields=files(id,ownedByMe)`)).json();
+  const f = (json.files || []).find(x => !x.ownedByMe) || (json.files || [])[0];
+  return f ? f.id : null;
+}
+async function loadMerchantsDB() {
+  try {
+    const fileId = await merchantsFileId();
+    if (fileId) {
+      const db = await (await driveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`)).json();
+      SG_MERCHANTS = db.merchants || [];
+      LS.set('fp_merchants_id', fileId);
+      if (data.settings && data.settings.household && !data.settings.household.merchantsFileId) data.settings.household.merchantsFileId = fileId;
+    } else console.warn('merchants.json not found in Drive — upload it via Settings > Upload merchant DB');
+  } catch(e) { console.warn('Drive merchants.json load failed', e); }
 }
 /* =================== CARDS =================== */
 function cardImgUrl(name) {
@@ -1501,27 +1686,12 @@ async function saveMerchantsDB(quiet) {
   }, null, 2);
 
   try {
-    // Check if merchants.json already exists
-    const q = encodeURIComponent("name='merchants.json' and trashed=false");
-    const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)`, {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-    const json = await res.json();
     const meta = { name: 'merchants.json', mimeType: 'application/json' };
-    if (json.files && json.files.length > 0) {
-      const fileId = json.files[0].id;
-      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'multipart/related; boundary=bound' },
-        body: `--bound\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(meta)}\r\n--bound\r\nContent-Type: application/json\r\n\r\n${dbJson}\r\n--bound--`
-      });
-    } else {
-      await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'multipart/related; boundary=bound' },
-        body: `--bound\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(meta)}\r\n--bound\r\nContent-Type: application/json\r\n\r\n${dbJson}\r\n--bound--`
-      });
-    }
+    const fileId = await merchantsFileId();
+    const body = `--bound\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(meta)}\r\n--bound\r\nContent-Type: application/json\r\n\r\n${dbJson}\r\n--bound--`;
+    const res = await driveFetch(fileId ? `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart&fields=id` : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
+      { method: fileId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'multipart/related; boundary=bound' }, body });
+    const saved = await res.json(); if (saved.id) { LS.set('fp_merchants_id', saved.id); data.settings.household.merchantsFileId = saved.id; }
     SG_MERCHANTS = allEntries;
     data.merchants = []; // Moved to DB — clear custom list
     saveToDrive();
@@ -1580,6 +1750,7 @@ function renderSettings() {
   const hist = (rs.history||[]).slice(-6).reverse().map(h => `<tr><td class="tabnum">${esc(h.version)}</td><td class="tabnum">${esc(h.appliedAt)}</td><td>${h.changes ?? '—'} change${h.changes===1?'':'s'}</td></tr>`).join('');
   return `
     ${rulesBanner()}
+    ${householdSettingsHtml()}
     ${accountsSettingsHtml()}
     <div class="section-header" style="margin-top:28px;"><h2>Card engine policy</h2></div>
     <div class="smart-spend-box">
@@ -1988,7 +2159,7 @@ function spendFormHtml(p, init) {
   init = init || {};
   const f = FORMS[p] = Object.assign({
     amount: '', date: today(), merchantText: '', merchant: '', mcc: '', category: '',
-    forProfile: currentView === 'profile' ? currentProfile : 'marvin',
+    forProfile: currentView === 'profile' ? currentProfile : (ME.profile || 'marvin'),
     channel: 'mobile_contactless', fcy: false, wallet: false, cardId: null, cardTouched: false, note: ''
   }, FORMS[p] && p !== 'qa' ? FORMS[p] : {}, init);
   const forChips = PROFILES.map(k => `<span class="chip ${f.forProfile===k?'on':''}" onclick="spendFormSet('${p}','forProfile','${k}')">${profileLabel(k)}</span>`).join('');
@@ -1996,6 +2167,7 @@ function spendFormHtml(p, init) {
   return `<div id="${p}-form">
     <div class="form-grid sf-top ${p==='qa'?'with-date':''}">
       <div class="form-row sf-merchant"><label>Merchant</label>
+        ${(p === 'qa' || p === 'ss' || p === 'dash') && !f.merchantText ? recentMerchantChips(p, f.forProfile) : ''}
         <input id="${p}-merchant" list="merchant-list" autocomplete="off" placeholder="e.g. Cold Storage, GrabFood, Shopee, MCC 5812" value="${esc(f.merchantText)}"
           oninput="spendFormMerchant('${p}')" />
         <div class="hint" id="${p}-mhint"></div>
@@ -2034,7 +2206,9 @@ function spendFormMerchant(p) {
   if (r.fcy) document.getElementById(p + '-fcy').checked = true;
   const variants = (r.variants || []).map(m => `<span class="chip" style="padding:2px 8px;font-size:11px;" onclick="document.getElementById('${p}-merchant').value='${esc(merchantLabel(m)).replace(/'/g,"\\'")}';spendFormMerchant('${p}')">${esc(m.service || m.name)} · ${esc(m.mcc)}</span>`).join(' ');
   const srcLabel = { db: 'merchant DB', learned: 'learned', keyword: 'best guess', mcc: 'MCC', none: 'unknown — set MCC for accuracy' }[r.source] || r.source;
-  hint.innerHTML = `${esc(r.category || 'Other')}${f.mcc ? ' · MCC ' + esc(f.mcc) : ''} <span style="color:#2A4A6B;">(${srcLabel})</span>` + (variants ? `<div style="margin-top:4px;">Other services: ${variants}</div>` : '');
+  const unsure = (r.source === 'none' || r.source === 'keyword') && text.trim().length >= 3 && !/^\d{4}$/.test(text.trim());
+  hint.innerHTML = `${esc(r.category || 'Other')}${f.mcc ? ' · MCC ' + esc(f.mcc) : ''} <span style="color:#2A4A6B;">(${srcLabel})</span>` + (variants ? `<div style="margin-top:4px;">Other services: ${variants}</div>` : '') +
+    (unsure ? ` <a href="javascript:void 0" style="color:#00C896;" onclick="askClaudeMcc('${p}')">Not sure? Ask Claude for the MCC</a><div id="${p}-claude"></div>` : '');
   spendFormRefresh(p);
 }
 function spendFormRead(p) {
@@ -2100,6 +2274,58 @@ function logFromForm(p) {
   openExpenseModal({ merchantText: f.merchantText, merchant: f.merchant, mcc: f.mcc, category: f.category, amount: f.amount, forProfile: f.forProfile, channel: f.channel, fcy: f.fcy, wallet: f.wallet, mccManual: f.mccManual });
 }
 
+
+/* ---- quick picks & "ask Claude for the MCC" ---- */
+function recentMerchantChips(p, who) {
+  const since = new Date(Date.now() - 120 * 86400000).toISOString().slice(0, 10);
+  const counts = {};
+  (data.transactions || []).filter(t => t.date >= since && t.merchant && FPEngine.kindOf(t) === 'expense' && (!who || t.forProfile === who || t.paidBy === who))
+    .forEach(t => { const k = t.merchant; counts[k] = counts[k] || { n: 0, mcc: t.mcc, last: t.date }; counts[k].n++; if (t.date > counts[k].last) counts[k].last = t.date; });
+  const top = Object.entries(counts).sort((a, b) => b[1].n - a[1].n).slice(0, 10);
+  if (!top.length) return '';
+  return `<div class="recent-chips">${top.map(([m, v]) => `<span class="chip" onclick="pickRecentMerchant('${p}', ${esc(JSON.stringify(m))}, '${esc(v.mcc || '')}')">${esc(m)}</span>`).join('')}</div>`;
+}
+function pickRecentMerchant(p, m, mcc) {
+  const el = document.getElementById(p + '-merchant'); if (!el) return;
+  el.value = m; spendFormMerchant(p);
+  const f = FORMS[p];
+  if (mcc && !f.mcc) { f.mcc = mcc; document.getElementById(p + '-mcc').value = mcc; spendFormRefresh(p); }
+  document.getElementById(p + '-amount')?.focus();
+}
+function mccPromptText(name) {
+  return `Find the merchant category code (MCC) that "${name}" in Singapore posts with on credit card statements.
+Search HeyMax (heymax.ai merchant lookup), Dobin, The MileLion's MCC posts, MileLion/HardwareZone/Reddit r/singaporefi data points, and the merchant's payment provider if you can tell (e.g. Grab, Stripe, NETS, Adyen). If in-store, online and delivery post differently, say so.
+Reply with ONLY this JSON, nothing else:
+{"format":"fp-merchant","name":"${name.replace(/"/g, "'")}","mcc":"0000","category":"e.g. Dining","channel":"mobile_contactless | online | card_contactless | chip","confidence":"reported | typical | unverified","source":"site or post you relied on","notes":"anything that changes the MCC"}`;
+}
+async function askClaudeMcc(p) {
+  const name = (document.getElementById(p + '-merchant').value || '').trim();
+  const box = document.getElementById(p + '-claude'); if (!box) return;
+  const prompt = mccPromptText(name);
+  let copied = false; try { await navigator.clipboard.writeText(prompt); copied = true; } catch (e) {}
+  box.innerHTML = `<div class="claude-box">
+    <div style="font-size:12px;color:#8AABBF;margin-bottom:6px;">${copied ? '✓ Prompt copied.' : 'Copy this prompt:'} Paste it into a Claude chat, then paste Claude's reply below.</div>
+    ${copied ? '' : `<textarea rows="5" style="width:100%;font-size:12px;" readonly onclick="this.select()">${esc(prompt)}</textarea>`}
+    <textarea id="${p}-claude-reply" rows="3" style="width:100%;font-size:13px;margin-top:6px;" placeholder='Paste Claude&#39;s reply, e.g. {"format":"fp-merchant", …}'></textarea>
+    <button class="btn-secondary" style="margin-top:6px;" onclick="applyClaudeMcc('${p}')">Use this MCC</button></div>`;
+}
+function applyClaudeMcc(p) {
+  const raw = document.getElementById(p + '-claude-reply').value;
+  const m = raw.match(/\{[\s\S]*\}/);
+  let j; try { j = JSON.parse(m ? m[0] : raw); } catch (e) { alert("That doesn't look like Claude's JSON reply."); return; }
+  if (!/^\d{4}$/.test(String(j.mcc || ''))) { alert('The reply has no 4-digit MCC.'); return; }
+  const entry = { id: uid(), name: (j.name || document.getElementById(p + '-merchant').value).trim(), service: '', mcc: String(j.mcc), category: j.category || FPEngine.categoryForMcc(String(j.mcc)),
+    channel: j.channel && CHANNELS.some(c => c.id === j.channel) ? j.channel : undefined, confidence: j.confidence || 'unverified', notes: [j.notes, j.source && 'Source: ' + j.source].filter(Boolean).join(' · '), addedBy: ME.email, addedAt: today() };
+  data.merchants = (data.merchants || []).filter(x => x.name.toLowerCase() !== entry.name.toLowerCase());
+  data.merchants.push(entry);
+  rebuildMerchantDatalist();
+  const el = document.getElementById(p + '-merchant'); el.value = entry.name;
+  FORMS[p].mccManual = false; spendFormMerchant(p);
+  if (entry.channel) spendFormSet(p, 'channel', entry.channel);
+  saveToDrive();
+  toast(`Saved ${esc(entry.name)} as MCC ${entry.mcc} (${esc(entry.confidence)}) — it's in your merchant list now`);
+}
+
 /* ---------------- expense modal (add / edit) ---------------- */
 function openExpenseModal(init) {
   let editing = null;
@@ -2140,7 +2366,7 @@ function qaSyncCardSelect() {
   const f = FORMS.qa;
   const pool = FPEngine.candidateCards(f.forProfile, data.cards, engineSettings());
   const others = data.cards.filter(c => !pool.includes(c));
-  const opt = c => `<option value="${c.id}" ${c.id===f.cardId?'selected':''}>${esc(c.name)} (${profileLabel(c.profile)})${f.lastRec && f.lastRec.pick && f.lastRec.pick.card.id===c.id ? ' ★ best' : ''}</option>`;
+  const opt = c => `<option value="${c.id}" ${c.id===f.cardId?'selected':''}>${esc(c.name)}${c.name.toLowerCase().includes(profileLabel(c.profile).toLowerCase()) ? '' : ' (' + profileLabel(c.profile) + ')'}${f.lastRec && f.lastRec.pick && f.lastRec.pick.card.id===c.id ? ' ★ best' : ''}</option>`;
   const accts = (data.accounts || []).map(a => `<option value="acct:${a.id}" ${f.cardId==='acct:'+a.id?'selected':''}>${esc(a.name)}</option>`).join('');
   sel.innerHTML = pool.map(opt).join('') + (others.length ? `<optgroup label="Other cards">${others.map(opt).join('')}</optgroup>` : '') +
     (accts ? `<optgroup label="PayNow / bank / wallet">${accts}</optgroup>` : '') + `<option value="__cash" ${f.cardId==='__cash'?'selected':''}>Cash / other (no card)</option>`;
@@ -2457,13 +2683,14 @@ function sourceFromValue(v) {
   if (v && v.startsWith('acct:')) { const a = accountById(v.slice(5)); return a ? { isCard: false, id: a.id, name: a.name, owner: a.owner || 'marvin' } : null; }
   const c = cardById(v); return c ? { isCard: true, id: c.id, name: c.name, owner: c.profile } : null;
 }
-function openImportModal() {
+function openImportModal(preVal, recon) {
   IMPORT = { rows: [] };
-  const cardOpts = data.cards.map(c => `<option value="${c.id}">${esc(c.name)} (${profileLabel(c.profile)})</option>`).join('');
-  const acctOpts = (data.accounts || []).map(a => `<option value="acct:${a.id}">${esc(a.name)}</option>`).join('');
+  const sel = v => (preVal && preVal === v ? 'selected' : '');
+  const cardOpts = data.cards.map(c => `<option value="${c.id}" ${sel(c.id)}>${esc(c.name)} (${profileLabel(c.profile)})</option>`).join('');
+  const acctOpts = (data.accounts || []).map(a => `<option value="acct:${a.id}" ${sel('acct:' + a.id)}>${esc(a.name)}</option>`).join('');
   showModal(`
-    <h3>Import a statement</h3>
-    <p style="font-size:12.5px;color:#8AABBF;margin:-8px 0 14px;">Card, bank account or wallet. CSV export, PDF, or text copied from internet banking. Nothing leaves your browser; only lines you confirm are saved to your Drive.</p>
+    <h3>${recon ? 'Reconcile a statement' : 'Import a statement'}</h3>
+    <p style="font-size:12.5px;color:#8AABBF;margin:-8px 0 14px;">Card, bank account or wallet. CSV export, PDF, or text copied from internet banking. Lines are checked against what you already logged; nothing is saved until you confirm.</p>
     <div class="form-grid">
       <div class="form-row"><label>Statement for</label><select id="im-card"><optgroup label="Cards">${cardOpts}</optgroup>${acctOpts ? `<optgroup label="Bank accounts & wallets">${acctOpts}</optgroup>` : ''}</select>
         <div class="hint">Bank account missing? Add it in Settings → Your accounts.</div></div>
@@ -2471,11 +2698,13 @@ function openImportModal() {
     </div>
     <div class="form-row"><label>File (.csv, .pdf, .txt)</label><input id="im-file" type="file" accept=".csv,.pdf,.txt,text/csv,application/pdf"/></div>
     <div class="form-row"><label>…or paste statement lines</label><textarea id="im-text" rows="6" style="font-family:monospace;font-size:12px;" placeholder="12 OCT  GRAB*FOOD SINGAPORE      23.40&#10;13 OCT  COLD STORAGE JELITA        86.15"></textarea></div>
+    <div class="hint">Scanned PDF, password trouble or odd layout? Use <a href="javascript:void 0" style="color:#00C896;" onclick="closeModal();openClaudeStatementHelp()">Prepare with Claude</a> instead.</div>
     <div id="im-status" class="hint"></div>
     <div class="modal-footer">
       <button class="btn-secondary" onclick="closeModal()">Cancel</button>
       <button class="btn-primary" onclick="readStatement()">Read statement</button>
     </div>`);
+  IMPORT.recon = recon || null;
 }
 async function readStatement() {
   const status = document.getElementById('im-status');
@@ -2497,58 +2726,94 @@ async function readStatement() {
     } else if (file) parsed = FPEngine.parseStatementText(await file.text(), { refDate, isCard });
     else parsed = FPEngine.parseStatementText(pasted, { refDate, isCard });
   } catch (e) { status.innerHTML = `<span class="text-red">${esc(e.message || e)}</span>`; return; }
-  if (!parsed.length) { status.innerHTML = '<span class="text-red">No transaction lines found. Lines need a date at the start and an amount at the end.</span>'; return; }
-  const existing = new Set((data.transactions || []).map(t => FPEngine.txnFingerprint(t)));
+  if (!parsed.length) { status.innerHTML = '<span class="text-red">No transaction lines found. Lines need a date at the start and an amount at the end. Try "Prepare with Claude".</span>'; return; }
+  startReview(srcVal, parsed, IMPORT && IMPORT.recon);
+}
+/** Classify statement lines, check them against your log, and show the review. */
+function startReview(srcVal, parsed, recon, queue) {
+  const src = sourceFromValue(srcVal);
   const ctx = flowCtx(src.id, src.isCard);
-  IMPORT = { src, srcVal, batch: 'imp_' + uid(), rows: parsed.map(r => {
+  const rows = parsed.map(r => {
     const g = FPEngine.categorise(r.description, merchantPool(), data.merchantMappings);
     const f = FPEngine.classifyFlow(r, ctx);
     const row = { ...r, merchant: g.confidence === 'none' && f.kind !== 'expense' ? (f.reason || g.merchant) : g.merchant, mcc: g.mcc || '', category: g.category,
-      channel: src.isCard ? (g.channel || 'chip') : 'paynow', fcy: g.fcy, forProfile: src.owner, confidence: g.confidence,
+      channel: src.isCard ? (g.channel || 'chip') : 'paynow', fcy: g.fcy || !!r.fcy, forProfile: src.owner, confidence: g.confidence,
       kind: f.kind, reason: f.reason, review: f.review.slice(), direction: r.credit ? 'in' : 'out' };
     if (row.kind === 'expense' && g.confidence === 'none' && !row.review.length) row.review.push('unknown');
-    const fp = { cardId: src.isCard ? src.id : null, cardName: src.isCard ? null : src.name, date: r.date, amount: r.amount, rawDescription: r.description };
-    row.duplicate = existing.has(FPEngine.txnFingerprint(fp)) || existing.has(FPEngine.txnFingerprint({ ...fp, cardName: src.name }));
-    row.include = !row.duplicate;
     row.guess = { merchant: row.merchant, mcc: row.mcc, channel: row.channel, kind: row.kind };
     return row;
-  }) };
+  });
+  const rc = FPEngine.reconcileStatement(rows.map(r => ({ date: r.date, amount: r.amount, description: r.description, credit: r.direction === 'in' })), data.transactions,
+    { cardId: src.isCard ? src.id : null, accountId: src.isCard ? null : src.id, cardName: src.name });
+  rows.forEach(r => { r.recon = 'new'; r.include = true; });
+  rc.duplicates.forEach(i => { rows[i].recon = 'duplicate'; rows[i].include = false; });
+  rc.matched.forEach(m => { rows[m.i].recon = 'matched'; rows[m.i].matchIds = m.txnIds; rows[m.i].how = m.how; rows[m.i].include = false; });
+  rc.differs.forEach(d => { rows[d.i].recon = 'differs'; rows[d.i].matchIds = [d.txnId]; rows[d.i].diff = d.diff; rows[d.i].useStatement = true; rows[d.i].include = false; });
+  // lines that aren't spending (card payments, transfers you never log) don't need asking about
+  rows.forEach(r => { if (r.recon === 'new' && !['expense', 'paid_for_others', 'refund', 'income'].includes(r.kind)) r.recon = 'other'; });
+  const missing = rc.missing.map(id => ({ id, action: 'keep' }));
+  IMPORT = { src, srcVal, batch: 'imp_' + uid(), rows, missing, period: { from: rc.from, to: rc.to }, recon: recon || null, queue: queue || [], showMatched: false };
   renderImportPreview();
 }
 function renderImportPreview() {
   const src = IMPORT.src;
   const inc = IMPORT.rows.filter(r => r.include);
   const spend = inc.filter(r => r.kind === 'expense').reduce((s, r) => s + r.amount, 0);
-  const nT = inc.filter(r => r.kind === 'transfer').length, nI = inc.filter(r => r.kind === 'income' || r.kind === 'refund').length;
+  const cnt = k => IMPORT.rows.filter(r => r.recon === k).length;
   const sel = 'background:#0D1B2A;border:1px solid #2A4A6B;color:#F0F4F8;border-radius:5px;padding:4px 6px;font-size:12px;width:100%;';
-  const rows = IMPORT.rows.map((r, i) => `<tr style="${r.include ? '' : 'opacity:.45;'}">
-    <td><input type="checkbox" style="width:auto;" ${r.include?'checked':''} onchange="IMPORT.rows[${i}].include=this.checked;renderImportPreview()"/></td>
+  const order = { differs: 0, new: 1, other: 2, matched: 3, duplicate: 4 };
+  const idx = IMPORT.rows.map((r, i) => i).filter(i => IMPORT.showMatched || !['matched', 'duplicate'].includes(IMPORT.rows[i].recon))
+    .sort((a, b) => order[IMPORT.rows[a].recon] - order[IMPORT.rows[b].recon] || (IMPORT.rows[a].date < IMPORT.rows[b].date ? -1 : 1));
+  const txnById = id => data.transactions.find(t => t.id === id);
+  const statusCell = (r, i) => {
+    if (r.recon === 'matched') return `<span class="pill pill-green">✓ logged</span>${r.how && r.how !== 'exact' ? `<div class="hint">${esc(r.how)}</div>` : ''}`;
+    if (r.recon === 'duplicate') return '<span class="pill pill-blue">imported before</span>';
+    if (r.recon === 'differs') { const t = txnById(r.matchIds[0]); return `<span class="pill pill-amber">amount differs</span><div class="hint">You logged $${fmtAmt(t ? t.amount : 0)} (${esc(t ? t.merchant : '')})</div>
+      <select style="${sel}margin-top:3px;" onchange="IMPORT.rows[${i}].useStatement=this.value==='s'"><option value="s" ${r.useStatement ? 'selected' : ''}>Use statement amount</option><option value="m" ${r.useStatement ? '' : 'selected'}>Keep mine</option></select>`; }
+    if (r.recon === 'new') return `<label style="display:flex;gap:6px;align-items:center;"><input type="checkbox" style="width:auto;" ${r.include ? 'checked' : ''} onchange="IMPORT.rows[${i}].include=this.checked;renderImportPreview()"/><span class="pill pill-red">not logged</span></label><div class="hint">add it?</div>`;
+    return `<label style="display:flex;gap:6px;align-items:center;"><input type="checkbox" style="width:auto;" ${r.include ? 'checked' : ''} onchange="IMPORT.rows[${i}].include=this.checked;renderImportPreview()"/><span class="hint">${esc(KIND_LABELS[r.kind] || r.kind)}</span></label>`;
+  };
+  const rows = idx.map(i => { const r = IMPORT.rows[i]; const editable = r.include; return `<tr style="${r.include || r.recon === 'differs' ? '' : 'opacity:.6;'}">
+    <td style="width:130px;">${statusCell(r, i)}</td>
     <td class="tabnum" style="white-space:nowrap;">${esc(r.date.slice(5))}</td>
     <td style="max-width:220px;"><div style="font-size:11px;color:#4A6580;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(r.description)}">${esc(r.description)}</div>
-      <input value="${esc(r.merchant)}" onchange="IMPORT.rows[${i}].merchant=this.value"/>
-      ${r.duplicate ? '<span class="pill pill-amber">already logged</span>' : ''}${r.review.includes('unknown') ? '<span class="pill pill-red">unknown</span>' : ''}${r.review.some(x => x !== 'unknown') ? '<span class="pill pill-red">check</span>' : ''}${r.reason && r.kind !== 'expense' ? `<div class="hint">${esc(r.reason)}</div>` : ''}</td>
-    <td style="width:120px;"><select style="${sel}" onchange="IMPORT.rows[${i}].kind=this.value;renderImportPreview()">${Object.entries(KIND_LABELS).map(([k, l]) => `<option value="${k}" ${r.kind===k?'selected':''}>${l}</option>`).join('')}</select></td>
-    <td style="width:66px;"><input value="${esc(r.mcc)}" ${r.kind==='expense'||r.kind==='paid_for_others'?'':'disabled'} onchange="IMPORT.rows[${i}].mcc=this.value.trim();IMPORT.rows[${i}].category=FPEngine.categoryForMcc(this.value.trim())" placeholder="MCC"/></td>
-    <td style="width:112px;">${src.isCard ? `<select style="${sel}" onchange="IMPORT.rows[${i}].channel=this.value">${CHANNELS.map(c => `<option value="${c.id}" ${r.channel===c.id?'selected':''}>${c.label}</option>`).join('')}</select>` : '<span class="hint">PayNow / bank</span>'}</td>
-    <td style="width:104px;">${r.kind === 'expense' ? `<select style="${sel}" onchange="IMPORT.rows[${i}].forProfile=this.value">${PROFILES.map(p => `<option value="${p}" ${r.forProfile===p?'selected':''}>${profileLabel(p)}</option>`).join('')}</select>` : '<span class="hint">—</span>'}</td>
+      ${editable ? `<input value="${esc(r.merchant)}" onchange="IMPORT.rows[${i}].merchant=this.value"/>` : `<div>${esc(r.merchant)}</div>`}
+      ${r.review.some(x => x !== 'unknown') && editable ? '<span class="pill pill-red">check</span>' : ''}${r.reason && r.kind !== 'expense' && editable ? `<div class="hint">${esc(r.reason)}</div>` : ''}</td>
+    <td style="width:120px;">${editable ? `<select style="${sel}" onchange="IMPORT.rows[${i}].kind=this.value;renderImportPreview()">${Object.entries(KIND_LABELS).map(([k, l]) => `<option value="${k}" ${r.kind===k?'selected':''}>${l}</option>`).join('')}</select>` : ''}</td>
+    <td style="width:66px;">${editable ? `<input value="${esc(r.mcc)}" ${r.kind==='expense'||r.kind==='paid_for_others'?'':'disabled'} onchange="IMPORT.rows[${i}].mcc=this.value.trim();IMPORT.rows[${i}].category=FPEngine.categoryForMcc(this.value.trim())" placeholder="MCC"/>` : ''}</td>
+    <td style="width:112px;">${editable && src.isCard ? `<select style="${sel}" onchange="IMPORT.rows[${i}].channel=this.value">${CHANNELS.map(c => `<option value="${c.id}" ${r.channel===c.id?'selected':''}>${c.label}</option>`).join('')}</select>` : ''}</td>
+    <td style="width:104px;">${editable && r.kind === 'expense' ? `<select style="${sel}" onchange="IMPORT.rows[${i}].forProfile=this.value">${PROFILES.map(p => `<option value="${p}" ${r.forProfile===p?'selected':''}>${profileLabel(p)}</option>`).join('')}</select>` : ''}</td>
     <td class="tabnum" style="text-align:right;white-space:nowrap;">${r.direction==='in'?'+':''}$${fmtAmt(r.amount)}${r.fcy ? '<div class="hint">FCY</div>' : ''}</td>
-  </tr>`).join('');
+  </tr>`; }).join('');
+  const miss = IMPORT.missing.map((m, k) => { const t = txnById(m.id); if (!t) return ''; return `<tr><td class="tabnum">${esc(t.date.slice(5))}</td><td>${esc(t.merchant)}${t.note ? `<div class="hint">${esc(t.note)}</div>` : ''}</td><td class="tabnum" style="text-align:right;">$${fmtAmt(t.amount)}</td>
+    <td><select style="${sel}" onchange="IMPORT.missing[${k}].action=this.value">${[['keep', 'Keep — not posted yet'], ['other', 'Wrong card — fix later'], ['delete', 'Delete — didn\'t happen']].map(([v, l]) => `<option value="${v}" ${m.action===v?'selected':''}>${l}</option>`).join('')}</select></td></tr>`; }).join('');
+  const nNew = IMPORT.rows.filter(r => r.recon === 'new' && r.include).length;
   showModal(`
-    <h3>Review ${IMPORT.rows.length} lines — ${esc(src.name)}</h3>
-    <p style="font-size:12.5px;color:#8AABBF;margin:-8px 0 12px;">Type, merchant, MCC and payment method are guessed from the description. Transfers between your accounts and card bill payments are kept out of spending. Anything marked <span class="pill pill-red">check</span> also goes to your review list. Corrections are remembered for next time.</p>
-    <div style="max-height:55vh;overflow:auto;"><table class="data-table mini-table">
+    <h3>${esc(src.name)} — ${IMPORT.rows.length} lines${IMPORT.period.from ? ` · ${esc(IMPORT.period.from)} to ${esc(IMPORT.period.to)}` : ''}</h3>
+    <div class="stat-row" style="margin:-6px 0 12px;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));">
+      <div class="stat-card" style="padding:10px 12px;"><div class="label">Match your log</div><div class="value tabnum text-green" style="font-size:20px;">${cnt('matched')}</div></div>
+      <div class="stat-card" style="padding:10px 12px;"><div class="label">Amount differs</div><div class="value tabnum ${cnt('differs') ? 'text-amber' : ''}" style="font-size:20px;">${cnt('differs')}</div></div>
+      <div class="stat-card" style="padding:10px 12px;"><div class="label">You didn't log</div><div class="value tabnum ${cnt('new') ? 'text-red' : ''}" style="font-size:20px;">${cnt('new')}</div></div>
+      <div class="stat-card" style="padding:10px 12px;"><div class="label">Logged, not on statement</div><div class="value tabnum ${IMPORT.missing.length ? 'text-amber' : ''}" style="font-size:20px;">${IMPORT.missing.length}</div></div>
+    </div>
+    <p style="font-size:12.5px;color:#8AABBF;margin:0 0 10px;">Lines that match what you logged are linked, not added again. Tick the ones you didn't log to add them. Card payments and transfers between your own accounts stay out of spending.
+      <a href="javascript:void 0" style="color:#00C896;" onclick="IMPORT.showMatched=!IMPORT.showMatched;renderImportPreview()">${IMPORT.showMatched ? 'Hide' : 'Show'} matched lines</a></p>
+    <div style="max-height:46vh;overflow:auto;"><table class="data-table mini-table">
       <thead><tr><th></th><th>Date</th><th>Merchant</th><th>Type</th><th>MCC</th><th>Paid by</th><th>For</th><th style="text-align:right;">Amount</th></tr></thead>
-      <tbody>${rows}</tbody></table></div>
+      <tbody>${rows || '<tr><td colspan="8"><div class="empty" style="padding:16px;">Everything on this statement matches what you logged ✓</div></td></tr>'}</tbody></table></div>
+    ${miss ? `<div style="font-size:11.5px;font-weight:600;color:#4A6580;letter-spacing:.06em;margin:14px 0 4px;">YOU LOGGED THESE ON ${esc(src.name.toUpperCase())}, BUT THEY'RE NOT ON THIS STATEMENT</div>
+      <div style="max-height:22vh;overflow:auto;"><table class="data-table mini-table"><tbody>${miss}</tbody></table></div>` : ''}
     <div class="modal-footer" style="align-items:center;">
-      <span style="margin-right:auto;font-size:12.5px;color:#8AABBF;">${inc.length} to import · $${fmtAmt(spend)} spending${nT ? ` · ${nT} transfer${nT!==1?'s':''}` : ''}${nI ? ` · ${nI} money in` : ''}</span>
-      <button class="btn-secondary" onclick="openImportModal()">Back</button>
-      <button class="btn-primary" onclick="commitImport()" ${inc.length?'':'disabled'}>Import ${inc.length}</button>
+      <span style="margin-right:auto;font-size:12.5px;color:#8AABBF;">${inc.length} to add${nNew ? ` (${nNew} you hadn't logged)` : ''} · $${fmtAmt(spend)} spending</span>
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="commitImport()">Confirm${IMPORT.queue.length ? ' & next' : ''}</button>
     </div>`);
   document.querySelector('#modal-container .modal').classList.add('wide');
 }
 function commitImport() {
   const src = IMPORT.src;
-  let n = 0, learned = 0;
+  let n = 0, learned = 0, linked = 0, fixed = 0, removed = 0;
+  const now = new Date().toISOString();
   IMPORT.rows.filter(r => r.include).forEach(r => {
     const txn = {
       id: 'tx_' + uid() + n, date: r.date, postDate: r.postDate || null, amount: Math.round(r.amount * 100) / 100,
@@ -2556,17 +2821,37 @@ function commitImport() {
       channel: r.channel, fcy: !!r.fcy, wallet: false, forProfile: r.forProfile,
       kind: r.kind, direction: r.direction, review: r.review.filter(x => r.kind === r.guess.kind || x === 'unknown'),
       cardId: src.isCard ? src.id : null, accountId: src.isCard ? null : src.id, cardName: src.name, paidBy: src.owner,
-      source: 'import', importBatch: IMPORT.batch, rawDescription: r.description, reviewed: false, createdAt: new Date().toISOString(),
+      source: 'import', importBatch: IMPORT.batch, rawDescription: r.description, reviewed: false, createdAt: now,
+      reconciled: true, stmtLine: IMPORT.batch,
     };
+    if (r.recon === 'new') txn.notLogged = true;
     if (r.kind === 'expense' && (r.merchant !== r.guess.merchant || r.mcc !== r.guess.mcc || r.channel !== r.guess.channel)) { learnMapping(r.description, txn); learned++; }
     if (r.kind !== r.guess.kind && learnKindRule(r.description, r.kind)) learned++;
     data.transactions.push(txn); n++;
   });
+  IMPORT.rows.filter(r => (r.recon === 'matched' || r.recon === 'differs') && r.matchIds).forEach(r => {
+    r.matchIds.forEach(id => {
+      const t = data.transactions.find(x => x.id === id); if (!t) return;
+      t.reconciled = true; t.stmtLine = IMPORT.batch; t.postDate = t.postDate || r.postDate || null;
+      if (!t.rawDescription) t.rawDescription = r.description;
+      if (r.recon === 'differs' && r.useStatement) { t.amount = Math.round(r.amount * 100) / 100; t.edited = true; fixed++; }
+      linked++;
+    });
+  });
+  const del = new Set(IMPORT.missing.filter(m => m.action === 'delete').map(m => m.id));
+  IMPORT.missing.filter(m => m.action === 'other').forEach(m => { const t = data.transactions.find(x => x.id === m.id); if (t) { t.review = Array.from(new Set((t.review || []).concat('wrong-card'))); t.reviewed = false; } });
+  if (del.size) { data.transactions = data.transactions.filter(t => !del.has(t.id)); removed = del.size; }
   const paired = FPEngine.pairTransfers(data.transactions, { onlyIds: data.transactions.filter(t => t.importBatch === IMPORT.batch).map(t => t.id) });
-  const skipped = IMPORT.rows.length - n;
+  const notLogged = IMPORT.rows.filter(r => r.recon === 'new' && r.include).length;
+  const counts = { lines: IMPORT.rows.length, matched: IMPORT.rows.filter(r => r.recon === 'matched').length, differs: IMPORT.rows.filter(r => r.recon === 'differs').length, added: n, notLogged, missing: IMPORT.missing.length, removed };
+  const rc = IMPORT.recon || { month: reconMonthFor(ME.profile), key: IMPORT.srcVal };
+  data.recon = data.recon || {}; data.recon[rc.month] = data.recon[rc.month] || {};
+  data.recon[rc.month][IMPORT.srcVal] = { status: 'imported', at: today(), by: ME.email, counts, period: IMPORT.period };
+  const queue = IMPORT.queue || [], recon = IMPORT.recon;
   IMPORT = null; closeModal(); saveToDrive();
-  spendMonth = null; navigate('spend');
-  toast(`Imported ${n} line${n!==1?'s':''} for ${esc(src.name)}${skipped ? ` · skipped ${skipped}` : ''}${paired ? ` · matched ${paired} transfer${paired!==1?'s':''} between your accounts` : ''}${learned ? ` · learned ${learned} correction${learned!==1?'s':''}` : ''}`, 5000);
+  toast(`${esc(src.name)}: ${linked} matched your log${fixed ? `, ${fixed} amount${fixed!==1?'s':''} corrected` : ''}${n ? ` · added ${n}${notLogged ? ` (${notLogged} you hadn't logged)` : ''}` : ''}${removed ? ` · removed ${removed}` : ''}${paired ? ` · matched ${paired} transfer${paired!==1?'s':''}` : ''}${learned ? ` · learned ${learned} correction${learned!==1?'s':''}` : ''}`, 6000);
+  if (queue.length) { const next = queue.shift(); startReview(next.srcVal, next.lines, recon, queue); return; }
+  if (recon) navigate('recon'); else { spendMonth = null; navigate('spend'); }
 }
 async function loadPdfJs() {
   if (window.pdfjsLib) return;
@@ -3236,6 +3521,262 @@ function saveInvValue() {
   inv.snapshots.push({ id: 'inv_' + uid(), accountId, date, valueSgd: Math.round(v * 100) / 100, source: 'manual' });
   inv.snapshots.sort((a, b) => (a.date < b.date ? -1 : 1));
   closeModal(); saveToDrive(); render();
+}
+
+
+/* =====================================================================
+   MONTH-END RECONCILIATION
+   ===================================================================== */
+let reconPerson = null, reconMonth = null;
+/** Which statement month someone is closing today: month-end people close the current month from the 25th; mid-month people from the 12th. */
+function reconMonthFor(person, d) {
+  d = d || today();
+  const hh = data.settings.household || {};
+  const when = (hh.reconDay || { marvin: 'end', wife: 'mid' })[person] || 'end';
+  const day = Number(d.slice(8, 10)), ym = d.slice(0, 7);
+  const prev = (() => { const [y, m] = ym.split('-').map(Number); return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`; })();
+  return day >= (when === 'mid' ? 12 : 25) ? ym : prev;
+}
+function reconItems(person) {
+  const jointBy = (data.settings.household || {}).jointReconciler || 'marvin';
+  const cards = data.cards.filter(c => !c.archived && (c.profile === person || (c.profile === 'joint' && person === jointBy)))
+    .map(c => ({ key: c.id, name: c.name, kind: 'card', statementDay: c.cycleDate }));
+  const accts = (data.accounts || []).filter(a => !a.archived && ((a.owner || 'marvin') === person || (a.owner === 'joint' && person === jointBy)))
+    .map(a => ({ key: 'acct:' + a.id, name: a.name, kind: a.type || 'bank' }));
+  return cards.concat(accts);
+}
+function reconState(month, key) { return ((data.recon || {})[month] || {})[key] || null; }
+function setReconStatus(month, key, status) {
+  data.recon = data.recon || {}; data.recon[month] = data.recon[month] || {};
+  data.recon[month][key] = Object.assign({}, data.recon[month][key] || {}, { status, at: today(), by: ME.email });
+  saveToDrive(); render();
+}
+function reconProgress(person, month) {
+  const items = reconItems(person);
+  const done = items.filter(it => { const st = reconState(month, it.key); return st && (st.status === 'done' || st.status === 'skipped'); }).length;
+  return { items: items.length, done };
+}
+function renderRecon() {
+  reconPerson = reconPerson || (ME.profile === 'wife' ? 'wife' : 'marvin');
+  reconMonth = reconMonth || reconMonthFor(reconPerson);
+  const items = reconItems(reconPerson);
+  const months = [...new Set([reconMonthFor(reconPerson), ...Object.keys(data.recon || {})])].sort().reverse();
+  const [y, m] = reconMonth.split('-').map(Number);
+  const mLabel = new Date(Date.UTC(y, m - 1, 1)).toLocaleString('en-SG', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const prog = reconProgress(reconPerson, reconMonth);
+  const rows = items.map(it => {
+    const st = reconState(reconMonth, it.key);
+    const c = st && st.counts;
+    const pill = !st ? '<span class="pill pill-red">to do</span>' : st.status === 'done' ? '<span class="pill pill-green">done</span>' : st.status === 'skipped' ? '<span class="pill pill-blue">no statement</span>' : '<span class="pill pill-amber">imported — check</span>';
+    const detail = c ? `${c.matched} matched · ${c.differs ? c.differs + ' amount fixes · ' : ''}${c.notLogged ? `<span class="text-red">${c.notLogged} you hadn't logged</span> · ` : ''}${c.missing ? `<span class="text-amber">${c.missing} logged but not on statement</span>` : 'nothing missing'}` : (it.statementDay ? `statement around the ${esc(String(it.statementDay))}${/^\d+$/.test(String(it.statementDay)) ? ordinal(Number(it.statementDay)) : ''}` : '');
+    return `<tr>
+      <td><strong>${esc(it.name)}</strong><div class="hint">${detail}</div></td>
+      <td>${pill}</td>
+      <td style="white-space:nowrap;text-align:right;">
+        <button class="btn-primary" style="font-size:12px;padding:6px 12px;" onclick="openImportModal('${it.key}', {month:'${reconMonth}', key:'${it.key}'})">${st ? 'Re-upload' : 'Upload'}</button>
+        ${st && st.status !== 'done' ? `<button class="btn-secondary" style="font-size:12px;padding:6px 10px;" onclick="setReconStatus('${reconMonth}','${it.key}','done')">✓ Done</button>` : ''}
+        ${!st ? `<button class="btn-secondary" style="font-size:12px;padding:6px 10px;" title="Card not used / no statement this month" onclick="setReconStatus('${reconMonth}','${it.key}','skipped')">Skip</button>` : ''}
+      </td></tr>`;
+  }).join('');
+  const unloggedOpen = (data.transactions || []).filter(t => t.notLogged && !t.reviewed && (t.paidBy === reconPerson || t.forProfile === reconPerson));
+  return `
+    <div class="tabs-scroll" style="margin-bottom:14px;"><div class="chip-row">
+      ${['marvin','wife'].map(p => `<span class="chip ${reconPerson===p?'on':''}" onclick="reconPerson='${p}';reconMonth=reconMonthFor('${p}');render()">${profileLabel(p)}</span>`).join('')}
+      <select onchange="reconMonth=this.value;render()" style="background:#0D1B2A;border:1px solid #2A4A6B;color:#F0F4F8;border-radius:20px;padding:5px 10px;font-size:12.5px;">${months.map(x => `<option value="${x}" ${x===reconMonth?'selected':''}>${x}</option>`).join('')}</select>
+    </div></div>
+    <div class="banner" style="justify-content:space-between;">
+      <div><strong>${profileLabel(reconPerson)} · ${esc(mLabel)} statements</strong> — ${prog.done} of ${prog.items} done
+        <div class="bar-track" style="margin-top:6px;width:220px;max-width:60vw;"><div class="bar-fill" style="width:${prog.items ? Math.round(prog.done / prog.items * 100) : 0}%;"></div></div></div>
+      <button class="btn-secondary" onclick="openClaudeStatementHelp()">✦ Prepare with Claude</button>
+    </div>
+    <ol style="font-size:13px;color:#8AABBF;line-height:1.7;margin:0 0 14px 18px;padding:0;">
+      <li>Download this month's statement PDF for each card and account below (or CSV where the bank offers it).</li>
+      <li>Tap <strong style="color:#F0F4F8;">Upload</strong> on each line. The app matches every statement line to what you logged and asks about anything you didn't.
+        Scanned PDFs (HSBC), password problems or a pile of files at once: use <strong style="color:#F0F4F8;">Prepare with Claude</strong> and import the one file Claude gives you.</li>
+      <li>Fix anything flagged, then tick <strong style="color:#F0F4F8;">Done</strong>. Cards you didn't use: <strong style="color:#F0F4F8;">Skip</strong>.</li>
+    </ol>
+    <div class="table-wrap" style="overflow-x:auto;"><table class="data-table"><thead><tr><th>Statement</th><th>Status</th><th></th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="3"><div class="empty" style="padding:18px;">No cards or accounts for this person yet</div></td></tr>'}</tbody></table></div>
+    ${unloggedOpen.length ? `<div class="banner" style="margin-top:14px;">Found on statements but not logged by you: <strong>${unloggedOpen.length}</strong> line${unloggedOpen.length!==1?'s':''} ($${fmtAmt(unloggedOpen.reduce((s2, t) => s2 + Number(t.amount || 0), 0))}). They're in Spending's review list — check who they were for.
+      <button class="btn-secondary" onclick="spendMonth=null;navigate('spend')">Review</button></div>` : ''}
+    <div class="hint" style="margin-top:12px;">Joint account and joint cards are on ${profileLabel((data.settings.household || {}).jointReconciler || 'marvin')}'s list. Change who reconciles when in Settings → Household.</div>`;
+}
+function ordinal(n) { return [, 'st', 'nd', 'rd'][(n % 100 >> 3 ^ 1) && n % 10] || 'th'; }
+
+/* ---- Claude prepares statements → one JSON file ---- */
+function claudeStatementPrompt() {
+  const people = { marvin: 'Marvin', wife: 'Caroline' };
+  const items = ['marvin', 'wife'].flatMap(p => reconItems(p).map(it => `- ${it.name} (${people[p]})`)).join('\n');
+  return `I'm attaching bank and credit-card statement PDFs (and maybe screenshots) for my household finance app. Read every one, using OCR if a PDF has no text, and convert them into ONE JSON file.
+
+My cards and accounts (use these exact names in "source"):
+${items}
+
+Output format (JSON only):
+{"format":"fp-statements","version":1,"statements":[
+  {"source":"<one of the names above>","owner":"Marvin|Caroline","institution":"UOB","product":"Lady's Card","last4":"1234",
+   "statementDate":"YYYY-MM-DD","periodFrom":"YYYY-MM-DD","periodTo":"YYYY-MM-DD","openingBalance":0.00,"closingBalance":0.00,
+   "lines":[{"date":"YYYY-MM-DD","postDate":"YYYY-MM-DD or null","description":"exact text as printed","amount":12.34,"credit":false,"fcy":"USD 9.20 or null"}]}
+]}
+
+Rules:
+- One statement object per card or account per statement (a combined statement with several cards = several objects).
+- amount is always positive; credit=true for money in: refunds, payments received, interest, salary, transfers in.
+- Include every transaction line, including card payments and transfers. Leave out "balance brought forward" and totals.
+- Use the transaction date (not posting date) for "date". Work out the year from the statement date.
+- Check each statement: opening + debits − credits = closing (for cards: previous balance + charges − credits = new balance). Add "checks":[{"source":..,"ok":true|false,"note":".."}] at the top level.
+- If a line is unreadable, include it with "description":"UNREADABLE …" rather than dropping it.
+Give me the result as a downloadable file named statements-<month>.json.`;
+}
+async function openClaudeStatementHelp() {
+  const prompt = claudeStatementPrompt();
+  let copied = false; try { await navigator.clipboard.writeText(prompt); copied = true; } catch (e) {}
+  showModal(`<h3>Prepare statements with Claude</h3>
+    <ol style="font-size:13px;color:#8AABBF;line-height:1.7;margin:-6px 0 12px 18px;padding:0;">
+      <li>${copied ? '<strong class="text-green">✓ Prompt copied.</strong>' : 'Copy the prompt below.'} Open a Claude chat, paste it and attach all your statement PDFs.</li>
+      <li>Claude checks every statement adds up and gives you one <code style="background:#1C2F45;padding:1px 5px;border-radius:3px;">statements-….json</code> file. Save it.</li>
+      <li>Import it here. Each statement goes through the same matching review.</li></ol>
+    <textarea rows="8" style="width:100%;font-size:12px;font-family:monospace;" readonly onclick="this.select()">${esc(prompt)}</textarea>
+    <div class="form-row" style="margin-top:12px;"><label>Claude's file (.json)</label><input type="file" accept=".json,application/json" onchange="importPreparedStatements(event)"/></div>
+    <div id="cs-status" class="hint"></div>
+    <div class="modal-footer"><button class="btn-secondary" onclick="closeModal()">Close</button></div>`);
+}
+function guessSourceFor(st) {
+  const opts = data.cards.map(c => ({ v: c.id, name: c.name, owner: c.profile, pats: [] })).concat((data.accounts || []).map(a => ({ v: 'acct:' + a.id, name: a.name, owner: a.owner, pats: a.patterns || [] })));
+  const n = (x) => FPEngine.util.norm(x);
+  const exact = opts.find(o => n(o.name) === n(st.source || ''));
+  if (exact) return exact.v;
+  const who = /caroline/i.test(st.owner || '') ? 'wife' : /marvin/i.test(st.owner || '') ? 'marvin' : null;
+  const text = n([st.source, st.institution, st.product, st.last4].filter(Boolean).join(' '));
+  let best = null, bestScore = 0;
+  opts.forEach(o => {
+    const words = n(o.name).split(' ').filter(w => w.length > 2 && !['card', 'visa', 'mastercard', 'account', 'marvin', 'caroline'].includes(w));
+    let sc = words.filter(w => text.includes(w)).length + (who && o.owner === who ? 0.5 : 0) + (o.pats.some(p => st.last4 && n(p).includes(n(st.last4))) ? 3 : 0);
+    if (sc > bestScore) { best = o; bestScore = sc; }
+  });
+  return bestScore >= 1 ? best.v : '';
+}
+function importPreparedStatements(e) {
+  const f = e.target.files[0]; if (!f) return;
+  f.text().then(txt => {
+    let j; try { j = JSON.parse(txt); } catch (err) { document.getElementById('cs-status').innerHTML = '<span class="text-red">Not valid JSON.</span>'; return; }
+    const sts = (j.statements || []).filter(x => (x.lines || []).length);
+    if (!sts.length) { document.getElementById('cs-status').innerHTML = '<span class="text-red">No statements with lines in that file.</span>'; return; }
+    PREPARED = { sts, checks: j.checks || [] };
+    const optsHtml = (v) => `<option value="">— choose —</option>` + data.cards.map(c => `<option value="${c.id}" ${v===c.id?'selected':''}>${esc(c.name)} (${profileLabel(c.profile)})</option>`).join('') +
+      (data.accounts || []).map(a => `<option value="acct:${a.id}" ${v==='acct:'+a.id?'selected':''}>${esc(a.name)}</option>`).join('');
+    const rows = sts.map((st, i) => { const g = guessSourceFor(st); st._src = g; const chk = PREPARED.checks.find(c => c.source === st.source);
+      return `<tr><td><strong>${esc(st.source || st.product || 'Statement ' + (i + 1))}</strong><div class="hint">${esc(st.statementDate || '')} · ${st.lines.length} lines${chk && chk.ok === false ? ` · <span class="text-red">doesn't add up: ${esc(chk.note || '')}</span>` : chk ? ' · <span class="text-green">adds up</span>' : ''}</div></td>
+        <td><select onchange="PREPARED.sts[${i}]._src=this.value" style="background:#0D1B2A;border:1px solid #2A4A6B;color:#F0F4F8;border-radius:5px;padding:5px;font-size:12px;">${optsHtml(g)}</select></td></tr>`; }).join('');
+    showModal(`<h3>${sts.length} statement${sts.length!==1?'s':''} from Claude</h3>
+      <p style="font-size:12.5px;color:#8AABBF;margin:-8px 0 12px;">Check each is matched to the right card or account, then review them one by one.</p>
+      <div class="table-wrap"><table class="data-table mini-table"><tbody>${rows}</tbody></table></div>
+      <div class="modal-footer"><button class="btn-secondary" onclick="closeModal()">Cancel</button><button class="btn-primary" onclick="reviewPrepared()">Review statements</button></div>`);
+  });
+}
+let PREPARED = null;
+function reviewPrepared() {
+  const list = PREPARED.sts.filter(st => st._src);
+  if (!list.length) { alert('Choose the card or account for at least one statement.'); return; }
+  const month = reconMonth || reconMonthFor(ME.profile);
+  const queue = list.map(st => ({ srcVal: st._src, lines: st.lines.map(l => ({ date: l.date, postDate: l.postDate || null, description: l.description, amount: Math.abs(Number(l.amount) || 0), credit: !!l.credit, fcy: !!l.fcy })) }));
+  const first = queue.shift();
+  startReview(first.srcVal, first.lines, { month, key: first.srcVal }, queue.map(q => ({ ...q })));
+}
+
+
+/* =====================================================================
+   ADVICE & GHOST TRACKER
+   ===================================================================== */
+function adviceData() { data.advice = data.advice || { recommendations: [], prices: {} }; data.advice.recommendations = data.advice.recommendations || []; data.advice.prices = data.advice.prices || {}; return data.advice; }
+const ADVICE_AREAS = { cash: 'Cash & savings', invest: 'Investing', cards: 'Cards', other: 'Other' };
+const ADVICE_STATUS = { proposed: ['pill-amber', 'To decide'], accepted: ['pill-blue', 'Taking it'], done: ['pill-green', 'Done'], rejected: ['pill-red', 'Not taking it'] };
+let adviceFilter = 'open';
+function renderAdvice() {
+  const A = adviceData();
+  const S = FPEngine.adviceSummary(A.recommendations, A.prices, today());
+  const shown = S.rows.filter(x => adviceFilter === 'all' || (adviceFilter === 'open' ? (!x.rec.status || x.rec.status === 'proposed' || x.rec.status === 'accepted') : x.rec.status === adviceFilter))
+    .sort((a, b) => (b.rec.priority || 0) - (a.rec.priority || 0) || (a.rec.date < b.rec.date ? 1 : -1));
+  const money = v => (v >= 0 ? '+' : '−') + '$' + fmtAmt(Math.abs(v));
+  const resultLine = (x) => {
+    const r = x.result, st = x.rec.status || 'proposed';
+    if (!r) return '';
+    if (r.pending) return `<div class="hint">${esc(r.pending)} — prices are added at each check-in.</div>`;
+    const lead = st === 'rejected' ? 'If you had: ' : st === 'proposed' ? 'Since suggested: ' : 'So far: ';
+    if (r.kind === 'rate') return `<div class="hint">${lead}<strong class="${r.gain >= 0 ? 'text-green' : 'text-red'}">${money(r.gain)}</strong> extra interest over ${r.days} days (about $${fmtAmt(r.perYear)} a year).</div>`;
+    if (r.kind === 'position') return `<div class="hint">${lead}<strong class="${r.gain >= 0 ? 'text-green' : 'text-red'}">${money(r.gain)}</strong> (${(r.ret * 100).toFixed(1)}%) on $${fmtAmt(r.amountSgd)} — ${esc(x.rec.ghost.ticker)} ${r.startPrice} → ${r.nowPrice} (${esc(r.priceDate)}).</div>`;
+    if (r.kind === 'switch') return `<div class="hint">${lead}<strong class="${r.gain >= 0 ? 'text-green' : 'text-red'}">${money(r.gain)}</strong> vs staying put — ${esc(x.rec.ghost.to.ticker)} ${(r.to.ret * 100).toFixed(1)}% vs ${esc(x.rec.ghost.from.ticker)} ${(r.from.ret * 100).toFixed(1)}%.</div>`;
+    return '';
+  };
+  const cards = shown.map(x => { const r = x.rec, st = r.status || 'proposed', [pc, pl] = ADVICE_STATUS[st] || ADVICE_STATUS.proposed;
+    return `<div class="card-tile" style="margin-bottom:12px;">
+      <div style="display:flex;gap:8px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;">
+        <div style="min-width:0;flex:1;"><div style="font-weight:700;font-size:14px;">${esc(r.title)}</div>
+          <div class="hint">${esc(ADVICE_AREAS[r.area] || r.area || '')} · suggested ${esc(r.date)}${r.amountSgd ? ' · $' + fmtAmt(r.amountSgd) : ''}${r.expectedPerYear ? ` · worth about $${fmtAmt(r.expectedPerYear)}/yr` : ''}</div></div>
+        <span class="pill ${pc}">${pl}</span></div>
+      <div style="font-size:13px;color:#C8D6E2;line-height:1.55;margin-top:8px;">${esc(r.detail || '')}</div>
+      ${r.steps && r.steps.length ? `<ol style="font-size:12.5px;color:#8AABBF;margin:6px 0 0 18px;padding:0;line-height:1.6;">${r.steps.map(x2 => `<li>${esc(x2)}</li>`).join('')}</ol>` : ''}
+      ${resultLine(x)}
+      ${r.decisionNote ? `<div class="hint">Your note: ${esc(r.decisionNote)}</div>` : ''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+        ${st !== 'accepted' && st !== 'done' ? `<button class="btn-primary" style="font-size:12px;padding:6px 12px;" onclick="decideAdvice('${r.id}','accepted')">I'll do it</button>` : ''}
+        ${st === 'accepted' ? `<button class="btn-primary" style="font-size:12px;padding:6px 12px;" onclick="decideAdvice('${r.id}','done')">✓ Done</button>` : ''}
+        ${st !== 'rejected' ? `<button class="btn-secondary" style="font-size:12px;padding:6px 12px;" onclick="decideAdvice('${r.id}','rejected')">Not taking it</button>` : `<button class="btn-secondary" style="font-size:12px;padding:6px 12px;" onclick="decideAdvice('${r.id}','proposed')">Reconsider</button>`}
+      </div></div>`; }).join('');
+  const tickers = Object.entries(A.prices).map(([k, v]) => { const last = (v || []).slice().sort((a, b) => (a.date < b.date ? -1 : 1)).pop(); return `<tr><td>${esc(k)}</td><td class="tabnum">${last ? last.price : '—'}</td><td class="tabnum">${last ? esc(last.date) : ''}</td><td class="hint">${(v || []).length} prices</td></tr>`; }).join('');
+  return `
+    <p style="font-size:13px;color:#8AABBF;margin:0 0 14px;line-height:1.6;">Recommendations from your check-ins with Claude. You decide; the app keeps score. Advice you take is tracked as it plays out, and advice you pass on is tracked as a <strong style="color:#F0F4F8;">ghost</strong> — what it would have made or lost — so you can judge the advice over time.</p>
+    <div class="stat-row">
+      <div class="stat-card"><div class="label">Waiting on you</div><div class="value tabnum ${S.open ? 'text-amber' : ''}">${S.open}</div><div class="sub">recommendation${S.open!==1?'s':''} to decide</div></div>
+      <div class="stat-card"><div class="label">From advice you took</div><div class="value tabnum ${S.taken >= 0 ? 'text-green' : 'text-red'}">${money(S.taken)}</div><div class="sub">so far, where measurable</div></div>
+      <div class="stat-card"><div class="label">Ghost: advice you passed on</div><div class="value tabnum ${S.notTaken >= 0 ? 'text-amber' : 'text-green'}">${money(S.notTaken)}</div><div class="sub">${S.notTaken >= 0 ? 'what it would have added' : 'you were right to skip it'}</div></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;">
+      <div class="chip-row">${[['open', 'Open'], ['done', 'Done'], ['rejected', 'Not taken'], ['all', 'All']].map(([k, l]) => `<span class="chip ${adviceFilter===k?'on':''}" onclick="adviceFilter='${k}';render()">${l}</span>`).join('')}</div>
+      <button class="btn-secondary" style="margin-left:auto;" onclick="document.getElementById('file-advice').click()">↑ Import check-in file</button>
+      <input type="file" id="file-advice" accept=".json" style="display:none" onchange="importAdviceFile(event)">
+    </div>
+    ${cards || '<div class="empty" style="padding:24px;">Nothing here. Import the file from your latest check-in.</div>'}
+    <details style="margin-top:18px;"><summary style="cursor:pointer;color:#8AABBF;font-size:13px;">Prices used for tracking (${Object.keys(A.prices).length})</summary>
+      <div class="table-wrap" style="margin-top:8px;"><table class="data-table mini-table"><thead><tr><th>Ticker</th><th>Last price</th><th>Date</th><th></th></tr></thead><tbody>${tickers || '<tr><td colspan="4" class="hint">none yet</td></tr>'}</tbody></table></div>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr auto;align-items:end;">
+        <div class="form-row"><label>Ticker</label><input id="px-t" placeholder="VWRA"/></div>
+        <div class="form-row"><label>Date</label><input id="px-d" type="date" value="${today()}"/></div>
+        <div class="form-row"><label>Price</label><input id="px-p" type="number" step="any"/></div>
+        <div class="form-row"><button class="btn-secondary" onclick="addAdvicePrice()">Add</button></div>
+      </div></details>`;
+}
+function decideAdvice(id, status) {
+  const r = adviceData().recommendations.find(x => x.id === id); if (!r) return;
+  let note = '';
+  if (status === 'rejected') { note = prompt('Why not? (optional — helps the next review)', r.decisionNote || ''); if (note === null) return; }
+  r.status = status; r.decidedAt = today(); r.decidedBy = ME.email; if (note) r.decisionNote = note;
+  if ((status === 'accepted' || status === 'done') && r.ghost && !r.ghost.decidedDate) r.ghost.decidedDate = today();
+  saveToDrive(); render();
+}
+function addAdvicePrice() {
+  const t = document.getElementById('px-t').value.trim().toUpperCase(), d = document.getElementById('px-d').value, pr = Number(document.getElementById('px-p').value);
+  if (!t || !d || !(pr > 0)) return;
+  const A = adviceData(); A.prices[t] = (A.prices[t] || []).filter(x => x.date !== d).concat({ date: d, price: pr });
+  saveToDrive(); render();
+}
+/** A check-in file from Claude: { format:'fp-advice', recommendations:[…], prices:{ TICKER:[{date,price}] } }. Your decisions are kept. */
+function importAdviceFile(e) {
+  const f = e.target.files[0]; if (!f) return; e.target.value = '';
+  f.text().then(txt => {
+    let j; try { j = JSON.parse(txt); } catch (err) { alert('Not valid JSON'); return; }
+    if (j.format !== 'fp-advice') { alert('That isn\'t a check-in file (format fp-advice).'); return; }
+    const A = adviceData(); let added = 0, updated = 0, px = 0;
+    (j.recommendations || []).forEach(r => {
+      const ex = A.recommendations.find(x => x.id === r.id);
+      if (ex) { const keep = { status: ex.status, decidedAt: ex.decidedAt, decidedBy: ex.decidedBy, decisionNote: ex.decisionNote }; Object.assign(ex, r, Object.fromEntries(Object.entries(keep).filter(([, v]) => v != null))); updated++; }
+      else { A.recommendations.push({ status: 'proposed', ...r }); added++; }
+    });
+    Object.entries(j.prices || {}).forEach(([t, list]) => { A.prices[t] = A.prices[t] || []; list.forEach(pt => { A.prices[t] = A.prices[t].filter(x => x.date !== pt.date).concat(pt); px++; }); });
+    A.updatedAt = today();
+    saveToDrive(); render();
+    toast(`Check-in loaded: ${added} new recommendation${added!==1?'s':''}${updated ? `, ${updated} updated` : ''}${px ? `, ${px} prices` : ''}`, 5000);
+  });
 }
 
 /* =================== MODAL UTILS =================== */

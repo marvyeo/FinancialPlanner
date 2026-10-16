@@ -525,5 +525,49 @@ test('bond coupons paid out count toward the gain; partial-year fees are annuali
   assert(E.investmentInsights(s, inv).some((i) => /in interest over the last 12 months/.test(i.text)));
 });
 
+test('reconcileStatement: matches logged lines, splits, near-misses, not-logged and missing', () => {
+  const ledger = [
+    { id: 'a', date: '2026-10-02', amount: 12.5, cardId: 'C', kind: 'expense', source: 'manual' },
+    { id: 'b', date: '2026-10-05', amount: 30, cardId: 'C', kind: 'expense' },
+    { id: 'c', date: '2026-10-05', amount: 20, cardId: 'C', kind: 'expense' },
+    { id: 'd', date: '2026-10-08', amount: 41, cardId: 'C', kind: 'expense' },
+    { id: 'e', date: '2026-10-09', amount: 99, cardId: 'C', kind: 'expense' },
+    { id: 'f', date: '2026-10-09', amount: 99, cardId: 'OTHER', kind: 'expense' },
+  ];
+  const lines = [
+    { date: '2026-10-03', amount: 12.5, description: 'KOPI' },
+    { date: '2026-10-05', amount: 50, description: 'DINNER' },
+    { date: '2026-10-08', amount: 43.1, description: 'GRAB' },
+    { date: '2026-10-07', amount: 7.7, description: 'NEW THING' },
+  ];
+  const r = E.reconcileStatement(lines, ledger, { cardId: 'C' });
+  assert.deepStrictEqual(r.matched.map((m) => m.i).sort(), [0, 1]);
+  assert.deepStrictEqual(r.matched.find((m) => m.i === 1).txnIds.sort(), ['b', 'c']);
+  assert.strictEqual(r.differs[0].txnId, 'd'); close(r.differs[0].diff, 2.1);
+  assert.deepStrictEqual(r.unmatched, [3]);
+  assert.deepStrictEqual(r.missing, []);   // 'e' (10-09) is after the last statement line
+  const r2 = E.reconcileStatement(lines, ledger, { cardId: 'C', to: '2026-10-10' });
+  assert.deepStrictEqual(r2.missing, ['e']);
+});
+test('mergeData keeps both people\'s edits', () => {
+  const base = { transactions: [{ id: '1', amount: 1 }, { id: '2', amount: 2 }], settings: { a: 1, b: 1 } };
+  const local = { transactions: [{ id: '1', amount: 10 }, { id: '3', amount: 3 }], settings: { a: 2, b: 1 } };          // edit 1, delete 2, add 3, change a
+  const remote = { transactions: [{ id: '1', amount: 1 }, { id: '2', amount: 2 }, { id: '4', amount: 4 }], settings: { a: 1, b: 5 } }; // add 4, change b
+  const m = E.mergeData(base, local, remote);
+  assert.deepStrictEqual(m.transactions.map((t) => t.id + ':' + t.amount).sort(), ['1:10', '3:3', '4:4']);
+  assert.deepStrictEqual(m.settings, { a: 2, b: 5 });
+});
+test('ghost tracking: position, rate and switch', () => {
+  const prices = { VWRA: [{ date: '2026-10-16', price: 100 }, { date: '2027-01-16', price: 110 }], USDSGD: [{ date: '2026-10-16', price: 1.3 }, { date: '2027-01-16', price: 1.3 }], ES3: [{ date: '2026-10-16', price: 4 }, { date: '2027-01-16', price: 4.2 }] };
+  const pos = E.ghostResult({ ghost: { kind: 'position', ticker: 'VWRA', ccy: 'USD', amountSgd: 13000, date: '2026-10-16' } }, prices, '2027-01-16');
+  close(pos.gain, 1300);
+  const rate = E.ghostResult({ ghost: { kind: 'rate', amountSgd: 100000, fromRate: 0.01, toRate: 1.95, date: '2026-10-16' } }, prices, '2027-10-16');
+  close(rate.gain, 1940);
+  const sw = E.ghostResult({ ghost: { kind: 'switch', from: { ticker: 'ES3' }, to: { ticker: 'VWRA', ccy: 'USD' }, amountSgd: 10000, date: '2026-10-16' } }, prices, '2027-01-16');
+  close(sw.gain, 500);
+  const s = E.adviceSummary([{ status: 'rejected', ghost: { kind: 'rate', amountSgd: 100000, fromRate: 0, toRate: 2, date: '2026-01-01' } }], prices, '2026-12-31');
+  assert.ok(s.notTaken > 1990 && s.notTaken < 2000);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
