@@ -1270,6 +1270,7 @@
     (payload.activity || []).forEach((x) => {
       const accountId = idFor[x.account]; if (!accountId) return;
       const rec = { id: newId(), accountId, date: x.date, type: x.type, label: x.label || x.type, name: x.name || '', code: x.code || '', units: x.units || null, price: x.price || null, amount: num(x.amount), ccy: x.ccy || 'SGD', ref: x.ref || '', via: x.via || '' };
+      if (x.paidOut) rec.paidOut = true;
       if (have.has(key(rec))) return;
       have.add(key(rec)); inv.activity.push(rec); res.activity++;
     });
@@ -1347,7 +1348,8 @@
         const amt = f.flow === 'contribution' ? f.amount : -f.amount;
         if (!ext.some((e) => e.via === 'statement' && Math.abs(Math.abs(e.amount) - f.amount) < 1 && Math.abs(daysUntil(e.date, f.txn.date)) <= 7)) ext.push({ date: f.txn.date, amount: amt, via: 'bank', txnId: f.txn.id });
       });
-      const divs = act.filter((x) => x.type === 'dividend').map((x) => ({ date: x.date, amount: x.sgd })).concat(bank.filter((f) => f.flow === 'dividend').map((f) => ({ date: f.txn.date, amount: f.amount, txnId: f.txn.id })));
+      // paidOut: the payout left the account (bond coupons, SGX dividends to the bank), so it isn't in the value and counts toward the gain
+      const divs = act.filter((x) => x.type === 'dividend').map((x) => ({ date: x.date, amount: x.sgd, paidOut: !!x.paidOut })).concat(bank.filter((f) => f.flow === 'dividend').map((f) => ({ date: f.txn.date, amount: f.amount, txnId: f.txn.id, paidOut: true })));
       const fees = act.filter((x) => x.type === 'fee').map((x) => ({ date: x.date, amount: x.sgd }));
       const rebates = act.filter((x) => x.type === 'cashback').map((x) => ({ date: x.date, amount: x.sgd }));
       const sum = (arr, from, to) => r2(arr.filter((x) => x.date >= from && x.date <= (to || asOf)).reduce((s, x) => s + num(x.amount), 0));
@@ -1359,16 +1361,21 @@
         if (!start || !end || start === end || start.date >= end.date) return null;
         const inWin = ext.filter((e) => e.date > start.date && e.date <= end.date);
         const net = inWin.reduce((s, e) => s + e.amount, 0);
-        const gain = num(end.valueSgd) - num(start.valueSgd) - net;
+        const paid = divs.filter((d) => d.paidOut && d.date > start.date && d.date <= end.date);
+        const paidOut = paid.reduce((s, d) => s + num(d.amount), 0);
+        const gain = num(end.valueSgd) - num(start.valueSgd) - net + paidOut;
         const T = daysUntil(end.date, start.date);
         const base = num(start.valueSgd) + inWin.reduce((s, e) => s + e.amount * (daysUntil(end.date, e.date) / T), 0);
         const ret = base > 0 ? gain / base : null;
         const ccyEnd = num(end.valueCcy), fxMove = end.ccy && end.ccy !== 'SGD' && ccyEnd ? r2(ccyEnd * (num(end.fx) - num(start.fx))) : 0;
-        return { from: start.date, to: end.date, net: r2(net), gain: r2(gain), ret, days: T, fxEffect: fxMove,
-          annualised: T >= 300 ? xirr([{ date: start.date, amount: -num(start.valueSgd) }].concat(inWin.map((e) => ({ date: e.date, amount: -e.amount })), [{ date: end.date, amount: num(end.valueSgd) }])) : null };
+        return { from: start.date, to: end.date, net: r2(net), gain: r2(gain), ret, days: T, fxEffect: fxMove, paidOut: r2(paidOut),
+          annualised: T >= 300 ? xirr([{ date: start.date, amount: -num(start.valueSgd) }].concat(inWin.map((e) => ({ date: e.date, amount: -e.amount })), paid.map((d) => ({ date: d.date, amount: num(d.amount) })), [{ date: end.date, amount: num(end.valueSgd) }])) : null };
       };
       const avgVal = (from) => { const w = snaps.filter((s) => s.date >= from); return w.length ? w.reduce((s, x) => s + num(x.valueSgd), 0) / w.length : null; };
       const av12 = avgVal(yearAgo);
+      // fee rate is annualised over the part of the last year we have data for
+      const feeFrom = first && first.date > yearAgo ? first.date : yearAgo;
+      const feeDays = daysUntil(asOf, feeFrom);
       const alloc = { assetClass: {}, region: {}, holdings: [] };
       if (latest && latest.holdings && latest.holdings.length) {
         const fx = num(latest.fx) || 1;
@@ -1393,7 +1400,7 @@
         dividends: divs, dividendsYtd: sum(divs, yStart), dividends12m: sum(divs, yearAgo),
         fees, feesYtd: sum(fees, yStart), fees12m: sum(fees, yearAgo),
         cashback: rebates, cashbackYtd: sum(rebates, yStart), cashback12m: sum(rebates, yearAgo), feesAll: sum(fees, '0000'), cashbackAll: sum(rebates, '0000'),
-        feeRate: av12 && fees.length ? sum(fees, yearAgo) / av12 : null,   // platform fees; fund costs (net of any cashback) sit on each holding's expenseRatio
+        feeRate: av12 && fees.length && feeDays >= 60 ? (sum(fees, yearAgo) / av12) * (365 / Math.min(365, feeDays)) : null, feeFrom: feeFrom > yearAgo ? feeFrom : null,   // platform fees; fund costs (net of any cashback) sit on each holding's expenseRatio
         yield12m: av12 && divs.length ? sum(divs, yearAgo) / av12 : null,
         ytd: windowStats(startYtd, latest), sinceStart: windowStats(first, latest),
         allocation: alloc, cashShare: latest && latest.valueSgd ? (alloc.assetClass.Cash || 0) / num(latest.valueSgd) : null,
@@ -1437,7 +1444,7 @@
       } else if (a.ytd) {
         const w = a.ytd;
         out.push({ level: 'info', text: `${n}: ${w.gain >= 0 ? 'up' : 'down'} ${money(w.gain)} (${w.ret != null ? (w.ret >= 0 ? '+' : '') + pct(w.ret) : '—'}) from ${w.from} to ${w.to}` +
-          (w.net ? `, after ${w.net > 0 ? 'adding' : 'taking out'} ${money(w.net)}` : ', with no new money added') + '.' });
+          (w.net ? `, after ${w.net > 0 ? 'adding' : 'taking out'} ${money(w.net)}` : ', with no new money added') + (w.paidOut ? `. That includes ${money(w.paidOut)} paid out as interest or dividends` : '') + '.' });
         if (Math.abs(w.fxEffect) >= 5) out.push({ level: 'info', text: `${n} is held in ${a.latest.ccy}. Exchange-rate moves ${w.fxEffect < 0 ? 'cut' : 'added'} about ${money(w.fxEffect)} in SGD terms over the same period; the rest is market movement.` });
       }
       if (!a.ytd && a.sinceStart && a.sinceStart.from) {
@@ -1446,9 +1453,9 @@
         if (!a.value && w.net <= 0) out.push({ level: 'info', text: `${n}: closed. It made ${money(w.gain)} overall before the money was taken out.` });
         else out.push({ level: 'info', text: `${n}: ${w.gain >= 0 ? 'up' : 'down'} ${money(w.gain)} on ${money(w.net)} put in since ${since}` + (w.annualised != null ? `, about ${pct(w.annualised)} a year (money-weighted)` : '') + '.' });
       }
-      if (a.feeRate != null && a.feeRate >= 0.004) out.push({ level: 'watch', text: `${n}: fees were ${money(a.fees12m)} over the last 12 months${a.cashback12m ? ` (cashback paid back ${money(a.cashback12m)})` : ''}, about ${pct(a.feeRate, 2)} of the average balance. Dividends over the same period: ${money(a.dividends12m)}.` });
-      if (a.yield12m != null && a.yield12m >= 0.02 && a.value) out.push({ level: 'info', text: `${n}: ${money(a.dividends12m)} in dividends over the last 12 months, about ${pct(a.yield12m)} of its value.` });
-      if (a.cashShare != null && a.cashShare >= 0.05) out.push({ level: 'watch', text: `${n}: ${pct(a.cashShare)} is sitting in cash inside the portfolio.` });
+      if (a.feeRate != null && a.feeRate >= 0.004) out.push({ level: 'watch', text: `${n}: fees were ${money(a.fees12m)} ${a.feeFrom ? 'since ' + a.feeFrom : 'over the last 12 months'}${a.cashback12m ? ` (cashback paid back ${money(a.cashback12m)})` : ''}, about ${pct(a.feeRate, 2)} a year of the average balance. Dividends over the same period: ${money(a.dividends12m)}.` });
+      if (a.yield12m != null && a.yield12m >= 0.02 && a.value) out.push({ level: 'info', text: `${n}: ${money(a.dividends12m)} in ${a.allocation.holdings.length && a.allocation.holdings.every((h) => h.assetClass === 'Bonds') ? 'interest' : 'dividends'} over the last 12 months, about ${pct(a.yield12m)} of its value${a.ytd && a.ytd.paidOut ? ' (counted in the gain above)' : ''}.` });
+      if (a.cashShare != null && a.cashShare >= 0.05 && !['srs', 'cash'].includes(a.account.type) && a.cashShare * a.value >= 500) out.push({ level: 'watch', text: `${n}: ${pct(a.cashShare)} is sitting in cash inside the portfolio.` });
       const top = a.allocation.holdings[0];
       if (top && a.value && a.account.type !== 'cpf' && a.allocation.holdings.length > 1 && top.valueSgd / a.value >= 0.3) out.push({ level: 'info', text: `${n}: the largest holding is ${top.name} at ${pct(top.valueSgd / a.value, 0)} of the portfolio.` });
       if (a.trades >= 6) out.push({ level: 'info', text: `${n}: ${a.trades} buy/sell trades in the last 12 months (rebalancing), selling ${money(a.turnover)} worth.` });

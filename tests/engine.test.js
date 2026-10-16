@@ -512,5 +512,18 @@ test('legacy cards without a definition still earn from their old bonusRules', (
   close(r.mpd, 3);
 });
 
+test('bond coupons paid out count toward the gain; partial-year fees are annualised', () => {
+  const inv = { accounts: [], snapshots: [], activity: [] };
+  E.mergeInvestmentData(inv, { format: 'fp-investments', accounts: [{ key: 'b', name: 'Bond', provider: 'X', type: 'other' }, { key: 'r', name: 'Robo', provider: 'X', type: 'robo' }],
+    snapshots: [{ account: 'b', date: '2025-12-31', valueSgd: 10000, holdings: [{ name: 'Bond', value: 10000, valueSgd: 10000, assetClass: 'Bonds' }] }, { account: 'b', date: '2026-10-16', valueSgd: 10000, holdings: [{ name: 'Bond', value: 10000, valueSgd: 10000, assetClass: 'Bonds' }] },
+      { account: 'r', date: '2026-03-31', valueSgd: 12000 }, { account: 'r', date: '2026-09-30', valueSgd: 12000 }],
+    activity: [{ account: 'b', date: '2026-06-01', type: 'dividend', amount: 300, paidOut: true }, { account: 'r', date: '2026-06-30', type: 'fee', amount: 30 }, { account: 'r', date: '2026-09-30', type: 'fee', amount: 30 }] });
+  const s = E.investmentSummary(inv, [], '2026-10-16');
+  const b = s.accounts.find((a) => a.account.name === 'Bond'), r = s.accounts.find((a) => a.account.name === 'Robo');
+  close(b.ytd.gain, 300); close(b.ytd.paidOut, 300);
+  close(r.feeRate, (60 / 12000) * (365 / 199), 0.0005);
+  assert(E.investmentInsights(s, inv).some((i) => /in interest over the last 12 months/.test(i.text)));
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

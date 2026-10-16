@@ -728,7 +728,7 @@ function renderDashboard() {
         <div class="label">Owed to you</div>
         ${(() => { const o = Object.values(FPEngine.owedSummary(data.transactions || [], today())); const t = o.reduce((s, p) => s + p.owed, 0); return `<div class="value tabnum ${t > 0 ? 'text-amber' : 'text-green'}">$${fmtAmt(t)}</div><div class="sub">${o.length ? o.length + ' ' + (o.length === 1 ? 'person' : 'people') + ' · tap to see' : 'all settled'}</div>`; })()}
       </div>
-      ${(() => { const inv = data.investments; if (!inv || !inv.accounts || !inv.accounts.length) return ''; let S; try { S = invSummary(); } catch (e) { return ''; } return `<div class="stat-card" style="cursor:pointer;" onclick="navigate('invest')"><div class="label">Investments</div><div class="value tabnum">$${fmtAmt(S.total)}</div><div class="sub">${S.gainYtd != null ? (S.gainYtd >= 0 ? '+' : '−') + '$' + fmtAmt(Math.abs(S.gainYtd)) + ' market gain this year' : 'tap to see'}</div></div>`; })()}
+      ${(() => { const inv = data.investments; if (!inv || !inv.accounts || !inv.accounts.length) return ''; let S; try { S = invSummary(); } catch (e) { return ''; } return `<div class="stat-card" style="cursor:pointer;" onclick="navigate('invest')"><div class="label">Investments</div><div class="value tabnum">$${fmtAmt(S.total)}</div><div class="sub">${S.gainYtd != null ? (S.gainYtd >= 0 ? '+' : '−') + '$' + fmtAmt(Math.abs(S.gainYtd)) + ' gain this year' : 'tap to see'}</div></div>`; })()}
       <div class="stat-card">
         <div class="label">Missed by using the wrong card</div>
         <div class="value tabnum ${mtd.missed > 0.5 ? 'text-amber' : 'text-green'}">$${fmtAmt(mtd.missed)}</div>
@@ -3103,7 +3103,7 @@ function renderInvest() {
   if (!inv.accounts.length && !sugg.length) return head + `<div class="empty"><div class="icon">↗</div>No investments yet. Import a digiPortfolio statement or add an account.</div>`;
   const stat = `<div class="stat-row">
       <div class="stat-card"><div class="label">Total value</div><div class="value tabnum">$${fmtAmt(S.total)}</div><div class="sub">${valued.length} of ${S.accounts.length} account${S.accounts.length !== 1 ? 's' : ''} valued${asOf.length ? ' · as of ' + asOf[asOf.length - 1] : ''}</div></div>
-      <div class="stat-card"><div class="label">Market gain since you started</div><div class="value tabnum ${S.gainAll == null ? '' : S.gainAll >= 0 ? 'text-green' : 'text-red'}">${S.gainAll == null ? '—' : signAmt(S.gainAll)}</div><div class="sub">excludes money you added${S.gainYtd != null ? ' · this year, where known: ' + signAmt(S.gainYtd) : ''}</div></div>
+      <div class="stat-card"><div class="label">Gain since you started</div><div class="value tabnum ${S.gainAll == null ? '' : S.gainAll >= 0 ? 'text-green' : 'text-red'}">${S.gainAll == null ? '—' : signAmt(S.gainAll)}</div><div class="sub">excludes money you added, includes interest paid out${S.gainYtd != null ? ' · this year, where known: ' + signAmt(S.gainYtd) : ''}</div></div>
       <div class="stat-card"><div class="label">Put in this year</div><div class="value tabnum">${signAmt(S.contributedYtd)}</div><div class="sub">net of withdrawals</div></div>
       <div class="stat-card"><div class="label">Dividends this year</div><div class="value tabnum text-green">$${fmtAmt(S.dividendsYtd)}</div><div class="sub">fees $${fmtAmt(S.feesYtd)}${S.cashbackYtd ? ' · cashback $' + fmtAmt(S.cashbackYtd) : ''}</div></div>
     </div>`;
