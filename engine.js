@@ -1007,7 +1007,7 @@
   const FLOW_PATTERNS = [
     // [regex on normalised description, kind, reason, direction: 'out'|'in'|'any']
     [/\b(bill payment|bill pymt|payment thank you|payment received|card payment|cc payment|credit card payment|autopay|giro payment card)\b/, 'transfer', 'Card bill payment', 'any'],
-    [/\b(endowus|moomoo|futu|saxo|tiger brokers|tiger trade|poems|phillip securities|cdp|syfe|stashaway|ibkr|interactive brokers|crypto com|coinhako|gemini|srs contribution|cpf|medisave|ma top ?up)\b/, 'transfer', 'Investment / CPF / SRS', 'any'],
+    [/\b(endowus|moomoo|futu|saxo|tiger brokers|tiger trade|poems|phillip securities|cdp|syfe|stashaway|ibkr|interactive brokers|crypto com|coinhako|gemini|srs contribution|cpf|medisave|ma top ?up|investment securities|digiportfolio|chocfin|chocolate finance)\b/, 'transfer', 'Investment / CPF / SRS', 'any'],
     [/\b(grabpay top ?up|youtrip|shopback pay|revolut|wise|trust bank|instarem|amaze|top ?up)\b/, 'transfer', 'Wallet top-up', 'out'],
     [/\b(atm|cash withdrawal|cash wdl|nets cash ?out)\b/, 'transfer', 'Cash withdrawal', 'out'],
     [/\b(salary|payroll|sal cr|giro salary)\b/, 'income', 'Salary', 'in'],
@@ -1089,6 +1089,319 @@
     return [t.cardId || t.cardName || '', t.date, r2(num(t.amount)).toFixed(2), norm(t.rawDescription || t.merchant).slice(0, 24)].join('|');
   }
 
+  /* ---------------- investments ---------------- */
+  const MON3 = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+  const toNum = (s) => Number(String(s).replace(/[,\s]/g, ''));
+  const isNumTok = (s) => /^-?[\d,]*\d(\.\d+)?$/.test(String(s).trim());
+  const DATE_TOK = /^(\d{1,2})\s+([A-Za-z]{3})[a-z]*\s+(\d{4})$/;
+  function dmyText(s) {
+    const m = /(\d{1,2})\s+([A-Za-z]{3})[a-z]*\s+(\d{4})/.exec(String(s));
+    return m && MON3[m[2].toLowerCase()] ? `${m[3]}-${pad(MON3[m[2].toLowerCase()])}-${pad(+m[1])}` : null;
+  }
+  const CCY_NAMES = { 'united states dollar': 'USD', 'singapore dollar': 'SGD', 'euro': 'EUR', 'hong kong dollar': 'HKD', 'australian dollar': 'AUD', 'pound sterling': 'GBP', 'japanese yen': 'JPY' };
+
+  /**
+   * Parse a DBS digiPortfolio monthly statement from its text (pdftotext -layout, or the app's pdf.js line rebuild).
+   * Returns { provider, date, totalSgd, portfolios:[{ portfolioNo, name, currency, fx, holdings[], cash, cashSgd, totalCcy, totalSgd, activity[], txTotals }] } or null.
+   */
+  function parseDigiPortfolio(text) {
+    text = String(text || '');
+    if (!/digiPortfolio/i.test(text)) return null;
+    const asAt = /Account Summary as (?:at|of)\s+(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})/.exec(text);
+    const out = { provider: 'DBS digiPortfolio', date: asAt ? dmyText(asAt[1]) : null, totalSgd: null, portfolios: [] };
+    const tot = /Total:\s*SGD Equivalent\s+([\d,]+\.\d+)/.exec(text); if (tot) out.totalSgd = toNum(tot[1]);
+    if (!out.date) return null;
+    const lines = text.split(/\r?\n/).map((l) => l.replace(/\f/g, '').trim()).filter(Boolean);
+    const tok = (l) => l.split(/\s{2,}/).map((x) => x.trim()).filter(Boolean);
+    const byNo = {};
+    const getPf = (no) => {
+      if (!byNo[no]) { byNo[no] = { portfolioNo: no, name: '', currency: 'SGD', fx: 1, holdings: [], cash: 0, cashSgd: 0, totalCcy: null, totalSgd: null, activity: [], txTotals: null }; out.portfolios.push(byNo[no]); }
+      return byNo[no];
+    };
+    let pf = null, section = 'hold', h = null, a = null;
+    for (const l of lines) {
+      let m;
+      if (/^Transaction Details as at/i.test(l)) { section = 'tx'; h = a = null; continue; }
+      if (/^GENERAL INFORMATION|^Special Notes/i.test(l)) { section = null; h = a = null; continue; }
+      if ((m = /^Portfolio(?: No\.)?\s*:?\s*(D-[\d-]+)/i.exec(l))) { pf = getPf(m[1]); h = a = null; continue; }
+      if (!pf) continue;
+      if (/^[^,]+ Portfolio, [^,]+ risk$/i.test(l)) { pf.name = l; continue; }
+      if ((m = /^Currency\s*:\s*(.+)$/i.exec(l))) { const c = m[1].trim(); pf.currency = CCY_NAMES[c.toLowerCase()] || c.slice(0, 3).toUpperCase(); continue; }
+      if ((m = /^Total Investment Value:\s*([\d,.-]+)\s+([\d,.-]+)/i.exec(l))) { pf.totalCcy = toNum(m[1]); pf.totalSgd = toNum(m[2]); h = null; continue; }
+      if ((m = /^Total Balance:\s*([\d,.-]+)\s+([\d,.-]+)/i.exec(l))) { pf.txTotals = { debit: toNum(m[1]), credit: toNum(m[2]) }; a = null; continue; }
+      const t = tok(l);
+      if (section === 'hold') {
+        if (t[0] === 'Cash' && t.length === 3 && isNumTok(t[1]) && isNumTok(t[2])) { pf.cash = toNum(t[1]); pf.cashSgd = toNum(t[2]); h = null; continue; }
+        if (t.length >= 7 && /^[A-Z0-9]{2,8}$/.test(t[0]) && !isNumTok(t[1]) && t.slice(-5).every(isNumTok)) {
+          const n = t.slice(-5).map(toNum);
+          h = { code: t[0], name: t.slice(1, -5).join(' '), units: n[0], cost: n[1], price: n[2], value: n[3], valueSgd: n[4], costPrice: null, priceDate: null, pnl: null };
+          pf.holdings.push(h); continue;
+        }
+        if (h) {
+          if (/^(ISIN|Security|Code|Account Summary|PDS_|Page )/i.test(l)) { h = null; continue; }
+          const dm = /(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})/.exec(l);
+          const parts = t;
+          let seenDate = false; const words = [];
+          parts.forEach((x) => {
+            if (DATE_TOK.test(x)) { seenDate = true; h.priceDate = dmyText(x); }
+            else if (isNumTok(x)) { if (seenDate) h.pnl = toNum(x); else h.costPrice = toNum(x); }
+            else words.push(x);
+          });
+          if (dm && !h.priceDate) h.priceDate = dmyText(dm[1]);
+          if (words.length) h.name = (h.name + ' ' + words.join(' ')).trim();
+        }
+        continue;
+      }
+      if (section === 'tx') {
+        if ((m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(t[0] || ''))) {
+          const nums = t.filter(isNumTok);
+          const ccyIdx = t.findIndex((x) => /^[A-Z]{3}$/.test(x));
+          const type = t[1] || '';
+          const amount = toNum(t[t.length - 1]);
+          const price = ccyIdx > 2 && isNumTok(t[ccyIdx - 1]) ? toNum(t[ccyIdx - 1]) : null;
+          const k = /buy|purchase|subscri/i.test(type) ? 'buy' : /sell|redeem|redemption/i.test(type) ? 'sell' : /dividend|distribution/i.test(type) ? 'dividend'
+            : /fee|charge/i.test(type) ? 'fee' : /withdraw|transfer out|fund out/i.test(type) ? 'withdrawal' : /deposit|top ?up|transfer in|fund in|contribut/i.test(type) ? 'deposit' : /interest/i.test(type) ? 'interest' : 'other';
+          a = { date: `${m[3]}-${m[2]}-${m[1]}`, type: k, label: type, price, units: null, amount: nums.length ? amount : 0, ccy: ccyIdx >= 0 ? t[ccyIdx] : pf.currency, name: '', ref: '' };
+          a.debit = ['buy', 'fee', 'withdrawal'].includes(k);
+          pf.activity.push(a); continue;
+        }
+        if (a && !a.ref) {
+          const nums = []; while (t.length && isNumTok(t[t.length - 1])) nums.unshift(toNum(t.pop()));
+          const words = t.join(' ').split(/\s+/);
+          a.ref = words[0] || '';
+          a.name = words.slice(1).join(' ');
+          if (nums.length >= 2) a.units = nums[nums.length - 2];
+          continue;
+        }
+      }
+    }
+    out.portfolios.forEach((p) => {
+      if (p.totalCcy && p.totalSgd) p.fx = p.totalSgd / p.totalCcy;
+      // name the instrument each trade belongs to
+      p.activity.forEach((x) => {
+        if (!x.name || x.type === 'dividend' || x.type === 'fee') return;
+        const n = norm(x.name);
+        const hit = p.holdings.find((hh) => { const hn = norm(hh.name); return hn && (n === hn || n.startsWith(hn) || hn.startsWith(n)); });
+        if (hit) x.code = hit.code;
+      });
+      p.holdings.forEach((hh) => { const c = classifyHolding(hh.name, hh.code); hh.assetClass = c.assetClass; hh.region = c.region; });
+    });
+    return out.portfolios.length ? out : null;
+  }
+
+  function classifyHolding(name, code) {
+    const n = ' ' + norm(name + ' ' + (code || '')) + ' ';
+    let assetClass = 'Equity';
+    if (/ cash | money market /.test(n)) assetClass = 'Cash';
+    else if (/ gold | silver | commodit/.test(n) && !/ producers /.test(n)) assetClass = 'Commodities';
+    else if (/ bond | bnd | treasury | corp | aggregate | govt | fixed income | t ?bill | sgs | ssb /.test(n)) assetClass = 'Bonds';
+    else if (/ reit | trust | ascott | capitaland integrated | mapletree /.test(n)) assetClass = 'REITs';
+    let region = 'Global';
+    if (/ s p 500 | usa | nasdaq | russell | treasury | us /.test(n)) region = 'US';
+    else if (/ eur | europe | stoxx /.test(n)) region = 'Europe';
+    else if (/ jap | japan | nikkei | jpx /.test(n)) region = 'Japan';
+    else if (/ em | emerging | india | china | fe x jp | asia ex /.test(n)) region = 'Emerging markets';
+    else if (/ singapore | sti | sgx | sgd /.test(n)) region = 'Singapore';
+    if (/ gold /.test(n)) region = 'Global';
+    return { assetClass, region };
+  }
+
+  /** Add one parsed statement to the investments store. Idempotent: re-importing the same month replaces it. */
+  function mergeInvestmentStatement(inv, parsed, opts) {
+    opts = opts || {};
+    const newId = opts.newId || (() => 'inv_' + Math.random().toString(36).slice(2, 10));
+    inv.accounts = inv.accounts || []; inv.snapshots = inv.snapshots || []; inv.activity = inv.activity || [];
+    const res = { accounts: [], snapshots: 0, activity: 0, created: [] };
+    parsed.portfolios.forEach((p) => {
+      let acct = inv.accounts.find((x) => (x.statementIds || []).includes(p.portfolioNo));
+      if (!acct) {
+        acct = { id: newId(), name: parsed.portfolios.length > 1 ? `digiPortfolio ${p.portfolioNo.slice(-4)}` : 'digiPortfolio', provider: parsed.provider, type: 'robo',
+          owner: opts.owner || 'marvin', currency: p.currency, statementIds: [p.portfolioNo], patterns: ['DIGIPORTFOLIO'], strategy: p.name };
+        inv.accounts.push(acct); res.created.push(acct.name);
+      }
+      res.accounts.push(acct.id);
+      const snap = { id: newId(), accountId: acct.id, date: parsed.date, source: 'statement', ccy: p.currency, fx: r2(p.fx * 1e6) / 1e6,
+        valueCcy: p.totalCcy, valueSgd: p.totalSgd, cashCcy: p.cash, cashSgd: p.cashSgd,
+        holdings: p.holdings.filter((x) => x.units > 0 || x.value > 0).map((x) => ({ code: x.code, name: x.name, units: x.units, cost: x.cost, price: x.price, value: x.value, valueSgd: x.valueSgd, pnl: x.pnl, assetClass: x.assetClass, region: x.region })) };
+      inv.snapshots = inv.snapshots.filter((s) => !(s.accountId === acct.id && s.date === snap.date));
+      inv.snapshots.push(snap); res.snapshots++;
+      const key = (x) => [x.accountId, x.date, x.type, r2(num(x.amount)), x.units || '', norm(x.name).slice(0, 20)].join('|');
+      const have = new Set(inv.activity.map(key));
+      p.activity.forEach((x) => {
+        const rec = { id: newId(), accountId: acct.id, date: x.date, type: x.type, label: x.label, name: x.name, code: x.code || '', units: x.units, price: x.price, amount: x.amount, ccy: x.ccy, ref: x.ref };
+        if (have.has(key(rec))) return;
+        have.add(key(rec)); inv.activity.push(rec); res.activity++;
+      });
+    });
+    inv.snapshots.sort((x, y) => (x.date < y.date ? -1 : 1));
+    inv.activity.sort((x, y) => (x.date < y.date ? -1 : 1));
+    return res;
+  }
+
+  /* bank / spreadsheet lines that move money into or out of investments */
+  const INVEST_RE = /\b(endowus|moomoo|futu|saxo|tiger brokers|tiger trade|poems|phillip securities|syfe|stashaway|ibkr|interactive brokers|digiportfolio|investment securities|chocfin|chocolate finance|cpf|medisave|ma top ?up|srs contribution|srs)\b/;
+  const txnText = (t) => norm([t.rawDescription, t.merchant, t.note].filter(Boolean).join(' '));
+  function acctMatches(acct, text) { return [acct.name].concat(acct.patterns || []).some((p) => p && norm(p).length >= 3 && text.includes(norm(p))); }
+
+  /**
+   * Find contributions, withdrawals and dividends in the ledger and tie them to investment accounts.
+   * t.investAccountId = '<id>' forces an account, '-' excludes a line. Returns [{ txn, accountId, flow }] (flow: contribution|withdrawal|dividend).
+   */
+  function investFlows(ledger, inv) {
+    const accts = (inv && inv.accounts) || [];
+    const out = [];
+    (ledger || []).forEach((t) => {
+      if (t.investAccountId === '-') return;
+      const text = txnText(t);
+      const dir = t.direction === 'in' ? 'in' : 'out';
+      const isDiv = dir === 'in' && /\b(dividend|dividends|distribution)\b/.test(text);
+      const forced = t.investAccountId && accts.find((a) => a.id === t.investAccountId);
+      const matched = forced || accts.find((a) => acctMatches(a, text) || (isDiv && (a.dividendPatterns || []).some((p) => p && text.includes(norm(p)))));
+      if (!forced && !matched && !isDiv && !INVEST_RE.test(text)) return;
+      if (!forced && kindOf(t) === 'expense' && !INVEST_RE.test(text) && !matched) return;
+      let accountId = matched ? matched.id : null;
+      if (isDiv && !accountId) { const sh = accts.find((a) => a.type === 'shares'); accountId = sh ? sh.id : null; }
+      out.push({ txn: t, accountId, flow: isDiv ? 'dividend' : dir === 'out' ? 'contribution' : 'withdrawal', amount: r2(num(t.amount)) });
+    });
+    // the same transfer logged twice (spreadsheet row + bank line): keep one
+    const kept = [];
+    out.sort((x, y) => (x.txn.date < y.txn.date ? -1 : 1)).forEach((f) => {
+      const dup = kept.find((k) => k.flow === f.flow && k.amount === f.amount && (k.accountId || '') === (f.accountId || '') && k.txn.id !== f.txn.id &&
+        (k.txn.source || '') !== (f.txn.source || '') && Math.abs(daysUntil(k.txn.date, f.txn.date)) <= 3);
+      if (dup) dup.dupIds = (dup.dupIds || []).concat(f.txn.id); else kept.push(f);
+    });
+    return kept;
+  }
+
+  /** Annualised money-weighted return. flows: [{date, amount}] (money you put in negative, value/withdrawals positive). */
+  function xirr(flows) {
+    const f = (flows || []).filter((x) => x && num(x.amount) !== 0).sort((a, b) => (a.date < b.date ? -1 : 1));
+    if (f.length < 2 || !f.some((x) => x.amount > 0) || !f.some((x) => x.amount < 0)) return null;
+    const t0 = parseYmd(f[0].date);
+    const yrs = f.map((x) => (parseYmd(x.date) - t0) / (365 * 86400000));
+    const npv = (r) => f.reduce((s, x, i) => s + x.amount / Math.pow(1 + r, yrs[i]), 0);
+    let lo = -0.99, hi = 10, flo = npv(lo), fhi = npv(hi);
+    if (flo * fhi > 0) return null;
+    for (let i = 0; i < 200; i++) { const mid = (lo + hi) / 2, fm = npv(mid); if (Math.abs(fm) < 1e-9) return mid; if (flo * fm < 0) { hi = mid; fhi = fm; } else { lo = mid; flo = fm; } }
+    return (lo + hi) / 2;
+  }
+
+  /**
+   * Everything the Investments page shows. asOf: YYYY-MM-DD.
+   * Values are SGD. Foreign-currency activity is converted at the nearest statement's rate.
+   */
+  function investmentSummary(inv, ledger, asOf) {
+    inv = inv || {}; asOf = asOf || ymd(new Date());
+    const yStart = asOf.slice(0, 4) + '-01-01';
+    const yearAgo = ymd(new Date(parseYmd(asOf).getTime() - 365 * 86400000));
+    const flowsAll = investFlows(ledger, inv);
+    const accounts = (inv.accounts || []).map((acct) => {
+      const snaps = (inv.snapshots || []).filter((s) => s.accountId === acct.id && s.date <= asOf).sort((a, b) => (a.date < b.date ? -1 : 1));
+      const fxAt = (d) => { if (!snaps.length) return 1; let best = snaps[0]; snaps.forEach((s) => { if (Math.abs(daysUntil(s.date, d)) < Math.abs(daysUntil(best.date, d))) best = s; }); return num(best.fx) || 1; };
+      const act = (inv.activity || []).filter((x) => x.accountId === acct.id && x.date <= asOf).map((x) => ({ ...x, sgd: r2(num(x.amount) * (x.ccy && x.ccy !== 'SGD' ? fxAt(x.date) : 1)) }));
+      const bank = flowsAll.filter((f) => f.accountId === acct.id && f.txn.date <= asOf);
+      // external money in/out: statement deposits/withdrawals, plus bank lines (bank wins if a statement doesn't list them)
+      const ext = [];
+      act.filter((x) => x.type === 'deposit' || x.type === 'withdrawal').forEach((x) => ext.push({ date: x.date, amount: x.type === 'deposit' ? x.sgd : -x.sgd, via: 'statement' }));
+      bank.filter((f) => f.flow !== 'dividend').forEach((f) => {
+        const amt = f.flow === 'contribution' ? f.amount : -f.amount;
+        if (!ext.some((e) => e.via === 'statement' && Math.abs(Math.abs(e.amount) - f.amount) < 1 && Math.abs(daysUntil(e.date, f.txn.date)) <= 7)) ext.push({ date: f.txn.date, amount: amt, via: 'bank', txnId: f.txn.id });
+      });
+      const divs = act.filter((x) => x.type === 'dividend').map((x) => ({ date: x.date, amount: x.sgd })).concat(bank.filter((f) => f.flow === 'dividend').map((f) => ({ date: f.txn.date, amount: f.amount, txnId: f.txn.id })));
+      const fees = act.filter((x) => x.type === 'fee').map((x) => ({ date: x.date, amount: x.sgd }));
+      const sum = (arr, from, to) => r2(arr.filter((x) => x.date >= from && x.date <= (to || asOf)).reduce((s, x) => s + num(x.amount), 0));
+      const latest = snaps[snaps.length - 1] || null, first = snaps[0] || null;
+      const startYtd = snaps.filter((s) => s.date < yStart).pop() || snaps.find((s) => s.date >= yStart) || null;
+      const windowStats = (start, end) => {
+        if (!start || !end || start === end || start.date >= end.date) return null;
+        const inWin = ext.filter((e) => e.date > start.date && e.date <= end.date);
+        const net = inWin.reduce((s, e) => s + e.amount, 0);
+        const gain = num(end.valueSgd) - num(start.valueSgd) - net;
+        const T = daysUntil(end.date, start.date);
+        const base = num(start.valueSgd) + inWin.reduce((s, e) => s + e.amount * (daysUntil(end.date, e.date) / T), 0);
+        const ret = base > 0 ? gain / base : null;
+        const ccyEnd = num(end.valueCcy), fxMove = end.ccy && end.ccy !== 'SGD' && ccyEnd ? r2(ccyEnd * (num(end.fx) - num(start.fx))) : 0;
+        return { from: start.date, to: end.date, net: r2(net), gain: r2(gain), ret, days: T, fxEffect: fxMove,
+          annualised: T >= 300 ? xirr([{ date: start.date, amount: -num(start.valueSgd) }].concat(inWin.map((e) => ({ date: e.date, amount: -e.amount })), [{ date: end.date, amount: num(end.valueSgd) }])) : null };
+      };
+      const avgVal = (from) => { const w = snaps.filter((s) => s.date >= from); return w.length ? w.reduce((s, x) => s + num(x.valueSgd), 0) / w.length : null; };
+      const av12 = avgVal(yearAgo);
+      const alloc = { assetClass: {}, region: {}, holdings: [] };
+      if (latest && latest.holdings && latest.holdings.length) {
+        const fx = num(latest.fx) || 1;
+        latest.holdings.forEach((h) => {
+          const v = num(h.valueSgd) || num(h.value) * fx; if (!v) return;
+          const c = h.assetClass ? h : { ...h, ...classifyHolding(h.name, h.code) };
+          alloc.assetClass[c.assetClass] = r2((alloc.assetClass[c.assetClass] || 0) + v);
+          alloc.region[c.assetClass === 'Equity' || c.assetClass === 'REITs' ? c.region : c.assetClass] = r2((alloc.region[c.assetClass === 'Equity' || c.assetClass === 'REITs' ? c.region : c.assetClass] || 0) + v);
+          alloc.holdings.push({ code: h.code, name: h.name, valueSgd: r2(v), pnl: h.pnl, cost: h.cost, value: h.value, units: h.units, assetClass: c.assetClass, region: c.region });
+        });
+        const cash = num(latest.cashSgd) || num(latest.cashCcy) * fx;
+        if (cash) { alloc.assetClass.Cash = r2((alloc.assetClass.Cash || 0) + cash); alloc.region.Cash = r2((alloc.region.Cash || 0) + cash); }
+        alloc.holdings.sort((a, b) => b.valueSgd - a.valueSgd);
+      }
+      const trades = act.filter((x) => (x.type === 'buy' || x.type === 'sell') && x.date >= yearAgo);
+      return {
+        account: acct, snapshots: snaps, latest, first,
+        value: latest ? r2(num(latest.valueSgd)) : null, valueDate: latest ? latest.date : null,
+        contributions: ext.sort((a, b) => (a.date < b.date ? -1 : 1)),
+        contributedYtd: r2(ext.filter((e) => e.date >= yStart).reduce((s, e) => s + e.amount, 0)),
+        contributedAll: r2(ext.reduce((s, e) => s + e.amount, 0)),
+        dividends: divs, dividendsYtd: sum(divs, yStart), dividends12m: sum(divs, yearAgo),
+        fees, feesYtd: sum(fees, yStart), fees12m: sum(fees, yearAgo),
+        feeRate: av12 && fees.length ? sum(fees, yearAgo) / av12 : null,
+        yield12m: av12 && divs.length ? sum(divs, yearAgo) / av12 : null,
+        ytd: windowStats(startYtd, latest), sinceStart: windowStats(first, latest),
+        allocation: alloc, cashShare: latest && latest.valueSgd ? (alloc.assetClass.Cash || 0) / num(latest.valueSgd) : null,
+        trades: trades.length, turnover: r2(trades.filter((x) => x.type === 'sell').reduce((s, x) => s + x.sgd, 0)),
+        activity: act,
+      };
+    });
+    const valued = accounts.filter((a) => a.value != null);
+    const total = r2(valued.reduce((s, a) => s + a.value, 0));
+    const agg = (k) => { const o = {}; valued.forEach((a) => { const src = a.allocation[k]; const sumA = Object.values(src).reduce((s, v) => s + v, 0); if (sumA) Object.entries(src).forEach(([n, v]) => { o[n] = r2((o[n] || 0) + v); }); else { const key = a.account.type === 'cpf' ? 'CPF' : 'Unclassified'; o[key] = r2((o[key] || 0) + a.value); } }); return o; };
+    // month-end value series for the chart (carry the last known value forward per account)
+    const months = [...new Set(valued.flatMap((a) => a.snapshots.map((s) => s.date.slice(0, 7))))].sort();
+    const series = valued.map((a) => ({ accountId: a.account.id, name: a.account.name, points: months.map((m) => { const s = a.snapshots.filter((x) => x.date.slice(0, 7) <= m).pop(); return s ? { month: m, value: r2(num(s.valueSgd)) } : { month: m, value: null }; }) }));
+    return {
+      asOf, accounts, total, months, series,
+      contributedYtd: r2(accounts.reduce((s, a) => s + a.contributedYtd, 0)),
+      dividendsYtd: r2(accounts.reduce((s, a) => s + a.dividendsYtd, 0)),
+      feesYtd: r2(accounts.reduce((s, a) => s + a.feesYtd, 0)),
+      gainYtd: valued.some((a) => a.ytd) ? r2(valued.reduce((s, a) => s + (a.ytd ? a.ytd.gain : 0), 0)) : null,
+      allocation: { assetClass: agg('assetClass'), region: agg('region') },
+      unassigned: flowsAll.filter((f) => !f.accountId),
+    };
+  }
+
+  /** Plain-English observations for the Investments page. Each: { level: 'info'|'watch', text }. */
+  function investmentInsights(summary) {
+    const out = [];
+    const pct = (x, d = 1) => (x * 100).toFixed(d) + '%';
+    const money = (x) => '$' + Math.abs(x).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    summary.accounts.forEach((a) => {
+      const n = a.account.name;
+      if (a.ytd) {
+        const w = a.ytd;
+        out.push({ level: 'info', text: `${n}: ${w.gain >= 0 ? 'up' : 'down'} ${money(w.gain)} (${w.ret != null ? (w.ret >= 0 ? '+' : '') + pct(w.ret) : '—'}) from ${w.from} to ${w.to}` +
+          (w.net ? `, after ${w.net > 0 ? 'adding' : 'taking out'} ${money(w.net)}` : ', with no new money added') + '.' });
+        if (Math.abs(w.fxEffect) >= 5) out.push({ level: 'info', text: `${n} is held in ${a.latest.ccy}. Exchange-rate moves ${w.fxEffect < 0 ? 'cut' : 'added'} about ${money(w.fxEffect)} in SGD terms over the same period; the rest is market movement.` });
+      }
+      if (a.feeRate != null && a.feeRate >= 0.004) out.push({ level: 'watch', text: `${n}: fees were ${money(a.fees12m)} over the last 12 months, about ${pct(a.feeRate, 2)} of the average balance. Dividends over the same period: ${money(a.dividends12m)}.` });
+      if (a.cashShare != null && a.cashShare >= 0.05) out.push({ level: 'watch', text: `${n}: ${pct(a.cashShare)} is sitting in cash inside the portfolio.` });
+      const top = a.allocation.holdings[0];
+      if (top && a.value && top.valueSgd / a.value >= 0.3) out.push({ level: 'info', text: `${n}: the largest holding is ${top.name} at ${pct(top.valueSgd / a.value, 0)} of the portfolio.` });
+      if (a.trades >= 6) out.push({ level: 'info', text: `${n}: ${a.trades} buy/sell trades in the last 12 months (rebalancing), selling ${money(a.turnover)} worth.` });
+      if (a.value == null && (a.contributions.length || a.dividends.length)) out.push({ level: 'watch', text: `${n}: ${a.contributions.length ? money(a.contributedAll) + ' put in' : ''}${a.contributions.length && a.dividends.length ? ' and ' : ''}${a.dividends.length ? money(a.dividends.reduce((s, x) => s + x.amount, 0)) + ' in dividends' : ''} on record, but no current value. Add one to see its return.` });
+      if (a.latest && a.latest.source === 'statement' && daysUntil(summary.asOf, a.latest.date) > 45) out.push({ level: 'watch', text: `${n}: the latest statement is from ${a.latest.date}. Import the newer ones to keep values current.` });
+    });
+    const ua = summary.unassigned.filter((f) => f.flow !== 'dividend');
+    if (ua.length) out.push({ level: 'watch', text: `${ua.length} transfer${ua.length > 1 ? 's' : ''} (${money(ua.reduce((s, f) => s + (f.flow === 'contribution' ? f.amount : -f.amount), 0))}) look like investment money but aren't tied to an account yet.` });
+    const tot = Object.values(summary.allocation.assetClass).reduce((s, v) => s + v, 0);
+    if (tot) { const eq = (summary.allocation.assetClass.Equity || 0) / tot; out.push({ level: 'info', text: `Across valued accounts: ${pct(eq, 0)} equities, ${pct((summary.allocation.assetClass.Bonds || 0) / tot, 0)} bonds, ${pct((summary.allocation.assetClass.Cash || 0) / tot, 0)} cash.` }); }
+    return out;
+  }
+
   /* ---------------- rules sanity check ---------------- */
   function validateRules(rules) {
     const errors = [];
@@ -1117,6 +1430,7 @@
     recommend, analyseLedger, ledgerEarnings, strategy, bestProgramme, diffRules, validateRules,
     KINDS, kindOf, earnsOnCard, isSpending, classifyFlow, pairTransfers,
     splitsOf, yourShare, openSplits, personMatches, matchRepayments, owedSummary, migrateContra,
+    parseDigiPortfolio, classifyHolding, mergeInvestmentStatement, investFlows, investmentSummary, investmentInsights, xirr,
     categorise, categoryForMcc, parseStatementText, parseCSV, guessCsvMapping, csvToRows, txnFingerprint,
     util: { norm, mccIn, expandList, r2, ymd, parseYmd, daysUntil },
   };

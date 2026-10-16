@@ -415,6 +415,72 @@ test('migrateContra: one share repaid by several people; mislabelled "Collect fr
   assert.deepStrictEqual(E.owedSummary(again.ledger, '2026-10-15'), {});
 });
 
+console.log('investments');
+const DIGI = [
+  'Account Statement', 'TEST USER', 'Account Summary as at 31 Jul 2026', 'digiPortfolio',
+  'digiPortfolio   Total: SGD Equivalent 1,290.00',
+  'Portfolio: D-0000000001-1', 'Global Portfolio, High risk', 'Currency : United States Dollar', 'Fund source : CASH',
+  'ISIN/   Description   Quantity Cost Value   Market Price   Market Value   Market',
+  'SPYL   SPDR S&P 500 UCITS   36   492.62   18.3840   661.82   854.98',
+  'ETF   13.6839   31 Jul 2026   169.20',
+  'VDTY   VANGUARD USD   1   21.78   21.0190   21.02   27.15',
+  'TREASURY BOND   21.7800   31 Jul 2026   -0.76',
+  'UCITS ETF',
+  'XMME   X MSCI EM 1C UCITS   4   300.00   80.0000   320.00   413.38',
+  '(DR) ETF   75.0000   31 Jul 2026   20.00',
+  'Cash   -4.33   -5.51',
+  'Total Investment Value:   998.51   1,290.00',
+  'Account Summary as of 31 Jul 2026   Page 1 of 3',
+  'Transaction Details as at 31 Jul 2026', 'digiPortfolio', 'Portfolio No. D-0000000001-1', 'Global Portfolio, High risk', 'Currency : United States Dollar',
+  'Transaction Date Transaction Type   Price   Currency   Debit   Credit',
+  '08/07/2026   Management Fee (Inclusive of GST)   USD   12.60', 'AbC12 Annual Management Fee   12.60',
+  '10/07/2026   Dividend   USD   0.07', 'EACPA260710A0 Cash Dividend   0.07',
+  '14/07/2026   Sell   18.57   USD   37.14', '2026071400627 SPDR S&P 500 UCITS ETF   2   37.14', 'EltZ0.0',
+  '16/07/2026   Buy   90.3563   USD   90.36', 'QAT3R4UTSQZR X MSCI EM 1C UCITS (DR) ETF   1   90.36',
+  'Total Balance:   102.96   37.21',
+].join('\n');
+test('digiPortfolio statement parses and ties to its totals', () => {
+  const p = E.parseDigiPortfolio(DIGI);
+  assert.strictEqual(p.date, '2026-07-31');
+  const pf = p.portfolios[0];
+  assert.strictEqual(pf.currency, 'USD'); assert.strictEqual(pf.holdings.length, 3);
+  const v = pf.holdings.find((h) => h.code === 'VDTY');
+  assert.strictEqual(v.name, 'VANGUARD USD TREASURY BOND UCITS ETF'); assert.strictEqual(v.assetClass, 'Bonds'); close(v.pnl, -0.76);
+  close(pf.holdings.reduce((s, h) => s + h.value, 0) + pf.cash, pf.totalCcy);
+  const debit = pf.activity.filter((a) => a.debit).reduce((s, a) => s + a.amount, 0);
+  close(debit, pf.txTotals.debit);
+  assert.strictEqual(pf.activity.find((a) => a.type === 'buy').code, 'XMME');
+  assert.strictEqual(pf.activity.find((a) => a.type === 'sell').units, 2);
+  close(pf.fx, 1290 / 998.51);
+});
+test('importing the same statement twice changes nothing', () => {
+  const inv = {}; let n = 0; const newId = () => 'x' + (++n);
+  E.mergeInvestmentStatement(inv, E.parseDigiPortfolio(DIGI), { newId });
+  const again = E.mergeInvestmentStatement(inv, E.parseDigiPortfolio(DIGI), { newId });
+  assert.strictEqual(inv.accounts.length, 1); assert.strictEqual(inv.snapshots.length, 1);
+  assert.strictEqual(inv.activity.length, 4); assert.strictEqual(again.activity, 0);
+});
+test('summary: gain excludes new money; contributions and dividends come from bank lines', () => {
+  const inv = { accounts: [{ id: 'e', name: 'Endowus', type: 'robo', patterns: ['ENDOWUS', 'INVESTMENT SECURITIES'] }, { id: 's', name: 'SGX shares', type: 'shares', patterns: [] }],
+    snapshots: [{ accountId: 'e', date: '2026-01-31', valueSgd: 1000, source: 'manual' }, { accountId: 'e', date: '2026-06-30', valueSgd: 1600, source: 'manual' }], activity: [] };
+  const L = [
+    { id: 'b1', date: '2026-03-11', amount: 500, direction: 'out', kind: 'transfer', rawDescription: 'Advice FAST Collection SGA11036 INVESTMENT & SECURITIES', source: 'import' },
+    { id: 'b2', date: '2026-03-11', amount: 500, direction: 'out', kind: 'transfer', rawDescription: 'Money to Endowus', source: 'spreadsheet' },
+    { id: 'd1', date: '2026-03-02', amount: 33.94, direction: 'in', kind: 'income', rawDescription: 'Dividends (OUE)' },
+    { id: 'x', date: '2026-03-05', amount: 12, direction: 'out', kind: 'expense', rawDescription: 'Lunch' },
+  ];
+  const S = E.investmentSummary(inv, L, '2026-07-01');
+  const e = S.accounts.find((a) => a.account.id === 'e');
+  close(e.contributedAll, 500);          // the spreadsheet row and the bank line are one transfer
+  close(e.ytd.gain, 100);                // 1600 - 1000 - 500
+  assert.ok(e.ytd.ret > 0.07 && e.ytd.ret < 0.08);
+  close(S.accounts.find((a) => a.account.id === 's').dividendsYtd, 33.94);
+  assert.strictEqual(S.unassigned.length, 0);
+});
+test('xirr: 10% over exactly one year', () => {
+  close(E.xirr([{ date: '2025-01-01', amount: -1000 }, { date: '2026-01-01', amount: 1100 }]), 0.1);
+});
+
 console.log('rules refresh');
 test('diff reports cap and rate changes', () => {
   const next = JSON.parse(JSON.stringify(rules));
