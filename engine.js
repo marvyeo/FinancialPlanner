@@ -1430,7 +1430,11 @@
     const money = (x) => '$' + Math.abs(x).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     summary.accounts.forEach((a) => {
       const n = a.account.name;
-      if (a.ytd) {
+      if (a.account.type === 'cpf' && a.ytd) {
+        const inY = a.contributions.filter((c) => c.date >= a.ytd.from && c.amount > 0).reduce((x, c) => x + c.amount, 0);
+        const outY = -a.contributions.filter((c) => c.date >= a.ytd.from && c.amount < 0).reduce((x, c) => x + c.amount, 0);
+        out.push({ level: 'info', text: `${n}: ${money(a.value)} on ${a.valueDate}. Since ${a.ytd.from}, ${money(inY)} went in and ${money(outY)} was paid out of it (housing, insurance). CPF interest is credited at the end of December, so this year's growth shows up then.` });
+      } else if (a.ytd) {
         const w = a.ytd;
         out.push({ level: 'info', text: `${n}: ${w.gain >= 0 ? 'up' : 'down'} ${money(w.gain)} (${w.ret != null ? (w.ret >= 0 ? '+' : '') + pct(w.ret) : '—'}) from ${w.from} to ${w.to}` +
           (w.net ? `, after ${w.net > 0 ? 'adding' : 'taking out'} ${money(w.net)}` : ', with no new money added') + '.' });
@@ -1446,7 +1450,7 @@
       if (a.yield12m != null && a.yield12m >= 0.02 && a.value) out.push({ level: 'info', text: `${n}: ${money(a.dividends12m)} in dividends over the last 12 months, about ${pct(a.yield12m)} of its value.` });
       if (a.cashShare != null && a.cashShare >= 0.05) out.push({ level: 'watch', text: `${n}: ${pct(a.cashShare)} is sitting in cash inside the portfolio.` });
       const top = a.allocation.holdings[0];
-      if (top && a.value && a.allocation.holdings.length > 1 && top.valueSgd / a.value >= 0.3) out.push({ level: 'info', text: `${n}: the largest holding is ${top.name} at ${pct(top.valueSgd / a.value, 0)} of the portfolio.` });
+      if (top && a.value && a.account.type !== 'cpf' && a.allocation.holdings.length > 1 && top.valueSgd / a.value >= 0.3) out.push({ level: 'info', text: `${n}: the largest holding is ${top.name} at ${pct(top.valueSgd / a.value, 0)} of the portfolio.` });
       if (a.trades >= 6) out.push({ level: 'info', text: `${n}: ${a.trades} buy/sell trades in the last 12 months (rebalancing), selling ${money(a.turnover)} worth.` });
       if (a.value == null && (a.contributions.length || a.dividends.length)) out.push({ level: 'watch', text: `${n}: ${a.contributions.length ? money(a.contributedAll) + ' put in' : ''}${a.contributions.length && a.dividends.length ? ' and ' : ''}${a.dividends.length ? money(a.dividends.reduce((s, x) => s + x.amount, 0)) + ' in dividends' : ''} on record, but no current value. Add one to see its return.` });
       if (a.latest && a.latest.source === 'statement' && daysUntil(summary.asOf, a.latest.date) > 45) out.push({ level: 'watch', text: `${n}: the latest statement is from ${a.latest.date}. Import the newer ones to keep values current.` });
@@ -1468,7 +1472,7 @@
     const tot = Object.values(summary.allocation.assetClass).reduce((s, v) => s + v, 0);
     if (tot) {
       const parts = Object.entries(summary.allocation.assetClass).filter(([, v]) => v > 0).sort((x, y) => y[1] - x[1])
-        .map(([k, v]) => `${v / tot < 0.005 ? 'under 1%' : pct(v / tot, 0)} ${k === 'Equity' ? 'shares' : k.toLowerCase()}`);
+        .map(([k, v]) => `${v / tot < 0.005 ? 'under 1%' : pct(v / tot, 0)} ${k === 'Equity' ? 'shares' : ['CPF', 'REITs'].includes(k) ? k : k.toLowerCase()}`);
       out.push({ level: 'info', text: `Across valued accounts: ${parts.join(', ')}.` });
     }
     return out;
