@@ -657,7 +657,7 @@ function householdSettingsHtml() {
     <div class="table-wrap"><table class="data-table"><thead><tr><th>Google account</th><th>Person</th><th></th></tr></thead><tbody>${members || '<tr><td colspan="3"><div class="empty" style="padding:14px;">Only you so far</div></td></tr>'}</tbody></table></div>
     <div class="smart-spend-box">
       <div class="form-grid">
-        <div class="form-row"><label>Share the planner with</label><input id="hh-share-email" value="${esc((hh.members || []).some(m => m.email === 'carol.tan.jx@gmail.com') ? '' : 'carol.tan.jx@gmail.com')}" placeholder="name@gmail.com"/></div>
+        <div class="form-row"><label>Share the planner with</label><input id="hh-share-email" value="" placeholder="partner@gmail.com"/></div>
         <div class="form-row"><label>They are</label><select id="hh-share-who">${['wife','marvin'].map(p => `<option value="${p}">${profileLabel(p)}</option>`).join('')}</select></div>
       </div>
       <button class="btn-primary" onclick="shareHousehold()">Share</button>
