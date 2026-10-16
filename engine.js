@@ -1403,7 +1403,7 @@
     });
     const valued = accounts.filter((a) => a.value != null);
     const total = r2(valued.reduce((s, a) => s + a.value, 0));
-    const agg = (k) => { const o = {}; valued.forEach((a) => { const src = a.allocation[k]; const sumA = Object.values(src).reduce((s, v) => s + v, 0); if (sumA) Object.entries(src).forEach(([n, v]) => { o[n] = r2((o[n] || 0) + v); }); else { const key = a.account.type === 'cpf' ? 'CPF' : 'Unclassified'; o[key] = r2((o[key] || 0) + a.value); } }); return o; };
+    const agg = (k) => { const o = {}; valued.forEach((a) => { const src = a.allocation[k]; const sumA = Object.values(src).reduce((s, v) => s + v, 0); if (sumA) Object.entries(src).forEach(([n, v]) => { o[n] = r2((o[n] || 0) + v); }); else if (a.value) { const key = a.account.type === 'cpf' ? 'CPF' : 'Unclassified'; o[key] = r2((o[key] || 0) + a.value); } }); return o; };
     // month-end value series for the chart (carry the last known value forward per account)
     // only accounts with a value history are drawn; opening zeros are anchors, not readings
     const real = (a) => a.snapshots.filter((x) => !x.opening);
@@ -1443,6 +1443,7 @@
         else out.push({ level: 'info', text: `${n}: ${w.gain >= 0 ? 'up' : 'down'} ${money(w.gain)} on ${money(w.net)} put in since ${since}` + (w.annualised != null ? `, about ${pct(w.annualised)} a year (money-weighted)` : '') + '.' });
       }
       if (a.feeRate != null && a.feeRate >= 0.004) out.push({ level: 'watch', text: `${n}: fees were ${money(a.fees12m)} over the last 12 months${a.cashback12m ? ` (cashback paid back ${money(a.cashback12m)})` : ''}, about ${pct(a.feeRate, 2)} of the average balance. Dividends over the same period: ${money(a.dividends12m)}.` });
+      if (a.yield12m != null && a.yield12m >= 0.02 && a.value) out.push({ level: 'info', text: `${n}: ${money(a.dividends12m)} in dividends over the last 12 months, about ${pct(a.yield12m)} of its value.` });
       if (a.cashShare != null && a.cashShare >= 0.05) out.push({ level: 'watch', text: `${n}: ${pct(a.cashShare)} is sitting in cash inside the portfolio.` });
       const top = a.allocation.holdings[0];
       if (top && a.value && a.allocation.holdings.length > 1 && top.valueSgd / a.value >= 0.3) out.push({ level: 'info', text: `${n}: the largest holding is ${top.name} at ${pct(top.valueSgd / a.value, 0)} of the portfolio.` });
@@ -1465,7 +1466,11 @@
     const eqUS = summary.accounts.reduce((s, a) => s + a.allocation.holdings.filter((h) => h.assetClass === 'Equity' && h.region === 'US').reduce((x, h) => x + h.valueSgd, 0), 0);
     if (eqTot > 0 && eqUS / eqTot >= 0.6) out.push({ level: 'info', text: `${pct(eqUS / eqTot, 0)} of the shares you hold across accounts are US companies (${money(eqUS)} of ${money(eqTot)}).` });
     const tot = Object.values(summary.allocation.assetClass).reduce((s, v) => s + v, 0);
-    if (tot) { const eq = (summary.allocation.assetClass.Equity || 0) / tot; out.push({ level: 'info', text: `Across valued accounts: ${pct(eq, 0)} equities, ${pct((summary.allocation.assetClass.Bonds || 0) / tot, 0)} bonds, ${pct((summary.allocation.assetClass.Cash || 0) / tot, 0)} cash.` }); }
+    if (tot) {
+      const parts = Object.entries(summary.allocation.assetClass).filter(([, v]) => v > 0).sort((x, y) => y[1] - x[1])
+        .map(([k, v]) => `${v / tot < 0.005 ? 'under 1%' : pct(v / tot, 0)} ${k === 'Equity' ? 'shares' : k.toLowerCase()}`);
+      out.push({ level: 'info', text: `Across valued accounts: ${parts.join(', ')}.` });
+    }
     return out;
   }
 

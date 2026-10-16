@@ -2999,7 +2999,7 @@ async function importInvestmentFiles(e) {
     } catch (err) { failed.push(f.name + ' (' + err.message + ')'); }
   }
   if (done.length) { saveToDrive(); render(); }
-  const msg = done.length ? `Imported ${done.length} statement${done.length > 1 ? 's' : ''} (${done.sort()[0]} to ${done.sort().pop()}): ${snaps} month-end value${snaps !== 1 ? 's' : ''}, ${acts} new trade/dividend/fee line${acts !== 1 ? 's' : ''}${created.size ? '. Added account: ' + [...created].join(', ') : ''}.` : '';
+  const msg = done.length ? `Imported ${done.length} file${done.length > 1 ? 's' : ''} (${done.sort()[0]} to ${done.sort().pop()}): ${snaps} month-end value${snaps !== 1 ? 's' : ''}, ${acts} new trade/dividend/fee line${acts !== 1 ? 's' : ''}${created.size ? '. Added account: ' + [...created].join(', ') : ''}.` : '';
   if (failed.length) alert((msg ? msg + '\n\n' : '') + 'Not imported:\n' + failed.join('\n') + '\n\nThe app reads DBS digiPortfolio statements and prepared investment files (.json). For other platforms, use "Record value".');
   else toast(msg, 6000);
 }
@@ -3122,7 +3122,7 @@ function renderInvest() {
         ${a.allocation.holdings.map(h => `<tr><td>${h.code ? `<strong>${esc(h.code)}</strong> <span class="hint">${esc(h.name)}</span>` : `<strong>${esc(h.name)}</strong>`}</td><td class="hint">${esc(h.assetClass)}${h.assetClass === 'Equity' ? ' · ' + esc(h.region) : ''}${h.expenseRatio != null ? ' · fund cost ' + (h.expenseRatio * 100).toFixed(2) + '%/yr' : ''}</td><td class="tabnum" style="text-align:right;">${h.units ?? ''}</td><td class="tabnum" style="text-align:right;">$${fmtAmt(h.valueSgd)}</td>
           <td class="tabnum ${h.pnl > 0 ? 'text-green' : h.pnl < 0 ? 'text-red' : ''}" style="text-align:right;">${h.pnl == null ? '—' : (h.pnl >= 0 ? '+' : '−') + fmtAmt(Math.abs(h.pnl))}${h.cost ? ` <span class="hint">${pctFmt(h.pnl / h.cost, 0)}</span>` : ''}</td></tr>`).join('')}
         ${a.latest.cashSgd ? `<tr><td><strong>Cash</strong></td><td class="hint">Cash</td><td></td><td class="tabnum" style="text-align:right;">$${fmtAmt(a.latest.cashSgd)}</td><td></td></tr>` : ''}</tbody></table></div>` : '';
-    const lines = [...a.activity.map(x => ({ date: x.date, what: (x.type === 'fee' && x.label ? x.label : x.type === 'deposit' && x.via ? 'Money in (' + x.via + ')' : ({ buy: 'Buy', sell: 'Sell', dividend: 'Dividend', fee: 'Fee', deposit: 'Deposit', withdrawal: 'Withdrawal', cashback: 'Cashback' }[x.type] || x.label)) + (x.code ? ' ' + x.code : x.name && x.type !== 'dividend' && x.type !== 'fee' ? ' ' + x.name : ''), amt: (['buy', 'fee', 'withdrawal'].includes(x.type) ? '−' : '+') + (x.ccy || '') + ' ' + fmtAmt(x.amount) + (x.units ? ` · ${x.units} @ ${x.price}` : '') })),
+    const lines = [...a.activity.map(x => ({ date: x.date, what: (x.type === 'fee' && x.label ? x.label : x.type === 'deposit' && x.via ? 'Money in (' + x.via + ')' : ({ buy: 'Buy', sell: 'Sell', dividend: 'Dividend', fee: 'Fee', deposit: 'Deposit', withdrawal: 'Withdrawal', cashback: 'Cashback' }[x.type] || x.label)) + (x.code ? ' ' + x.code : x.name && x.type !== 'dividend' && x.type !== 'fee' ? ' ' + x.name : ''), amt: x.type === 'credit' ? `+${x.units} units` + (x.amount ? ` (worth ${x.ccy || 'SGD'} ${fmtAmt(x.amount)})` : '') : (['buy', 'fee', 'withdrawal'].includes(x.type) ? '−' : '+') + (x.ccy || '') + ' ' + fmtAmt(x.amount) + (x.units ? ` · ${x.units} @ ${x.price}` : '') })),
       ...a.contributions.filter(c => c.via === 'bank').map(c => ({ date: c.date, what: c.amount > 0 ? 'Money in (bank)' : 'Money out (bank)', amt: (c.amount > 0 ? '+' : '−') + 'SGD ' + fmtAmt(Math.abs(c.amount)) })),
       ...a.dividends.filter(d => d.txnId).map(d => ({ date: d.date, what: 'Dividend (bank)', amt: '+SGD ' + fmtAmt(d.amount) })),
       ...a.snapshots.filter(s => s.source === 'manual').map(s => ({ date: s.date, what: 'Value recorded', amt: 'SGD ' + fmtAmt(s.valueSgd), snap: s }))]
@@ -3141,7 +3141,7 @@ function renderInvest() {
       </div>
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
         <button class="btn-secondary" style="font-size:12px;" onclick="invOpen['${acc.id}']=!invOpen['${acc.id}'];render()">${open ? 'Hide' : 'Show'} holdings & activity</button>
-        <button class="btn-secondary" style="font-size:12px;" onclick="openInvValueModal('${acc.id}')">Record value</button>
+        ${a.latest && a.latest.source !== 'statement' && (a.latest.holdings || []).some(h => h.units && h.price != null) ? `<button class="btn-secondary" style="font-size:12px;" onclick="openInvPriceModal('${acc.id}')">Update prices</button>` : `<button class="btn-secondary" style="font-size:12px;" onclick="openInvValueModal('${acc.id}')">Record value</button>`}
         <button class="btn-secondary" style="font-size:12px;" onclick="openInvAccountModal('${acc.id}')">Edit</button></div>
       ${open ? hold + act : ''}</div>`;
   }).join('');
@@ -3200,6 +3200,34 @@ function openInvValueModal(id) {
     <div class="form-grid"><div class="form-row"><label>Date</label><input id="iv-date" type="date" ${inp} value="${today()}"/></div>
       <div class="form-row"><label>Value (SGD)</label><input id="iv-val" type="number" step="0.01" inputmode="decimal" ${inp} placeholder="0.00"/></div></div>
     <div class="modal-footer"><button class="btn-secondary" onclick="closeModal()">Cancel</button><button class="btn-primary" onclick="saveInvValue()">Save</button></div>`);
+}
+// Re-price the holdings of a non-statement account: units stay, prices change, a new dated value is recorded.
+function openInvPriceModal(id) {
+  const inv = invData(); const acc = inv.accounts.find(a => a.id === id);
+  const last = inv.snapshots.filter(s => s.accountId === id && !s.opening).sort((a, b) => (a.date < b.date ? -1 : 1)).pop(); if (!last) return;
+  const inp = 'style="background:#0D1B2A;border:1px solid #2A4A6B;color:#F0F4F8;border-radius:7px;padding:7px 9px;width:110px;text-align:right;"';
+  window._priceSnap = last;
+  showModal(`<h3>Update prices · ${esc(acc.name)}</h3>
+    <p class="hint" style="margin:-8px 0 12px;">Units stay as they are. Enter today's prices (SGD) from your broker or platform; the value is recalculated.</p>
+    <div style="overflow-x:auto;"><table class="data-table mini-table"><thead><tr><th>Holding</th><th style="text-align:right;">Units</th><th style="text-align:right;">Last price</th><th style="text-align:right;">New price</th></tr></thead><tbody>
+    ${last.holdings.map((h, i) => `<tr><td>${h.code ? '<strong>' + esc(h.code) + '</strong> ' : ''}<span class="hint">${esc(h.name)}</span></td><td class="tabnum" style="text-align:right;">${h.units}</td>
+      <td class="tabnum hint" style="text-align:right;">${h.price ?? '—'}${h.priceDate ? '<div style="font-size:10.5px;">' + esc(h.priceDate) + '</div>' : ''}</td>
+      <td style="text-align:right;"><input id="pr-${i}" type="number" step="any" inputmode="decimal" ${inp} value="${h.price ?? ''}"/></td></tr>`).join('')}</tbody></table></div>
+    <div class="form-row" style="margin-top:10px;"><label>Prices as of</label><input id="pr-date" type="date" value="${today()}" style="background:#0D1B2A;border:1px solid #2A4A6B;color:#F0F4F8;border-radius:7px;padding:8px 10px;"/></div>
+    <div class="modal-footer"><button class="btn-secondary" onclick="closeModal()">Cancel</button><button class="btn-primary" onclick="saveInvPrices()">Save</button></div>`);
+}
+function saveInvPrices() {
+  const inv = invData(); const last = window._priceSnap; const date = document.getElementById('pr-date').value; if (!last || !date) return;
+  const holdings = last.holdings.map((h, i) => {
+    const pr = Number(document.getElementById('pr-' + i).value); const price = isFinite(pr) && pr >= 0 ? pr : h.price;
+    const v = Math.round(h.units * price * 100) / 100;
+    return { ...h, price, priceDate: date, value: v, valueSgd: v, pnl: h.cost != null ? Math.round((v - h.cost) * 100) / 100 : h.pnl };
+  });
+  const valueSgd = Math.round(holdings.reduce((s, h) => s + h.valueSgd, 0) * 100) / 100 + (Number(last.cashSgd) || 0);
+  inv.snapshots = inv.snapshots.filter(s => !(s.accountId === last.accountId && s.date === date));
+  inv.snapshots.push({ id: 'inv_' + uid(), accountId: last.accountId, date, valueSgd, source: 'manual', ccy: 'SGD', fx: 1, cashSgd: last.cashSgd || 0, holdings });
+  inv.snapshots.sort((a, b) => (a.date < b.date ? -1 : 1));
+  closeModal(); saveToDrive(); render(); toast('Value updated: $' + fmtAmt(valueSgd));
 }
 function saveInvValue() {
   const inv = invData(); const accountId = document.getElementById('iv-acct').value, date = document.getElementById('iv-date').value, v = Number(document.getElementById('iv-val').value);
