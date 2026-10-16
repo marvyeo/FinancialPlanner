@@ -1197,7 +1197,7 @@
     else if (/ bond | bnd | treasury | corp | aggregate | govt | fixed income | t ?bill | sgs | ssb /.test(n)) assetClass = 'Bonds';
     else if (/ reit | trust | ascott | capitaland integrated | mapletree /.test(n)) assetClass = 'REITs';
     let region = 'Global';
-    if (/ s p 500 | usa | nasdaq | russell | treasury | us /.test(n)) region = 'US';
+    if (/ s p 500 | usa | u s | nasdaq | russell | treasury | us | united states /.test(n)) region = 'US';
     else if (/ eur | europe | stoxx /.test(n)) region = 'Europe';
     else if (/ jap | japan | nikkei | jpx /.test(n)) region = 'Japan';
     else if (/ em | emerging | india | china | fe x jp | asia ex /.test(n)) region = 'Emerging markets';
@@ -1232,6 +1232,46 @@
         if (have.has(key(rec))) return;
         have.add(key(rec)); inv.activity.push(rec); res.activity++;
       });
+    });
+    inv.snapshots.sort((x, y) => (x.date < y.date ? -1 : 1));
+    inv.activity.sort((x, y) => (x.date < y.date ? -1 : 1));
+    return res;
+  }
+
+  /**
+   * Merge a prepared investments file: { format:'fp-investments', accounts:[{key, name, provider, type, owner, fundedBy, patterns, replaces}],
+   *   snapshots:[{account, date, valueSgd, opening?, holdings[]}], activity:[{account, date, type, amount, ccy, name, units, price, label}] }.
+   * Accounts are matched by provider+key, then by an existing empty account named in `replaces`. Idempotent.
+   */
+  function mergeInvestmentData(inv, payload, opts) {
+    opts = opts || {};
+    const newId = opts.newId || (() => 'inv_' + Math.random().toString(36).slice(2, 10));
+    inv.accounts = inv.accounts || []; inv.snapshots = inv.snapshots || []; inv.activity = inv.activity || [];
+    const res = { created: [], updated: [], snapshots: 0, activity: 0 };
+    const idFor = {};
+    (payload.accounts || []).forEach((p) => {
+      const ext = (p.provider || '') + ':' + p.key;
+      let a = inv.accounts.find((x) => x.extId === ext);
+      if (!a && p.replaces) a = inv.accounts.find((x) => !x.extId && p.replaces.some((n) => norm(n) === norm(x.name)) && !inv.snapshots.some((s) => s.accountId === x.id) && !inv.activity.some((s) => s.accountId === x.id));
+      const fields = { name: p.name, provider: p.provider, type: p.type || 'robo', owner: p.owner || 'marvin', fundedBy: p.fundedBy || '', strategy: p.strategy || '', extId: ext };
+      if (a) { Object.assign(a, fields); a.patterns = [...new Set((a.patterns || []).concat(p.patterns || []))]; res.updated.push(a.name); }
+      else { a = { id: newId(), ...fields, patterns: p.patterns || [], dividendPatterns: [] }; inv.accounts.push(a); res.created.push(a.name); }
+      idFor[p.key] = a.id;
+    });
+    (payload.snapshots || []).forEach((s) => {
+      const accountId = idFor[s.account]; if (!accountId) return;
+      const snap = { id: newId(), accountId, date: s.date, source: s.source || 'import', opening: !!s.opening, valueSgd: num(s.valueSgd), ccy: 'SGD', fx: 1,
+        holdings: (s.holdings || []).map((h) => { const c = classifyHolding(h.name, h.code); return { ...h, assetClass: h.assetClass || c.assetClass, region: h.region || c.region }; }) };
+      inv.snapshots = inv.snapshots.filter((x) => !(x.accountId === accountId && x.date === s.date));
+      inv.snapshots.push(snap); res.snapshots++;
+    });
+    const key = (x) => [x.accountId, x.date, x.type, r2(num(x.amount)), x.units || '', norm(x.name).slice(0, 20)].join('|');
+    const have = new Set(inv.activity.map(key));
+    (payload.activity || []).forEach((x) => {
+      const accountId = idFor[x.account]; if (!accountId) return;
+      const rec = { id: newId(), accountId, date: x.date, type: x.type, label: x.label || x.type, name: x.name || '', code: x.code || '', units: x.units || null, price: x.price || null, amount: num(x.amount), ccy: x.ccy || 'SGD', ref: x.ref || '', via: x.via || '' };
+      if (have.has(key(rec))) return;
+      have.add(key(rec)); inv.activity.push(rec); res.activity++;
     });
     inv.snapshots.sort((x, y) => (x.date < y.date ? -1 : 1));
     inv.activity.sort((x, y) => (x.date < y.date ? -1 : 1));
@@ -1309,9 +1349,12 @@
       });
       const divs = act.filter((x) => x.type === 'dividend').map((x) => ({ date: x.date, amount: x.sgd })).concat(bank.filter((f) => f.flow === 'dividend').map((f) => ({ date: f.txn.date, amount: f.amount, txnId: f.txn.id })));
       const fees = act.filter((x) => x.type === 'fee').map((x) => ({ date: x.date, amount: x.sgd }));
+      const rebates = act.filter((x) => x.type === 'cashback').map((x) => ({ date: x.date, amount: x.sgd }));
       const sum = (arr, from, to) => r2(arr.filter((x) => x.date >= from && x.date <= (to || asOf)).reduce((s, x) => s + num(x.amount), 0));
       const latest = snaps[snaps.length - 1] || null, first = snaps[0] || null;
-      const startYtd = snaps.filter((s) => s.date < yStart).pop() || snaps.find((s) => s.date >= yStart) || null;
+      // an "opening" snapshot (value 0 the day before the first deposit) anchors since-start returns, but isn't a year-end value
+      let startYtd = snaps.filter((s) => s.date < yStart).pop() || snaps.find((s) => s.date >= yStart) || null;
+      if (startYtd && startYtd.opening && startYtd.date < yStart) startYtd = null;
       const windowStats = (start, end) => {
         if (!start || !end || start === end || start.date >= end.date) return null;
         const inWin = ext.filter((e) => e.date > start.date && e.date <= end.date);
@@ -1334,7 +1377,7 @@
           const c = h.assetClass ? h : { ...h, ...classifyHolding(h.name, h.code) };
           alloc.assetClass[c.assetClass] = r2((alloc.assetClass[c.assetClass] || 0) + v);
           alloc.region[c.assetClass === 'Equity' || c.assetClass === 'REITs' ? c.region : c.assetClass] = r2((alloc.region[c.assetClass === 'Equity' || c.assetClass === 'REITs' ? c.region : c.assetClass] || 0) + v);
-          alloc.holdings.push({ code: h.code, name: h.name, valueSgd: r2(v), pnl: h.pnl, cost: h.cost, value: h.value, units: h.units, assetClass: c.assetClass, region: c.region });
+          alloc.holdings.push({ code: h.code, name: h.name, valueSgd: r2(v), pnl: h.pnl, cost: h.cost, value: h.value, units: h.units, price: h.price, assetClass: c.assetClass, region: c.region, expenseRatio: h.expenseRatio, isin: h.isin });
         });
         const cash = num(latest.cashSgd) || num(latest.cashCcy) * fx;
         if (cash) { alloc.assetClass.Cash = r2((alloc.assetClass.Cash || 0) + cash); alloc.region.Cash = r2((alloc.region.Cash || 0) + cash); }
@@ -1349,7 +1392,8 @@
         contributedAll: r2(ext.reduce((s, e) => s + e.amount, 0)),
         dividends: divs, dividendsYtd: sum(divs, yStart), dividends12m: sum(divs, yearAgo),
         fees, feesYtd: sum(fees, yStart), fees12m: sum(fees, yearAgo),
-        feeRate: av12 && fees.length ? sum(fees, yearAgo) / av12 : null,
+        cashback: rebates, cashbackYtd: sum(rebates, yStart), cashback12m: sum(rebates, yearAgo), feesAll: sum(fees, '0000'), cashbackAll: sum(rebates, '0000'),
+        feeRate: av12 && fees.length ? sum(fees, yearAgo) / av12 : null,   // platform fees; fund costs (net of any cashback) sit on each holding's expenseRatio
         yield12m: av12 && divs.length ? sum(divs, yearAgo) / av12 : null,
         ytd: windowStats(startYtd, latest), sinceStart: windowStats(first, latest),
         allocation: alloc, cashShare: latest && latest.valueSgd ? (alloc.assetClass.Cash || 0) / num(latest.valueSgd) : null,
@@ -1361,14 +1405,19 @@
     const total = r2(valued.reduce((s, a) => s + a.value, 0));
     const agg = (k) => { const o = {}; valued.forEach((a) => { const src = a.allocation[k]; const sumA = Object.values(src).reduce((s, v) => s + v, 0); if (sumA) Object.entries(src).forEach(([n, v]) => { o[n] = r2((o[n] || 0) + v); }); else { const key = a.account.type === 'cpf' ? 'CPF' : 'Unclassified'; o[key] = r2((o[key] || 0) + a.value); } }); return o; };
     // month-end value series for the chart (carry the last known value forward per account)
-    const months = [...new Set(valued.flatMap((a) => a.snapshots.map((s) => s.date.slice(0, 7))))].sort();
-    const series = valued.map((a) => ({ accountId: a.account.id, name: a.account.name, points: months.map((m) => { const s = a.snapshots.filter((x) => x.date.slice(0, 7) <= m).pop(); return s ? { month: m, value: r2(num(s.valueSgd)) } : { month: m, value: null }; }) }));
+    // only accounts with a value history are drawn; opening zeros are anchors, not readings
+    const real = (a) => a.snapshots.filter((x) => !x.opening);
+    const charted = valued.filter((a) => real(a).length >= 2);
+    const months = [...new Set(charted.flatMap((a) => real(a).map((s) => s.date.slice(0, 7))))].sort();
+    const series = charted.map((a) => ({ accountId: a.account.id, name: a.account.name, points: months.map((m) => { const s = real(a).filter((x) => x.date.slice(0, 7) <= m).pop(); return s ? { month: m, value: r2(num(s.valueSgd)) } : { month: m, value: null }; }) }));
     return {
-      asOf, accounts, total, months, series,
+      asOf, accounts, total, months, series, notCharted: valued.filter((a) => real(a).length < 2 && a.value).map((a) => a.account.name),
       contributedYtd: r2(accounts.reduce((s, a) => s + a.contributedYtd, 0)),
       dividendsYtd: r2(accounts.reduce((s, a) => s + a.dividendsYtd, 0)),
       feesYtd: r2(accounts.reduce((s, a) => s + a.feesYtd, 0)),
       gainYtd: valued.some((a) => a.ytd) ? r2(valued.reduce((s, a) => s + (a.ytd ? a.ytd.gain : 0), 0)) : null,
+      gainAll: valued.some((a) => a.sinceStart) ? r2(valued.reduce((s, a) => s + (a.sinceStart ? a.sinceStart.gain : 0), 0)) : null,
+      cashbackYtd: r2(accounts.reduce((s, a) => s + a.cashbackYtd, 0)),
       allocation: { assetClass: agg('assetClass'), region: agg('region') },
       unassigned: flowsAll.filter((f) => !f.accountId),
     };
@@ -1387,16 +1436,34 @@
           (w.net ? `, after ${w.net > 0 ? 'adding' : 'taking out'} ${money(w.net)}` : ', with no new money added') + '.' });
         if (Math.abs(w.fxEffect) >= 5) out.push({ level: 'info', text: `${n} is held in ${a.latest.ccy}. Exchange-rate moves ${w.fxEffect < 0 ? 'cut' : 'added'} about ${money(w.fxEffect)} in SGD terms over the same period; the rest is market movement.` });
       }
-      if (a.feeRate != null && a.feeRate >= 0.004) out.push({ level: 'watch', text: `${n}: fees were ${money(a.fees12m)} over the last 12 months, about ${pct(a.feeRate, 2)} of the average balance. Dividends over the same period: ${money(a.dividends12m)}.` });
+      if (!a.ytd && a.sinceStart && a.sinceStart.from) {
+        const w = a.sinceStart;
+        const since = a.first && a.first.opening && a.contributions.length ? a.contributions[0].date : w.from;
+        if (!a.value && w.net <= 0) out.push({ level: 'info', text: `${n}: closed. It made ${money(w.gain)} overall before the money was taken out.` });
+        else out.push({ level: 'info', text: `${n}: ${w.gain >= 0 ? 'up' : 'down'} ${money(w.gain)} on ${money(w.net)} put in since ${since}` + (w.annualised != null ? `, about ${pct(w.annualised)} a year (money-weighted)` : '') + '.' });
+      }
+      if (a.feeRate != null && a.feeRate >= 0.004) out.push({ level: 'watch', text: `${n}: fees were ${money(a.fees12m)} over the last 12 months${a.cashback12m ? ` (cashback paid back ${money(a.cashback12m)})` : ''}, about ${pct(a.feeRate, 2)} of the average balance. Dividends over the same period: ${money(a.dividends12m)}.` });
       if (a.cashShare != null && a.cashShare >= 0.05) out.push({ level: 'watch', text: `${n}: ${pct(a.cashShare)} is sitting in cash inside the portfolio.` });
       const top = a.allocation.holdings[0];
-      if (top && a.value && top.valueSgd / a.value >= 0.3) out.push({ level: 'info', text: `${n}: the largest holding is ${top.name} at ${pct(top.valueSgd / a.value, 0)} of the portfolio.` });
+      if (top && a.value && a.allocation.holdings.length > 1 && top.valueSgd / a.value >= 0.3) out.push({ level: 'info', text: `${n}: the largest holding is ${top.name} at ${pct(top.valueSgd / a.value, 0)} of the portfolio.` });
       if (a.trades >= 6) out.push({ level: 'info', text: `${n}: ${a.trades} buy/sell trades in the last 12 months (rebalancing), selling ${money(a.turnover)} worth.` });
       if (a.value == null && (a.contributions.length || a.dividends.length)) out.push({ level: 'watch', text: `${n}: ${a.contributions.length ? money(a.contributedAll) + ' put in' : ''}${a.contributions.length && a.dividends.length ? ' and ' : ''}${a.dividends.length ? money(a.dividends.reduce((s, x) => s + x.amount, 0)) + ' in dividends' : ''} on record, but no current value. Add one to see its return.` });
       if (a.latest && a.latest.source === 'statement' && daysUntil(summary.asOf, a.latest.date) > 45) out.push({ level: 'watch', text: `${n}: the latest statement is from ${a.latest.date}. Import the newer ones to keep values current.` });
     });
     const ua = summary.unassigned.filter((f) => f.flow !== 'dividend');
     if (ua.length) out.push({ level: 'watch', text: `${ua.length} transfer${ua.length > 1 ? 's' : ''} (${money(ua.reduce((s, f) => s + (f.flow === 'contribution' ? f.amount : -f.amount), 0))}) look like investment money but aren't tied to an account yet.` });
+    // the same kind of fund held at very different cost
+    const funds = summary.accounts.flatMap((a) => a.allocation.holdings.filter((h) => h.expenseRatio != null).map((h) => ({ ...h, acct: a.account.name })));
+    const byKind = {};
+    funds.forEach((h) => { (byKind[h.assetClass + '|' + h.region] = byKind[h.assetClass + '|' + h.region] || []).push(h); });
+    Object.values(byKind).forEach((g) => {
+      if (g.length < 2) return;
+      const lo = g.reduce((m, h) => (h.expenseRatio < m.expenseRatio ? h : m)), hi = g.reduce((m, h) => (h.expenseRatio > m.expenseRatio ? h : m));
+      if (hi.expenseRatio - lo.expenseRatio >= 0.0015) out.push({ level: 'watch', text: `${hi.name} (${hi.acct}, ${pct(hi.expenseRatio, 2)} a year) and ${lo.name} (${lo.acct}, ${pct(lo.expenseRatio, 2)}) are both ${hi.region} ${hi.assetClass.toLowerCase()} funds. On ${money(hi.valueSgd)} the cost gap is about ${money(hi.valueSgd * (hi.expenseRatio - lo.expenseRatio))} a year.` });
+    });
+    const eqTot = summary.accounts.reduce((s, a) => s + a.allocation.holdings.filter((h) => h.assetClass === 'Equity').reduce((x, h) => x + h.valueSgd, 0), 0);
+    const eqUS = summary.accounts.reduce((s, a) => s + a.allocation.holdings.filter((h) => h.assetClass === 'Equity' && h.region === 'US').reduce((x, h) => x + h.valueSgd, 0), 0);
+    if (eqTot > 0 && eqUS / eqTot >= 0.6) out.push({ level: 'info', text: `${pct(eqUS / eqTot, 0)} of the shares you hold across accounts are US companies (${money(eqUS)} of ${money(eqTot)}).` });
     const tot = Object.values(summary.allocation.assetClass).reduce((s, v) => s + v, 0);
     if (tot) { const eq = (summary.allocation.assetClass.Equity || 0) / tot; out.push({ level: 'info', text: `Across valued accounts: ${pct(eq, 0)} equities, ${pct((summary.allocation.assetClass.Bonds || 0) / tot, 0)} bonds, ${pct((summary.allocation.assetClass.Cash || 0) / tot, 0)} cash.` }); }
     return out;
@@ -1430,7 +1497,7 @@
     recommend, analyseLedger, ledgerEarnings, strategy, bestProgramme, diffRules, validateRules,
     KINDS, kindOf, earnsOnCard, isSpending, classifyFlow, pairTransfers,
     splitsOf, yourShare, openSplits, personMatches, matchRepayments, owedSummary, migrateContra,
-    parseDigiPortfolio, classifyHolding, mergeInvestmentStatement, investFlows, investmentSummary, investmentInsights, xirr,
+    parseDigiPortfolio, classifyHolding, mergeInvestmentStatement, mergeInvestmentData, investFlows, investmentSummary, investmentInsights, xirr,
     categorise, categoryForMcc, parseStatementText, parseCSV, guessCsvMapping, csvToRows, txnFingerprint,
     util: { norm, mccIn, expandList, r2, ymd, parseYmd, daysUntil },
   };

@@ -278,6 +278,8 @@
     .mob-nav-btn.active { color: #00C896; }
     #main { padding-bottom: 64px; }
     .stat-row { grid-template-columns: 1fr 1fr; }
+    .stat-card { min-width: 0; padding: 14px 14px; }
+    .stat-card .value { font-size: 21px; overflow-wrap: anywhere; }
     .form-grid { grid-template-columns: 1fr; }
   }
   @media (min-width: 769px) {
@@ -2982,6 +2984,13 @@ async function importInvestmentFiles(e) {
   const inv = invData(); const done = [], failed = []; let snaps = 0, acts = 0; const created = new Set();
   for (const f of files) {
     try {
+      if (/\.json$/i.test(f.name)) {
+        let j; try { j = JSON.parse(await f.text()); } catch (err) { failed.push(f.name + ' (not valid JSON)'); continue; }
+        if (j.format !== 'fp-investments') { failed.push(f.name + ' (not an investments file)'); continue; }
+        const r = FPEngine.mergeInvestmentData(inv, j, { newId: () => 'inv_' + uid() });
+        r.created.forEach(n => created.add(n)); snaps += r.snapshots; acts += r.activity; done.push((j.snapshots || []).map(x => x.date).sort().pop() || today());
+        continue;
+      }
       const text = /\.pdf$/i.test(f.name) || f.type === 'application/pdf' ? await pdfFileToText(f) : await f.text();
       const parsed = FPEngine.parseDigiPortfolio(text);
       if (!parsed) { failed.push(f.name + ' (not a digiPortfolio statement)'); continue; }
@@ -2991,7 +3000,7 @@ async function importInvestmentFiles(e) {
   }
   if (done.length) { saveToDrive(); render(); }
   const msg = done.length ? `Imported ${done.length} statement${done.length > 1 ? 's' : ''} (${done.sort()[0]} to ${done.sort().pop()}): ${snaps} month-end value${snaps !== 1 ? 's' : ''}, ${acts} new trade/dividend/fee line${acts !== 1 ? 's' : ''}${created.size ? '. Added account: ' + [...created].join(', ') : ''}.` : '';
-  if (failed.length) alert((msg ? msg + '\n\n' : '') + 'Not imported:\n' + failed.join('\n') + '\n\nOnly DBS digiPortfolio statements can be read for now. For other platforms, use "Record value".');
+  if (failed.length) alert((msg ? msg + '\n\n' : '') + 'Not imported:\n' + failed.join('\n') + '\n\nThe app reads DBS digiPortfolio statements and prepared investment files (.json). For other platforms, use "Record value".');
   else toast(msg, 6000);
 }
 
@@ -3053,9 +3062,10 @@ function invLineChart(S) {
   const cols = S.months.map((m, i) => `<rect x="${x(i) - (W - L - R) / (2 * Math.max(1, n - 1))}" y="${T}" width="${(W - L - R) / Math.max(1, n - 1)}" height="${H - T - B}" fill="transparent"
       onmousemove="invHover(event,${i},${x(i)})" onmouseleave="invHover(null)"/>`).join('');
   const legend = series.length > 1 ? `<div class="viz-legend">${series.map((s, si) => `<span><i style="background:${VIZ[si % VIZ.length]}"></i>${esc(s.name)}</span>`).join('')}</div>` : '';
+  const note = S.notCharted && S.notCharted.length ? `<div class="hint" style="margin-top:6px;">Not drawn yet (only one value on record): ${S.notCharted.map(esc).join(', ')}.</div>` : '';
   return `<div class="viz-card"><div class="viz-title">Value over time <span class="hint">(SGD, month-end)</span></div>${legend}
     <svg id="inv-svg" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Investment value by month">${grid}${xl}
-      <line id="inv-cross" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="#4A6580" stroke-width="1" style="display:none"/>${paths}${cols}</svg></div>`;
+      <line id="inv-cross" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="#4A6580" stroke-width="1" style="display:none"/>${paths}${cols}</svg>${note}</div>`;
 }
 function invHover(ev, i, cx) {
   const cross = document.getElementById('inv-cross');
@@ -3070,7 +3080,7 @@ function allocBar(title, obj, colors) {
   const entries = Object.entries(obj).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
   const tot = entries.reduce((s, [, v]) => s + v, 0); if (!tot) return '';
   const segs = entries.map(([k, v]) => `<div class="alloc-seg" style="flex:${v};background:${colors[k] || VIZ[7]}" onmousemove="vizTip(event,'${esc(k)}: <b>$${fmtAmt(v)}</b> · ${(v / tot * 100).toFixed(1)}%')" onmouseleave="vizTip(null)"></div>`).join('');
-  const legend = entries.map(([k, v]) => `<span><i style="background:${colors[k] || VIZ[7]}"></i>${esc(k)} <b>${(v / tot * 100).toFixed(0)}%</b></span>`).join('');
+  const legend = entries.map(([k, v]) => `<span><i style="background:${colors[k] || VIZ[7]}"></i>${esc(k)} <b>${v / tot < 0.005 ? '&lt;1' : (v / tot * 100).toFixed(0)}%</b></span>`).join('');
   return `<div class="viz-card"><div class="viz-title">${title}</div><div class="alloc-bar">${segs}</div><div class="viz-legend" style="margin-top:10px;">${legend}</div></div>`;
 }
 
@@ -3086,16 +3096,16 @@ function renderInvest() {
   const head = `
     <div class="section-header" style="flex-wrap:wrap;gap:8px;"><h2>Investments</h2>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <label class="btn-primary" style="cursor:pointer;">Import statements<input type="file" accept=".pdf,.txt" multiple style="display:none" onchange="importInvestmentFiles(event)"></label>
+        <label class="btn-primary" style="cursor:pointer;">Import statements<input type="file" accept=".pdf,.txt,.json" multiple style="display:none" onchange="importInvestmentFiles(event)"></label>
         <button class="btn-secondary" onclick="openInvValueModal()">Record value</button>
         <button class="btn-secondary" onclick="openInvAccountModal()">+ Account</button></div></div>
     <p style="font-size:12.5px;color:#8AABBF;margin:-6px 0 16px;line-height:1.6;">Import DBS digiPortfolio statement PDFs (select several at once). For CPF, Endowus, shares and other platforms, record a value now and then; money in, money out and dividends are picked up from your bank lines.</p>`;
   if (!inv.accounts.length && !sugg.length) return head + `<div class="empty"><div class="icon">↗</div>No investments yet. Import a digiPortfolio statement or add an account.</div>`;
   const stat = `<div class="stat-row">
       <div class="stat-card"><div class="label">Total value</div><div class="value tabnum">$${fmtAmt(S.total)}</div><div class="sub">${valued.length} of ${S.accounts.length} account${S.accounts.length !== 1 ? 's' : ''} valued${asOf.length ? ' · as of ' + asOf[asOf.length - 1] : ''}</div></div>
-      <div class="stat-card"><div class="label">Market gain this year</div><div class="value tabnum ${S.gainYtd == null ? '' : S.gainYtd >= 0 ? 'text-green' : 'text-red'}">${S.gainYtd == null ? '—' : signAmt(S.gainYtd)}</div><div class="sub">excludes money you added</div></div>
+      <div class="stat-card"><div class="label">Market gain since you started</div><div class="value tabnum ${S.gainAll == null ? '' : S.gainAll >= 0 ? 'text-green' : 'text-red'}">${S.gainAll == null ? '—' : signAmt(S.gainAll)}</div><div class="sub">excludes money you added${S.gainYtd != null ? ' · this year, where known: ' + signAmt(S.gainYtd) : ''}</div></div>
       <div class="stat-card"><div class="label">Put in this year</div><div class="value tabnum">${signAmt(S.contributedYtd)}</div><div class="sub">net of withdrawals</div></div>
-      <div class="stat-card"><div class="label">Dividends this year</div><div class="value tabnum text-green">$${fmtAmt(S.dividendsYtd)}</div><div class="sub">fees $${fmtAmt(S.feesYtd)}</div></div>
+      <div class="stat-card"><div class="label">Dividends this year</div><div class="value tabnum text-green">$${fmtAmt(S.dividendsYtd)}</div><div class="sub">fees $${fmtAmt(S.feesYtd)}${S.cashbackYtd ? ' · cashback $' + fmtAmt(S.cashbackYtd) : ''}</div></div>
     </div>`;
   const suggHtml = sugg.length ? `<div class="card-tile" style="border-color:#2A4A6B;"><div style="font-weight:700;margin-bottom:6px;">Found in your transactions</div>
       <p class="hint" style="margin-bottom:8px;">These lines look like investment money. Add the account so they count towards it (you can rename it afterwards).</p>
@@ -3109,10 +3119,10 @@ function renderInvest() {
     const w = a.ytd;
     const kv = (l, v, cls = '') => `<div><div class="hint">${l}</div><div class="tabnum ${cls}" style="font-weight:600;">${v}</div></div>`;
     const hold = a.allocation.holdings.length ? `<div style="overflow-x:auto;"><table class="data-table mini-table" style="margin-top:10px;"><thead><tr><th>Holding</th><th>Type</th><th style="text-align:right;">Units</th><th style="text-align:right;">Value (SGD)</th><th style="text-align:right;">Unrealised (${esc(a.latest.ccy || 'SGD')})</th></tr></thead><tbody>
-        ${a.allocation.holdings.map(h => `<tr><td><strong>${esc(h.code || '')}</strong> <span class="hint">${esc(h.name)}</span></td><td class="hint">${esc(h.assetClass)}${h.assetClass === 'Equity' ? ' · ' + esc(h.region) : ''}</td><td class="tabnum" style="text-align:right;">${h.units ?? ''}</td><td class="tabnum" style="text-align:right;">$${fmtAmt(h.valueSgd)}</td>
+        ${a.allocation.holdings.map(h => `<tr><td>${h.code ? `<strong>${esc(h.code)}</strong> <span class="hint">${esc(h.name)}</span>` : `<strong>${esc(h.name)}</strong>`}</td><td class="hint">${esc(h.assetClass)}${h.assetClass === 'Equity' ? ' · ' + esc(h.region) : ''}${h.expenseRatio != null ? ' · fund cost ' + (h.expenseRatio * 100).toFixed(2) + '%/yr' : ''}</td><td class="tabnum" style="text-align:right;">${h.units ?? ''}</td><td class="tabnum" style="text-align:right;">$${fmtAmt(h.valueSgd)}</td>
           <td class="tabnum ${h.pnl > 0 ? 'text-green' : h.pnl < 0 ? 'text-red' : ''}" style="text-align:right;">${h.pnl == null ? '—' : (h.pnl >= 0 ? '+' : '−') + fmtAmt(Math.abs(h.pnl))}${h.cost ? ` <span class="hint">${pctFmt(h.pnl / h.cost, 0)}</span>` : ''}</td></tr>`).join('')}
         ${a.latest.cashSgd ? `<tr><td><strong>Cash</strong></td><td class="hint">Cash</td><td></td><td class="tabnum" style="text-align:right;">$${fmtAmt(a.latest.cashSgd)}</td><td></td></tr>` : ''}</tbody></table></div>` : '';
-    const lines = [...a.activity.map(x => ({ date: x.date, what: ({ buy: 'Buy', sell: 'Sell', dividend: 'Dividend', fee: 'Fee', deposit: 'Deposit', withdrawal: 'Withdrawal' }[x.type] || x.label) + (x.code ? ' ' + x.code : x.name && x.type !== 'dividend' && x.type !== 'fee' ? ' ' + x.name : ''), amt: (['buy', 'fee', 'withdrawal'].includes(x.type) ? '−' : '+') + (x.ccy || '') + ' ' + fmtAmt(x.amount) + (x.units ? ` · ${x.units} @ ${x.price}` : '') })),
+    const lines = [...a.activity.map(x => ({ date: x.date, what: (x.type === 'fee' && x.label ? x.label : x.type === 'deposit' && x.via ? 'Money in (' + x.via + ')' : ({ buy: 'Buy', sell: 'Sell', dividend: 'Dividend', fee: 'Fee', deposit: 'Deposit', withdrawal: 'Withdrawal', cashback: 'Cashback' }[x.type] || x.label)) + (x.code ? ' ' + x.code : x.name && x.type !== 'dividend' && x.type !== 'fee' ? ' ' + x.name : ''), amt: (['buy', 'fee', 'withdrawal'].includes(x.type) ? '−' : '+') + (x.ccy || '') + ' ' + fmtAmt(x.amount) + (x.units ? ` · ${x.units} @ ${x.price}` : '') })),
       ...a.contributions.filter(c => c.via === 'bank').map(c => ({ date: c.date, what: c.amount > 0 ? 'Money in (bank)' : 'Money out (bank)', amt: (c.amount > 0 ? '+' : '−') + 'SGD ' + fmtAmt(Math.abs(c.amount)) })),
       ...a.dividends.filter(d => d.txnId).map(d => ({ date: d.date, what: 'Dividend (bank)', amt: '+SGD ' + fmtAmt(d.amount) })),
       ...a.snapshots.filter(s => s.source === 'manual').map(s => ({ date: s.date, what: 'Value recorded', amt: 'SGD ' + fmtAmt(s.valueSgd), snap: s }))]
@@ -3120,13 +3130,14 @@ function renderInvest() {
     const act = lines.length ? `<div style="overflow-x:auto;"><table class="data-table mini-table" style="margin-top:10px;"><thead><tr><th>Date</th><th>Activity</th><th style="text-align:right;">Amount</th><th></th></tr></thead><tbody>
         ${lines.slice(0, 40).map(l => `<tr><td class="tabnum">${esc(l.date)}</td><td>${esc(l.what)}</td><td class="tabnum" style="text-align:right;">${esc(l.amt)}</td><td>${l.snap ? `<button class="btn-danger" onclick="deleteInvSnapshot('${acc.id}','${l.snap.date}')">✕</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="hint" style="margin-top:8px;">No activity on record yet.</div>';
     return `<div class="card-tile">
-      <div class="card-top"><div><div class="card-name">${esc(acc.name)}</div><div class="card-meta">${esc(INV_TYPES[acc.type] || acc.type)} · ${profileLabel(acc.owner || 'marvin')}${acc.strategy ? ' · ' + esc(acc.strategy) : ''}</div></div>
+      <div class="card-top"><div><div class="card-name">${esc(acc.name)}</div><div class="card-meta">${esc(INV_TYPES[acc.type] || acc.type)} · ${profileLabel(acc.owner || 'marvin')}${acc.fundedBy ? ' · funded by ' + esc(acc.fundedBy) : ''}${acc.strategy ? ' · ' + esc(acc.strategy) : ''}</div></div>
         <div style="text-align:right;"><div class="tabnum" style="font-size:20px;font-weight:700;">${a.value != null ? '$' + fmtAmt(a.value) : '—'}</div><div class="hint">${a.valueDate ? 'as of ' + a.valueDate : 'no value yet'}</div></div></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;">
-        ${kv(w ? `Gain ${w.from.slice(5)} → ${w.to.slice(5)}` : 'Gain this year', w ? signAmt(w.gain) + ' <span class="hint">' + pctFmt(w.ret) + '</span>' : '—', w ? (w.gain >= 0 ? 'text-green' : 'text-red') : '')}
-        ${kv('Put in (all on record)', signAmt(a.contributedAll))}
+        ${(() => { const g = w || a.sinceStart; const since = g && a.first && a.first.opening && g === a.sinceStart && a.contributions.length ? a.contributions[0].date : g && g.from;
+          return kv(g ? (g === w ? `Gain ${g.from.slice(5)} → ${g.to.slice(5)}` : `Gain since ${since}`) : 'Gain', g ? signAmt(g.gain) + ' <span class="hint">' + (g.annualised != null ? pctFmt(g.annualised) + '/yr' : pctFmt(g.ret)) + '</span>' : '—', g ? (g.gain >= 0 ? 'text-green' : 'text-red') : ''); })()}
+        ${a.contributedAll < 0 ? kv('Net taken out', '$' + fmtAmt(-a.contributedAll)) : kv('Put in (all on record)', '$' + fmtAmt(a.contributedAll))}
         ${kv('Dividends this year', '$' + fmtAmt(a.dividendsYtd))}
-        ${kv('Fees, last 12 months', '$' + fmtAmt(a.fees12m) + (a.feeRate != null ? ' <span class="hint">' + (a.feeRate * 100).toFixed(2) + '%</span>' : ''))}
+        ${kv('Fees, last 12 months', '$' + fmtAmt(a.fees12m) + (a.feeRate != null ? ' <span class="hint">' + (a.feeRate * 100).toFixed(2) + '%</span>' : '') + (a.cashback12m ? '<div class="hint" style="font-weight:400;">cashback +$' + fmtAmt(a.cashback12m) + '</div>' : ''))}
       </div>
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
         <button class="btn-secondary" style="font-size:12px;" onclick="invOpen['${acc.id}']=!invOpen['${acc.id}'];render()">${open ? 'Hide' : 'Show'} holdings & activity</button>

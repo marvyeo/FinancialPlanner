@@ -477,6 +477,21 @@ test('summary: gain excludes new money; contributions and dividends come from ba
   close(S.accounts.find((a) => a.account.id === 's').dividendsYtd, 33.94);
   assert.strictEqual(S.unassigned.length, 0);
 });
+test('prepared investments file: opening value anchors since-start return; bank debits matched to platform deposits', () => {
+  const inv = { accounts: [{ id: 'old', name: 'Endowus', type: 'robo', patterns: ['ENDOWUS'] }], snapshots: [], activity: [] };
+  const P = { format: 'fp-investments', accounts: [{ key: 'kid', name: 'Kid fund', provider: 'Robo', patterns: ['INVESTMENT & SECURITIES'], replaces: ['Endowus'] }],
+    snapshots: [{ account: 'kid', date: '2025-01-09', valueSgd: 0, opening: true }, { account: 'kid', date: '2026-10-16', valueSgd: 1300, holdings: [{ name: 'Prime USA Fund', units: 5, price: 260, valueSgd: 1300, expenseRatio: 0.0005 }] }],
+    activity: [{ account: 'kid', date: '2025-01-10', type: 'deposit', amount: 1000 }, { account: 'kid', date: '2026-03-12', type: 'deposit', amount: 200 }, { account: 'kid', date: '2026-04-16', type: 'fee', amount: 3 }, { account: 'kid', date: '2026-06-10', type: 'cashback', amount: 1 }] };
+  const r = E.mergeInvestmentData(inv, P, { newId: (() => { let n = 0; return () => 'n' + (++n); })() });
+  assert.deepStrictEqual(r.updated, ['Kid fund']); assert.strictEqual(inv.accounts.length, 1);   // took over the empty "Endowus" account
+  assert.strictEqual(E.mergeInvestmentData(inv, P).activity, 0);
+  const L = [{ id: 'b', date: '2026-03-11', amount: 200, direction: 'out', kind: 'transfer', rawDescription: 'FAST Collection INVESTMENT & SECURITIES', source: 'import' }];
+  const a = E.investmentSummary(inv, L, '2026-10-16').accounts[0];
+  close(a.contributedAll, 1200);             // the DBS debit is the platform's 12 Mar deposit, not extra money
+  assert.strictEqual(a.ytd, null);            // no year-end value, so no "this year" figure
+  close(a.sinceStart.gain, 100); close(a.cashbackYtd, 1);
+  assert.strictEqual(a.allocation.holdings[0].region, 'US');
+});
 test('xirr: 10% over exactly one year', () => {
   close(E.xirr([{ date: '2025-01-01', amount: -1000 }, { date: '2026-01-01', amount: 1100 }]), 0.1);
 });
