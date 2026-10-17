@@ -1478,6 +1478,8 @@
       const dir = t.direction === 'in' ? 'in' : 'out';
       const isDiv = dir === 'in' && /\b(dividend|dividends|distribution)\b/.test(text);
       const forced = t.investAccountId && accts.find((a) => a.id === t.investAccountId);
+      // tax, insurance and bill payments are never investing, even when the text mentions CPF or HDB
+      if (!forced && (/^(taxes?|insurance|bills?|utilities|house)$/i.test(String(t.category || '')) || /\biras\b/.test(text))) return;
       const matched = forced || accts.find((a) => acctMatches(a, text) || (isDiv && (a.dividendPatterns || []).some((p) => p && text.includes(norm(p)))));
       if (!forced && !matched && !isDiv && !INVEST_RE.test(text)) return;
       if (!forced && kindOf(t) === 'expense' && !INVEST_RE.test(text) && !matched) return;

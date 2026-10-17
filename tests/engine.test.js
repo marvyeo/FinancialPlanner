@@ -569,5 +569,12 @@ test('ghost tracking: position, rate and switch', () => {
   assert.ok(s.notTaken > 1990 && s.notTaken < 2000);
 });
 
+test('tax and insurance payments are not investment contributions', () => {
+  const inv = { accounts: [{ id: 'cpf', name: 'CPF (Caroline)', owner: 'wife' }] };
+  const L = [{ id: 't1', date: '2026-07-06', amount: 545.78, direction: 'out', kind: 'expense', merchant: 'IRAS / CPF / HDB / Gov', category: 'Taxes' },
+             { id: 't2', date: '2026-07-07', amount: 1000, direction: 'out', kind: 'transfer', merchant: 'CPF top-up' }];
+  const f = E.investFlows ? E.investFlows(L, inv) : null;
+  if (f) { assert.strictEqual(f.filter(x => x.txn.id === 't1').length, 0); }
+});
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

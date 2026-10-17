@@ -368,6 +368,7 @@
     <div class="nav-item" data-nav="invest" onclick="navigate('invest')"><span class="icon">↗</span> Investments</div>
     <div class="nav-item" data-nav="recon" onclick="navigate('recon')"><span class="icon">☑</span> Month-end check <span id="recon-badge" style="margin-left:auto;font-size:11px;color:#F59E0B;"></span></div>
     <div class="nav-item" data-nav="advice" onclick="navigate('advice')"><span class="icon">✧</span> Advice</div>
+    <div class="nav-item" data-nav="joint" onclick="navigate('joint')"><span class="icon">⚖</span> Joint 50/50 <span id="joint-badge" style="margin-left:auto;font-size:11px;color:#F59E0B;"></span></div>
     <div class="nav-item" data-nav="owed" onclick="navigate('owed')"><span class="icon">⇄</span> Owed to me <span id="owed-badge" style="margin-left:auto;font-size:11px;color:#F59E0B;"></span></div>
     <div class="nav-section">Profiles</div>
     <div class="nav-item" data-nav="profile:marvin" onclick="navigate('profile','marvin')"><span class="icon">👤</span> Marvin</div>
@@ -629,6 +630,7 @@ function setView(v, quiet) {
   VIEW = ['marvin', 'wife', 'cobae', 'family'].includes(v) ? v : 'marvin';
   LS.set('fp_view', VIEW);
   spendFilter = VIEW === 'family' ? 'all' : VIEW;
+  if (currentView === 'profile') { currentProfile = VIEW === 'family' ? 'joint' : VIEW; document.querySelectorAll('.nav-item, .mob-nav-btn').forEach(el => el.classList.toggle('active', el.dataset.nav === 'profile:' + currentProfile)); }
   const el = document.getElementById('view-sel'); if (el) el.value = VIEW;
   if (!quiet) render();
 }
@@ -638,7 +640,16 @@ function ownerOfTxn(t) {
   return t.paidBy || null;
 }
 /** A person's view: spending for them, or paid from their cards and accounts. */
-function txnInView(t, v) { v = v || VIEW; return v === 'family' || v === 'all' || t.forProfile === v || ownerOfTxn(t) === v; }
+function txnInView(t, v) { v = v || VIEW; return v === 'family' || v === 'all' || t.forProfile === v || ownerOfTxn(t) === v || (t.parts || []).some(p => p.forProfile === v); }
+/** A statement line broken into parts: each part has its own person and category; the rest stays with the line itself. Amounts are your share (after others' IOUs), pro rata. */
+function piecesOf(t) {
+  const amt = Number(t.amount) || 0, parts = (t.parts || []).filter(p => Number(p.amount) > 0);
+  const share = window.FPEngine ? FPEngine.yourShare(t) : amt, f = amt ? share / amt : 1;
+  const rest = Math.round((amt - parts.reduce((s, p) => s + Number(p.amount), 0)) * 100) / 100;
+  const out = parts.map((p, i) => ({ key: t.id + '#' + (p.id || i), amount: Number(p.amount) * f, gross: Number(p.amount), forProfile: p.forProfile || t.forProfile, category: p.category || t.category, note: p.note || '', part: p }));
+  if (rest > 0.004 || !parts.length) out.unshift({ key: t.id, amount: rest * f, gross: rest, forProfile: t.forProfile, category: t.category, note: t.note || '', part: null });
+  return out;
+}
 function askWhoAmI() {
   showModal(`<h3>Who's using this device?</h3>
     <p style="font-size:13px;color:#8AABBF;margin:-6px 0 16px;">${esc(ME.email)} — the app uses this to fill in "for whom" and to show your own reconciliation list first.</p>
@@ -752,7 +763,7 @@ function computeUpcoming() {
     ...(data.profiles.cobae?.subscriptions||[]).map(b=>({...b,_profile:'cobae',_sub:true})),
   ];
   allBills.forEach(b => {
-    if (!b.dueDate) return;
+    if (!b.dueDate || !billHasAction(b)) return;
     const d = new Date(b.dueDate); d.setHours(0,0,0,0);
     const overdue = d < todayD && b.status !== 'paid';
     const upcoming = d >= todayD && d <= in30;
@@ -764,7 +775,7 @@ function computeUpcoming() {
       });
     }
   });
-  data.cards.forEach(card => {
+  if (false) data.cards.forEach(card => {   // statement dates aren't due dates; the rolling card bills cover this now
     if (!card.cycleDate) return;
     const today2 = new Date();
     const cycleDay = parseInt(card.cycleDate);
@@ -796,6 +807,16 @@ function uid() { return Date.now().toString(36)+Math.random().toString(36).slice
 // Local (Singapore) date — toISOString() would return yesterday before 8am SGT
 function today() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+const MON3 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+/** 2026-10-30 → "Oct-30" (the year is shown only when it isn't this year or next 11 months). */
+function fmtMD(d) { if (!d) return '—'; const [y, m, dd] = d.split('-'); const far = (new Date(d) - new Date()) > 330 * 86400000 || (new Date(d) - new Date()) < -60 * 86400000; return `${MON3[+m - 1]}-${dd}${far ? ' ' + y : ''}`; }
+/** Nothing to pay: a card bill with no spend, or a credit balance. */
+function billHasAction(b) { return !(b._isBillingReminder && !(Number(b.amount) > 0.005)); }
+/** Bills and subscriptions for whoever is selected at the top: a person sees their own plus Joint; Cobae sees Cobae's; Family sees all. */
+function billsInView(v = VIEW) {
+  const profs = v === 'family' ? ['marvin', 'wife', 'joint', 'cobae'] : v === 'cobae' ? ['cobae'] : [v, 'joint'];
+  return profs.flatMap(p => [...((data.profiles[p] || {}).bills || []).map(b => ({ ...b, _profile: p })), ...((data.profiles[p] || {}).subscriptions || []).map(b => ({ ...b, _profile: p, _sub: true }))]).filter(billHasAction);
+}
 function nextCycle(dateStr, recurrence) {
   const d = new Date(dateStr);
   if (recurrence === 'monthly') d.setMonth(d.getMonth()+1);
@@ -825,7 +846,7 @@ let currentProfile = 'marvin';
 
 function navigate(view, sub) {
   currentView = view;
-  if (sub) currentProfile = sub;
+  if (sub) { currentProfile = sub; if (view === 'profile' && sub !== 'joint' && sub !== VIEW) { VIEW = sub; spendFilter = sub; LS.set('fp_view', VIEW); const el = document.getElementById('view-sel'); if (el) el.value = VIEW; } }
   // Highlight by data-nav key (no index maps — they broke when profiles were added)
   const key = view === 'profile' ? 'profile:' + currentProfile : view;
   document.querySelectorAll('.nav-item, .mob-nav-btn').forEach(el => el.classList.toggle('active', el.dataset.nav === key));
@@ -840,7 +861,7 @@ function toggleSidebar() {
 
 /* =================== RENDER DISPATCHER =================== */
 function render() {
-  const titles = { recon: 'Month-end check', advice: 'Advice & ghost tracker', dashboard: 'Dashboard', spend: 'Spending', owed: 'Owed to me', invest: 'Investments', smartspend: 'Which card?', strategy: 'Strategy', cards: 'Cards', merchants: 'Merchants', settings: 'Settings' };
+  const titles = { joint: 'Joint 50/50', recon: 'Month-end check', advice: 'Advice & ghost tracker', dashboard: 'Dashboard', spend: 'Spending', owed: 'Owed to me', invest: 'Investments', smartspend: 'Which card?', strategy: 'Strategy', cards: 'Cards', merchants: 'Merchants', settings: 'Settings' };
   document.getElementById('page-title').textContent =
     currentView === 'profile' ? profileLabel(currentProfile) : titles[currentView] || '';
   const content = document.getElementById('page-content');
@@ -851,6 +872,7 @@ function render() {
   else if (currentView === 'smartspend') { content.innerHTML = renderSmartSpend(); restoreForm('ss'); }
   else if (currentView === 'spend') content.innerHTML = renderSpend();
   else if (currentView === 'owed') content.innerHTML = renderOwed();
+  else if (currentView === 'joint') content.innerHTML = renderJoint();
   else if (currentView === 'recon') content.innerHTML = renderRecon();
   else if (currentView === 'advice') content.innerHTML = renderAdvice();
   else if (currentView === 'invest') content.innerHTML = renderInvest();
@@ -859,16 +881,12 @@ function render() {
   else if (currentView === 'merchants') { content.innerHTML = renderMerchants(); if (merchantFilter) filterMerchants(merchantFilter); }
   else if (currentView === 'settings') content.innerHTML = renderSettings();
   try { const o = Object.values(FPEngine.owedSummary(data.transactions || [])).reduce((s, p) => s + p.owed, 0); document.getElementById('owed-badge').textContent = o > 0 ? '$' + Math.round(o) : ''; } catch (e) {}
+  try { const j = jointBalance(jointItems().filter(x => !x.settled)); document.getElementById('joint-badge').textContent = Math.abs(j.owes) >= 1 ? '$' + Math.round(Math.abs(j.owes)) : ''; } catch (e) {}
 }
 
 /* =================== DASHBOARD =================== */
 function renderDashboard() {
-  const allBills = [
-    ...data.profiles.marvin.bills, ...data.profiles.marvin.subscriptions,
-    ...data.profiles.wife.bills, ...data.profiles.wife.subscriptions,
-    ...data.profiles.joint.bills, ...data.profiles.joint.subscriptions,
-    ...(data.profiles.cobae?.bills||[]), ...(data.profiles.cobae?.subscriptions||[])
-  ];
+  const allBills = billsInView();
   const overdue = allBills.filter(b => billStatus(b) === 'overdue');
   const thisMonth = allBills.filter(b => {
     if (!b.dueDate) return false;
@@ -878,7 +896,7 @@ function renderDashboard() {
   });
   const monthTotal = thisMonth.reduce((s,b) => s + Number(b.amount||0), 0);
   const subCount = allBills.filter(b => b._isSub).length;
-  const monthSubs = [...data.profiles.marvin.subscriptions,...data.profiles.wife.subscriptions,...data.profiles.joint.subscriptions,...(data.profiles.cobae?.subscriptions||[])];
+  const monthSubs = allBills.filter(b => b._sub);
   const subMonthly = monthSubs.reduce((s,b) => {
     const a = Number(b.amount||0);
     if (b.recurrence === 'monthly') return s + a;
@@ -889,7 +907,7 @@ function renderDashboard() {
 
   let alerts = '';
   overdue.forEach(b => {
-    alerts += `<div class="alert-bar overdue">⚠ <div><strong>${b.name}</strong> — $${fmtAmt(b.amount)} overdue since ${b.dueDate}</div></div>`;
+    alerts += `<div class="alert-bar overdue">⚠ <div><strong>${esc(b.name)}</strong> — $${fmtAmt(b.amount)} overdue since ${fmtMD(b.dueDate)}</div></div>`;
   });
 
   // Upcoming 7-day bills
@@ -902,8 +920,8 @@ function renderDashboard() {
   });
   let soonRows = soon.length ? soon.map(b => `
     <tr>
-      <td class="tabnum">${b.dueDate}</td>
-      <td>${b.name}</td>
+      <td class="tabnum">${fmtMD(b.dueDate)}</td>
+      <td>${esc(b.name)}${VIEW !== 'cobae' && b._profile !== VIEW ? ` <span class="hint">${profileLabel(b._profile)}</span>` : ''}</td>
       <td class="tabnum">$${fmtAmt(b.amount)}</td>
       <td>${statusBadge(billStatus(b))}</td>
     </tr>`).join('') : `<tr><td colspan="4"><div class="empty" style="padding:24px">No bills due this week</div></td></tr>`;
@@ -978,15 +996,17 @@ function renderProfile(profile) {
   const p = data.profiles[profile];
   const bills = p.bills || [];
   const subs = p.subscriptions || [];
+  const hiddenCardBills = bills.filter(b => !billHasAction(b)).map(b => b._cardRef || b.name);
   const profCards = data.cards.filter(c => c.profile === profile);
 
-  const billRows = bills.length ? bills.map((b,i) => {
+  const billOrder = bills.map((b, i) => [b, i]).filter(([b]) => billHasAction(b)).sort((x, y) => String(x[0].dueDate || '9').localeCompare(String(y[0].dueDate || '9')));
+  const billRows = billOrder.length ? billOrder.map(([b,i]) => {
     const st = billStatus(b);
     const billingTag = b._isBillingReminder ? `<span style="font-size:10px;background:#1A2040;color:#7B9FD4;border-radius:3px;padding:1px 5px;margin-left:6px;">billing</span>` : '';
     return `<tr>
-      <td>${b.name}${billingTag}</td>
+      <td>${esc(b.name)}${billingTag}${b.note ? `<div class="hint">${esc(b.note)}</div>` : ''}</td>
       <td class="tabnum">$${fmtAmt(b.amount)}</td>
-      <td>${b.dueDate||'—'}</td>
+      <td class="tabnum" style="white-space:nowrap;">${fmtMD(b.dueDate)}</td>
       <td>${b.recurrence||'monthly'}</td>
       <td>${b.paymentMethod||'—'}</td>
       <td>${statusBadge(st)}</td>
@@ -1000,8 +1020,9 @@ function renderProfile(profile) {
   const subRows = subs.length ? subs.map((b,i) => {
     const st = billStatus(b);
     return `<tr>
-      <td>${b.name}</td>
+      <td>${esc(b.name)}${b.note ? `<div class="hint">${esc(b.note)}</div>` : ''}</td>
       <td class="tabnum">$${fmtAmt(b.amount)}</td>
+      <td class="tabnum" style="white-space:nowrap;">${fmtMD(b.dueDate)}</td>
       <td>${b.recurrence||'monthly'}</td>
       <td>${b.paymentMethod||'—'}</td>
       <td>${b.category||'—'}</td>
@@ -1011,7 +1032,7 @@ function renderProfile(profile) {
         <button class="btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="openEditBillModal('${profile}','sub',${i})">Edit</button>
         <button class="btn-danger" onclick="deleteBill('${profile}','sub',${i})">✕</button>
       </td>
-    </tr>`;}).join('') : `<tr><td colspan="7"><div class="empty"><div class="icon">🔄</div>No subscriptions added yet</div></td></tr>`;
+    </tr>`;}).join('') : `<tr><td colspan="8"><div class="empty"><div class="icon">🔄</div>No subscriptions added yet</div></td></tr>`;
 
   const cardChips = profCards.length ? profCards.map(c =>
     `<div style="display:inline-block;background:#1C2F45;border-radius:6px;padding:6px 14px;margin:4px;font-size:13px;font-weight:600;">${c.name}</div>`
@@ -1032,11 +1053,12 @@ function renderProfile(profile) {
         <tbody>${billRows}</tbody>
       </table>
     </div>
+    ${hiddenCardBills.length ? `<p class="hint" style="margin:-16px 0 20px;">Nothing to pay on ${hiddenCardBills.length} card${hiddenCardBills.length !== 1 ? 's' : ''} this cycle (${hiddenCardBills.map(esc).join(', ')}), so ${hiddenCardBills.length !== 1 ? 'they are' : 'it is'} hidden.</p>` : ''}
 
     <div class="section-header"><h2>Subscriptions</h2></div>
     <div class="table-wrap">
       <table class="data-table">
-        <thead><tr><th>Name</th><th>Amount</th><th>Recurrence</th><th>Payment</th><th>Category</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Amount</th><th>Next</th><th>Recurrence</th><th>Payment</th><th>Category</th><th>Status</th><th></th></tr></thead>
         <tbody>${subRows}</tbody>
       </table>
     </div>
@@ -1326,6 +1348,7 @@ function renderCards() {
     <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
       <button class="btn-primary" onclick="openCardModal()">+ Add card</button>
       <button class="btn-secondary" onclick="openCardImport()">↑ Import card JSON</button>
+      <button class="btn-secondary" onclick="openCardDays()">📅 Statement &amp; due days${data.cards.some(c => !c.cycleDate || !c.gracePeriodDays) ? ` <span class="pill pill-amber">${data.cards.filter(c => !c.cycleDate || !c.gracePeriodDays).length} missing</span>` : ''}</button>
     </div>
     ${noCards ? `<div class="empty"><div class="icon">▤</div>No cards added yet</div>` :
       groups.map(g => `
@@ -1378,7 +1401,7 @@ function renderCardTile(card, ci) {
             <span style="background:#1C3A52;color:#00C896;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:0.04em;">${profileLabel(card.profile)}</span>
             ${hasExpiredPromo?'<span class="badge badge-overdue">Promo expired</span>':''}
           </div>
-          <div class="card-meta">${card.issuer||'—'} · ${cycleTypeLabel} · Statement day ${card.cycleDate||'?'}${card.gracePeriodDays?' · Payment due +'+card.gracePeriodDays+'d':''}</div>
+          <div class="card-meta">${card.issuer||'—'} · ${cycleTypeLabel} · Statement day ${card.cycleDate||'?'}${card.gracePeriodDays?' · Payment due +'+card.gracePeriodDays+'d':` · <a href="#" onclick="openCardDays();return false;" class="text-amber">set payment due days</a>`}</div>
           <div style="margin-top:6px;font-size:12px;color:#8AABBF;">Base: <strong style="color:#F0F4F8;">${baseLine}</strong> &nbsp;${linkPill}</div>
           ${def.transfer ? `<div style="margin-top:4px;font-size:11.5px;color:#4A6580;">${esc(def.transfer.ratio)}${def.transfer.feeSGD?' · $'+def.transfer.feeSGD+' fee':''}</div>` : (def.legacy && partners ? `<div style="margin-top:8px;">${partners}</div>` : '')}
         </div>
@@ -1508,6 +1531,26 @@ function openCardImport() {
   `);
 }
 
+/** Every card's statement day and days-to-pay on one screen. */
+function openCardDays() {
+  const inp = 'background:#0D1B2A;border:1px solid #2A4A6B;color:#F0F4F8;border-radius:5px;padding:5px;font-size:13px;width:64px;';
+  const rows = ['marvin', 'wife', 'joint', 'cobae'].flatMap(p => data.cards.filter(c => (c.profile || 'marvin') === p)).map(c => `<tr>
+    <td>${esc(c.name)}<div class="hint">${profileLabel(c.profile)}</div></td>
+    <td><input type="number" min="1" max="31" data-cd="${c.id}" value="${esc(c.cycleDate || '')}" style="${inp}${c.cycleDate ? '' : 'border-color:#F5A623;'}"/></td>
+    <td><input type="number" min="0" max="60" data-gd="${c.id}" value="${esc(c.gracePeriodDays || '')}" style="${inp}${c.gracePeriodDays ? '' : 'border-color:#F5A623;'}"/></td>
+    <td class="hint" style="white-space:nowrap;">${(() => { try { const nb = nextCardBill(c); return nb ? fmtMD(nb.due) : ''; } catch (e) { return ''; } })()}</td></tr>`).join('');
+  showModal(`<h3>Statement &amp; due days</h3>
+    <p class="hint" style="margin:-8px 0 12px;">Statement day = day of the month the statement is cut. Days to pay = days from statement to payment due date (on the statement: due date minus statement date). Usual values: DBS 25, Citi 25, OCBC 23, UOB 18, HSBC 20, AMEX ~25, CIMB ~25.</p>
+    <div class="table-wrap" style="max-height:58vh;overflow:auto;"><table class="data-table mini-table"><thead><tr><th>Card</th><th>Statement day</th><th>Days to pay</th><th>Next due</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="modal-footer"><button class="btn-secondary" onclick="closeModal()">Cancel</button><button class="btn-primary" onclick="saveCardDays()">Save</button></div>`);
+}
+function saveCardDays() {
+  let n = 0;
+  document.querySelectorAll('[data-cd]').forEach(el => { const c = cardById(el.dataset.cd); const v = parseInt(el.value); if (c && v && v !== parseInt(c.cycleDate)) { c.cycleDate = v; n++; } });
+  document.querySelectorAll('[data-gd]').forEach(el => { const c = cardById(el.dataset.gd); const v = el.value === '' ? null : parseInt(el.value); if (c && v != null && v !== parseInt(c.gracePeriodDays)) { c.gracePeriodDays = v; n++; } });
+  try { refreshCardBills(); } catch (e) {}
+  closeModal(); saveToDrive(); render(); toast(`Saved ${n} change${n !== 1 ? 's' : ''}; card bills updated`);
+}
 function doCardImport() {
   try {
     const raw = JSON.parse(document.getElementById('import-json').value);
@@ -2452,6 +2495,7 @@ function openExpenseModal(init) {
       <div class="form-row"><label>Type</label><select id="qa-kind">${Object.entries(KIND_LABELS).map(([k, l]) => `<option value="${k}" ${((init||{}).kind || 'expense') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
     </div>
     <div class="form-row"><label>Note (optional)</label><input id="qa-note" value="${esc((init||{}).note||'')}" placeholder="e.g. Cobae's swimming class"/></div>
+    <div id="qa-parts-wrap">${partsEditorHtml(editing ? editing.parts : [])}</div>
     <div style="font-size:11.5px;font-weight:600;color:#4A6580;letter-spacing:.06em;margin:8px 0 2px;">RECOMMENDATION — tap a card to choose it</div>
     <div id="qa-rec"></div>
     <div id="qa-split-wrap">${splitEditorHtml(editing ? editing.splits : [])}</div>
@@ -2462,8 +2506,8 @@ function openExpenseModal(init) {
     </div>`);
   document.querySelector('#modal-container .modal').classList.add('wide');
   if (init && init.merchantText && !editing) spendFormMerchant('qa'); else spendFormRefresh('qa');
-  rememberPeople([]); splitRender();
-  document.getElementById('qa-amount')?.addEventListener('input', splitShare);
+  rememberPeople([]); splitRender(); partsRender();
+  document.getElementById('qa-amount')?.addEventListener('input', () => { splitShare(); partsRest(); });
   if (!editing) setTimeout(() => document.getElementById(init && init.merchantText ? 'qa-amount' : 'qa-merchant')?.focus(), 50);
 }
 function qaSyncCardSelect() {
@@ -2487,6 +2531,8 @@ function saveExpense() {
   if (!t.merchant) { alert('Enter the merchant.'); return; }
   const owedSum = QA_SPLITS.reduce((s, x) => s + (Number(x.amount) || 0), 0);
   if (owedSum > t.realAmount + 0.005) { alert('Others owe more than the bill amount.'); return; }
+  const partsSum = QA_PARTS.reduce((s, x) => s + (Number(x.amount) || 0), 0);
+  if (partsSum > t.realAmount + 0.005) { alert('The parts add up to more than the amount.'); return; }
   rememberPeople(QA_SPLITS.map(x => x.person && x.person.trim()));
   const card = cardById(f.cardId);
   const acct = f.cardId && f.cardId.startsWith('acct:') ? accountById(f.cardId.slice(5)) : null;
@@ -2499,6 +2545,7 @@ function saveExpense() {
     cardId: card ? card.id : null, accountId: acct ? acct.id : null, cardName: card ? card.name : acct ? acct.name : 'Cash / non-card', paidBy: card ? card.profile : acct ? (acct.owner || t.forProfile) : t.forProfile,
     kind: document.getElementById('qa-kind').value, direction: 'out', review: [], reviewed: true,
     splits: QA_SPLITS.filter(x => x.person && Number(x.amount) > 0).map(x => ({ id: x.id || 'sp_' + uid(), person: x.person.trim(), amount: Math.round(Number(x.amount) * 100) / 100, status: x.status || 'owed', collectedOn: x.collectedOn, repaymentId: x.repaymentId })),
+    parts: QA_PARTS.filter(x => Number(x.amount) > 0).map(x => ({ id: x.id || 'pt_' + uid(), amount: Math.round(Number(x.amount) * 100) / 100, forProfile: x.forProfile || 'joint', category: (x.category || '').trim(), note: (x.note || '').trim() })),
     recommendedCardId: rec && rec.pick ? rec.pick.card.id : null,
     note: document.getElementById('qa-note').value.trim(),
     source: 'manual', createdAt: new Date().toISOString(),
@@ -2508,6 +2555,7 @@ function saveExpense() {
     const prev = data.transactions[i];
     Object.assign(txn, { source: prev.source, rawDescription: prev.rawDescription, importBatch: prev.importBatch, createdAt: prev.createdAt, edited: true,
       direction: prev.direction || 'out', transferPair: prev.transferPair, postDate: prev.postDate, importKey: prev.importKey, repays: prev.repays });
+    Object.keys(prev).forEach(k => { if (!(k in txn)) txn[k] = prev[k]; });   // keep statement links, review flags etc.
     if (prev.rawDescription && FPEngine.kindOf(prev) !== txn.kind) learnKindRule(prev.rawDescription, txn.kind);
     // Learn the correction for future statement imports
     if (prev.rawDescription && (prev.merchant !== txn.merchant || prev.mcc !== txn.mcc || prev.channel !== txn.channel)) learnMapping(prev.rawDescription, txn);
@@ -2728,7 +2776,7 @@ function renderSpend() {
   const sum = monthSummary(spendMonth, spendFilter, spendCard);
   const spendTx = sum.txns.filter(FPEngine.isSpending);
   const byCat = {}, byWho = {};
-  spendTx.forEach(t => { const v = FPEngine.yourShare(t); byCat[t.category || 'Other'] = (byCat[t.category || 'Other'] || 0) + v; byWho[t.forProfile] = (byWho[t.forProfile] || 0) + v; });
+  spendTx.forEach(t => piecesOf(t).forEach(pc => { byCat[pc.category || 'Other'] = (byCat[pc.category || 'Other'] || 0) + pc.amount; byWho[pc.forProfile] = (byWho[pc.forProfile] || 0) + pc.amount; }));
   const bars = (obj, labelFn) => {
     const entries = Object.entries(obj).sort((a,b) => b[1]-a[1]);
     const max = entries[0] ? entries[0][1] : 1;
@@ -3184,6 +3232,34 @@ function rememberPeople(names) {
 }
 
 /* ---- split editor inside the expense modal ---- */
+let QA_PARTS = [];
+function partsEditorHtml(parts) {
+  QA_PARTS = (parts || []).map(x => ({ ...x }));
+  return `<div style="border:1px solid #1C2F45;border-radius:8px;padding:10px 12px;margin-top:6px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <span style="font-size:12px;font-weight:600;color:#8AABBF;">Break into parts <span class="hint" style="font-weight:400;">· one charge, different people or uses (e.g. a Shopee order)</span></span>
+      <button class="btn-secondary" style="font-size:11px;padding:3px 9px;" onclick="QA_PARTS.push({forProfile:'joint',amount:0});partsRender()">+ Part</button></div>
+    <div id="qa-parts"></div><div id="qa-parts-rest" class="hint" style="margin-top:4px;"></div>
+    <datalist id="cat-list">${[...new Set((data.transactions || []).map(t => t.category).filter(Boolean))].sort().map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>`;
+}
+function partsRender() {
+  const el = document.getElementById('qa-parts'); if (!el) return;
+  const inp = 'background:#0D1B2A;border:1px solid #2A4A6B;color:#F0F4F8;border-radius:5px;padding:5px 6px;font-size:12.5px;';
+  el.innerHTML = QA_PARTS.map((x, i) => `<div style="display:flex;gap:6px;align-items:center;margin-top:5px;flex-wrap:wrap;">
+      <input type="number" step="0.01" placeholder="0.00" value="${x.amount || ''}" oninput="QA_PARTS[${i}].amount=parseFloat(this.value)||0;partsRest()" style="${inp}width:80px;"/>
+      <select onchange="QA_PARTS[${i}].forProfile=this.value" style="${inp}">${PROFILES.map(p => `<option value="${p}" ${(x.forProfile || 'joint') === p ? 'selected' : ''}>${profileLabel(p)}</option>`).join('')}</select>
+      <input placeholder="Category" list="cat-list" value="${esc(x.category || '')}" oninput="QA_PARTS[${i}].category=this.value" style="${inp}width:96px;"/>
+      <input placeholder="What (e.g. Gundam)" value="${esc(x.note || '')}" oninput="QA_PARTS[${i}].note=this.value" style="${inp}flex:1;min-width:90px;"/>
+      <button class="btn-danger" style="padding:3px 8px;" onclick="QA_PARTS.splice(${i},1);partsRender()">✕</button></div>`).join('');
+  partsRest();
+}
+function partsRest() {
+  const el = document.getElementById('qa-parts-rest'); if (!el) return;
+  if (!QA_PARTS.length) { el.textContent = ''; return; }
+  const tot = parseFloat(document.getElementById('qa-amount')?.value) || 0, used = QA_PARTS.reduce((s, x) => s + (Number(x.amount) || 0), 0);
+  const who = FORMS.qa ? profileLabel(FORMS.qa.forProfile) : '';
+  el.innerHTML = used > tot + 0.005 ? `<span class="text-red">Parts add up to $${fmtAmt(used)}, more than $${fmtAmt(tot)}.</span>` : `The rest, $${fmtAmt(tot - used)}, stays with ${esc(who)} and the category above.`;
+}
 function splitEditorHtml(splits) {
   QA_SPLITS = (splits || []).map(x => ({ ...x }));
   return `<div style="border:1px solid #1C2F45;border-radius:8px;padding:10px 12px;margin-top:6px;">
@@ -3257,6 +3333,89 @@ function repaymentSuggestionsHtml() {
 
 /* ---- Owed to me page ---- */
 let owedShowSettled = false;
+/* =================== JOINT 50/50 =================== */
+// Joint spending paid by one of you from a personal card or account. Each of you bears half; what's not settled yet is listed here.
+function jointStore() { data.joint = data.joint || { settled: {}, settlements: [] }; data.joint.settled = data.joint.settled || {}; data.joint.settlements = data.joint.settlements || []; return data.joint; }
+function isJointMoney(t) { const a = t.accountId && accountById(t.accountId); return !!(a && (a.owner === 'joint' || /joint/i.test(a.name || ''))); }
+function jointItems() {
+  const J = jointStore(), out = [];
+  (data.transactions || []).forEach(t => {
+    const k = FPEngine.kindOf(t); if (k !== 'expense' && k !== 'refund') return;
+    if (isJointMoney(t)) return;                       // paid from the joint account: already shared
+    const payer = ownerOfTxn(t); if (payer !== 'marvin' && payer !== 'wife') return;
+    const sign = k === 'refund' || t.direction === 'in' ? -1 : 1;
+    piecesOf(t).forEach(pc => { if (pc.forProfile !== 'joint' || pc.amount < 0.005) return;
+      out.push({ key: pc.key, t, payer, amount: sign * Math.round(pc.amount * 100) / 100, date: t.date, merchant: t.merchant, category: pc.category, note: pc.note || t.note || '', settled: J.settled[pc.key] || null, part: pc.part }); });
+  });
+  return out.sort((a, b) => a.date < b.date ? -1 : 1);
+}
+/** owes > 0: Caroline owes Marvin; owes < 0: Marvin owes Caroline. */
+function jointBalance(items) {
+  const m = items.filter(x => x.payer === 'marvin').reduce((s, x) => s + x.amount, 0), c = items.filter(x => x.payer === 'wife').reduce((s, x) => s + x.amount, 0);
+  return { marvin: m, wife: c, total: m + c, owes: (m - c) / 2 };
+}
+let JOINT_UPTO = null, JOINT_SHOW_SETTLED = false;
+function renderJoint() {
+  const all = jointItems(), open = all.filter(x => !x.settled);
+  const months = [...new Set(open.map(x => x.date.slice(0, 7)))];
+  const upto = JOINT_UPTO && months.includes(JOINT_UPTO) ? JOINT_UPTO : months[months.length - 1] || today().slice(0, 7);
+  const sel = open.filter(x => x.date.slice(0, 7) <= upto);
+  const B = jointBalance(sel);
+  const who = B.owes >= 0 ? ['Caroline', 'Marvin'] : ['Marvin', 'Caroline'];
+  const inp = 'background:#0D1B2A;border:1px solid #2A4A6B;color:#F0F4F8;border-radius:5px;padding:3px 5px;font-size:12px;';
+  const rows = (JOINT_SHOW_SETTLED ? all.filter(x => x.date.slice(0, 7) <= upto) : sel).slice().reverse().map(x => `<tr${x.settled ? ' style="opacity:.5"' : ''}>
+    <td class="tabnum">${fmtMD(x.date)}</td>
+    <td style="cursor:pointer;" onclick="openExpenseModal('${x.t.id}')">${esc(x.merchant)}${x.part ? ' <span class="pill">part</span>' : ''}<div class="hint">${esc(x.category || '')}${x.note ? ' · ' + esc(x.note) : ''}</div></td>
+    <td>${x.payer === 'marvin' ? 'Marvin' : 'Caroline'}</td>
+    <td class="tabnum" style="text-align:right;">${x.amount < 0 ? '−' : ''}$${fmtAmt(Math.abs(x.amount))}</td>
+    <td>${x.settled ? '<span class="pill pill-green">settled</span>' : `<select style="${inp}" onchange="jointMove('${x.key}',this.value)"><option value="">Joint</option>${['marvin', 'wife', 'cobae'].map(p => `<option value="${p}">→ ${profileLabel(p)}</option>`).join('')}</select>`}</td></tr>`).join('');
+  return `
+    <p class="hint" style="margin:0 0 14px;line-height:1.6;">Anything marked <strong>Joint</strong> that one of you paid from your own card or account. Spending from the joint account is already shared, so it's left out. Each of you bears half. Mark a line Joint when you log it, or in Spending; for a mixed order use <em>Break into parts</em>.</p>
+    <div class="stat-row">
+      <div class="stat-card"><div class="label">Marvin paid</div><div class="value tabnum">$${fmtAmt(B.marvin)}</div><div class="sub">${sel.filter(x => x.payer === 'marvin').length} items</div></div>
+      <div class="stat-card"><div class="label">Caroline paid</div><div class="value tabnum">$${fmtAmt(B.wife)}</div><div class="sub">${sel.filter(x => x.payer === 'wife').length} items</div></div>
+      <div class="stat-card"><div class="label">To settle</div><div class="value tabnum ${Math.abs(B.owes) >= 0.01 ? 'text-amber' : 'text-green'}">$${fmtAmt(Math.abs(B.owes))}</div><div class="sub">${Math.abs(B.owes) >= 0.01 ? `${who[0]} pays ${who[1]}` : 'all square'}</div></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:4px 0 14px;">
+      <label class="hint">Up to end of</label>
+      <select style="${inp}padding:6px;" onchange="JOINT_UPTO=this.value;render()">${(months.length ? months : [upto]).map(m => `<option value="${m}" ${m === upto ? 'selected' : ''}>${m}</option>`).join('')}</select>
+      <button class="btn-primary" ${sel.length ? '' : 'disabled'} onclick="jointSettle('${upto}')">Mark settled</button>
+      <button class="btn-secondary" onclick="jointCsv('${upto}')">↓ CSV for the joint sheet</button>
+      ${sel.length ? `<button class="btn-secondary" title="For months you already settled in your Google Sheet" onclick="if(confirm('Mark everything up to ${upto} as already settled in your sheet? No transfer is recorded.'))jointSettle('${upto}',true)">Already settled in the sheet</button>` : ''}
+      <label class="hint" style="display:flex;gap:5px;align-items:center;"><input type="checkbox" style="width:auto;" ${JOINT_SHOW_SETTLED ? 'checked' : ''} onchange="JOINT_SHOW_SETTLED=this.checked;render()"/> show settled</label>
+    </div>
+    <div class="table-wrap"><table class="data-table"><thead><tr><th>Date</th><th>Item</th><th>Paid by</th><th style="text-align:right;">Amount</th><th>Joint?</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="5"><div class="empty">Nothing waiting to be settled ✓</div></td></tr>'}</tbody></table></div>
+    ${jointStore().settlements.length ? `<div class="section-header" style="margin-top:22px;"><h2>Past settle-ups</h2></div>
+      <div class="table-wrap"><table class="data-table mini-table"><tbody>${jointStore().settlements.slice().reverse().map(z => `<tr><td class="tabnum">${esc(z.date)}</td><td>${esc(z.label)}</td><td class="tabnum" style="text-align:right;">$${fmtAmt(z.amount)}</td><td class="hint">${z.items.length} items${z.openingBalance ? ' · marked as already done' : ''}</td><td><button class="btn-secondary" style="font-size:11px;padding:3px 8px;" onclick="jointUndo('${z.id}')">Undo</button></td></tr>`).join('')}</tbody></table></div>` : ''}`;
+}
+function jointMove(key, who) {
+  if (!who) return;
+  const [id, pid] = key.split('#'); const t = data.transactions.find(x => x.id === id); if (!t) return;
+  if (pid) { const p = (t.parts || []).find((x, i) => (x.id || String(i)) === pid); if (p) p.forProfile = who; } else t.forProfile = who;
+  saveToDrive(); render(); toast(`Moved to ${profileLabel(who)}`);
+}
+function jointSettle(upto, opening) {
+  const items = jointItems().filter(x => !x.settled && x.date.slice(0, 7) <= upto);
+  if (!items.length) return;
+  const B = jointBalance(items), J = jointStore();
+  const label = opening ? `Settled before using the app (to ${upto})` : (Math.abs(B.owes) < 0.01 ? `All square to ${upto}` : `${B.owes > 0 ? 'Caroline → Marvin' : 'Marvin → Caroline'} for spending to ${upto}`);
+  if (!opening && !confirm(`${label}: $${fmtAmt(Math.abs(B.owes))}, ${items.length} items. Mark as settled?`)) return;
+  const z = { id: 'js_' + uid(), date: today(), upto, label, amount: Math.round(Math.abs(B.owes) * 100) / 100, from: B.owes > 0 ? 'wife' : 'marvin', items: items.map(x => x.key), openingBalance: !!opening };
+  J.settlements.push(z); items.forEach(x => J.settled[x.key] = z.id);
+  saveToDrive(); render(); toast(opening ? `${items.length} older items marked as already settled` : `Settled. Log the $${fmtAmt(z.amount)} transfer as a Transfer so it isn't counted as spending.`, 7000);
+}
+function jointUndo(id) {
+  const J = jointStore(); const z = J.settlements.find(x => x.id === id); if (!z || !confirm('Undo this settle-up? Its items go back to the open list.')) return;
+  z.items.forEach(k => { if (J.settled[k] === id) delete J.settled[k]; }); J.settlements = J.settlements.filter(x => x.id !== id);
+  saveToDrive(); render();
+}
+function jointCsv(upto) {
+  const items = jointItems().filter(x => !x.settled && x.date.slice(0, 7) <= upto);
+  const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const csv = ['Date,Item,Category,Note,Paid by,Amount'].concat(items.map(x => [x.date, x.merchant, x.category, x.note, x.payer === 'marvin' ? 'Marvin' : 'Caroline', x.amount.toFixed(2)].map(q).join(','))).join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `joint-${upto}.csv`; a.click();
+}
 function renderOwed() {
   const summ = FPEngine.owedSummary(data.transactions || [], today());
   const people = Object.values(summ).sort((a, b) => b.owed - a.owed);
@@ -3347,9 +3506,12 @@ let invOpen = {};
 
 function invData() { data.investments = data.investments || { accounts: [], snapshots: [], activity: [] }; return data.investments; }
 /** Investments for the current view (owner = person; Family = everything). The store itself is invData(). */
+let INV_CPF = (() => { try { return localStorage.getItem('fp_inv_cpf') === '1'; } catch (e) { return false; } })();   // CPF is pension money: hidden unless asked for
+const isCpfAcct = a => a.type === 'cpf' || /^cpf\b/i.test(a.name || '');
+function toggleInvCpf() { INV_CPF = !INV_CPF; try { localStorage.setItem('fp_inv_cpf', INV_CPF ? '1' : '0'); } catch (e) {} render(); }
 function invView() {
-  const inv = invData(); if (VIEW === 'family') return inv;
-  const ids = new Set((inv.accounts || []).filter(a => (a.owner || 'marvin') === VIEW).map(a => a.id));
+  const inv = invData();
+  const ids = new Set((inv.accounts || []).filter(a => (VIEW === 'family' || (a.owner || 'marvin') === VIEW) && (INV_CPF || !isCpfAcct(a))).map(a => a.id));
   const keep = arr => (arr || []).filter(x => ids.has(x.accountId));
   return { ...inv, accounts: (inv.accounts || []).filter(a => ids.has(a.id)), snapshots: keep(inv.snapshots), activity: keep(inv.activity) };
 }
@@ -3509,7 +3671,8 @@ function renderInvest() {
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <label class="btn-primary" style="cursor:pointer;">Import statements<input type="file" accept=".pdf,.txt,.json" multiple style="display:none" onchange="importInvestmentFiles(event)"></label>
         <button class="btn-secondary" onclick="openInvValueModal()">Record value</button>
-        <button class="btn-secondary" onclick="openInvAccountModal()">+ Account</button></div></div>
+        <button class="btn-secondary" onclick="openInvAccountModal()">+ Account</button>
+        <button class="btn-secondary" onclick="toggleInvCpf()" title="CPF is pension money with limited use">${INV_CPF ? '✓ Including CPF' : 'CPF hidden — show'}</button></div></div>
     <p style="font-size:12.5px;color:#8AABBF;margin:-6px 0 16px;line-height:1.6;">Import DBS digiPortfolio statement PDFs (select several at once). For CPF, Endowus, shares and other platforms, record a value now and then; money in, money out and dividends are picked up from your bank lines.</p>`;
   if (!inv.accounts.length && !sugg.length) return head + `<div class="empty"><div class="icon">↗</div>No investments yet. Import a digiPortfolio statement or add an account.</div>`;
   const stat = `<div class="stat-row">
