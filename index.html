@@ -590,9 +590,9 @@ function joinViaPicker() {
   const msg = document.getElementById('join-msg');
   if (!PICKER_API_KEY) { msg.innerHTML = 'The file picker isn\'t set up yet. Ask Marvin to add the Picker API key (see Settings → Household), then try again.'; return; }
   gapi.load('picker', () => {
-    const view = new google.picker.DocsView(google.picker.ViewId.DOCS).setMode(google.picker.DocsViewMode.LIST).setOwnedByMe(false).setMimeTypes('application/json');
+    const view = new google.picker.DocsView(google.picker.ViewId.DOCS).setMode(google.picker.DocsViewMode.LIST).setOwnedByMe(false);
     const picker = new google.picker.PickerBuilder().addView(view).enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
-      .setTitle('Pick financialplanner-data.json (and merchants.json)').setOAuthToken(accessToken).setDeveloperKey(PICKER_API_KEY).setAppId(GCP_APP_ID)
+      .setTitle('Pick financialplanner-data.json').setOAuthToken(accessToken).setDeveloperKey(PICKER_API_KEY).setAppId(GCP_APP_ID)
       .setCallback(async (d) => {
         if (d.action !== google.picker.Action.PICKED) return;
         const docs = d.docs || [];
@@ -1238,7 +1238,10 @@ async function loadMerchantsDB() {
       SG_MERCHANTS = db.merchants || [];
       LS.set('fp_merchants_id', fileId);
       if (data.settings && data.settings.household && !data.settings.household.merchantsFileId) data.settings.household.merchantsFileId = fileId;
-    } else console.warn('merchants.json not found in Drive — upload it via Settings > Upload merchant DB');
+      // keep a copy in the planner file so a partner who can't open merchants.json still gets the same list
+      if (JSON.stringify(data.merchantsDb || []) !== JSON.stringify(SG_MERCHANTS)) { data.merchantsDb = SG_MERCHANTS; setTimeout(saveToDrive, 1500); }
+    } else if ((data.merchantsDb || []).length) SG_MERCHANTS = data.merchantsDb;
+    else console.warn('merchants.json not found in Drive — upload it via Settings > Upload merchant DB');
   } catch(e) { console.warn('Drive merchants.json load failed', e); }
 }
 /* =================== CARDS =================== */
@@ -1689,10 +1692,17 @@ async function saveMerchantsDB(quiet) {
   try {
     const meta = { name: 'merchants.json', mimeType: 'application/json' };
     const fileId = await merchantsFileId();
+    if (!fileId && (data.merchantsDb || []).length) {
+      // no access to the household merchants.json (partner's phone): keep the list inside the planner file instead
+      data.merchantsDb = allEntries; SG_MERCHANTS = allEntries; data.merchants = [];
+      saveToDrive(); render(); rebuildMerchantDatalist();
+      toast(`Updated the shared merchant list (${allEntries.length} merchants)`); return;
+    }
     const body = `--bound\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(meta)}\r\n--bound\r\nContent-Type: application/json\r\n\r\n${dbJson}\r\n--bound--`;
     const res = await driveFetch(fileId ? `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart&fields=id` : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
       { method: fileId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'multipart/related; boundary=bound' }, body });
     const saved = await res.json(); if (saved.id) { LS.set('fp_merchants_id', saved.id); data.settings.household.merchantsFileId = saved.id; }
+    data.merchantsDb = allEntries;
     SG_MERCHANTS = allEntries;
     data.merchants = []; // Moved to DB — clear custom list
     saveToDrive();
