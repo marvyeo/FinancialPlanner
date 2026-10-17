@@ -3769,7 +3769,7 @@ function importAdviceFile(e) {
     const A = adviceData(); let added = 0, updated = 0, px = 0;
     (j.recommendations || []).forEach(r => {
       const ex = A.recommendations.find(x => x.id === r.id);
-      if (ex) { const keep = { status: ex.status, decidedAt: ex.decidedAt, decidedBy: ex.decidedBy, decisionNote: ex.decisionNote }; Object.assign(ex, r, Object.fromEntries(Object.entries(keep).filter(([, v]) => v != null))); updated++; }
+      if (ex) { const decided = ex.status && ex.status !== 'proposed'; const keep = decided ? { status: ex.status, decidedAt: ex.decidedAt, decidedBy: ex.decidedBy, decisionNote: ex.decisionNote } : {}; Object.assign(ex, r, Object.fromEntries(Object.entries(keep).filter(([, v]) => v != null))); if (!ex.status) ex.status = 'proposed'; updated++; }
       else { A.recommendations.push({ status: 'proposed', ...r }); added++; }
     });
     Object.entries(j.prices || {}).forEach(([t, list]) => { A.prices[t] = A.prices[t] || []; list.forEach(pt => { A.prices[t] = A.prices[t].filter(x => x.date !== pt.date).concat(pt); px++; }); });
