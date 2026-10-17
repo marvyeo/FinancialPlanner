@@ -426,7 +426,7 @@ const GITHUB_URL = 'https://marvyeo.github.io/FinancialPlanner/';
 // Lets a second person open the household file that was shared with them (Google Picker).
 // One-time setup: Google Cloud console → APIs & Services → enable "Google Picker API" → Credentials → Create API key,
 // restrict it to the Picker API and to https://marvyeo.github.io/*. Paste it here.
-const PICKER_API_KEY = '';
+const PICKER_API_KEY = 'AIzaSyAHadhdBv8qOsaD91L6l4V74AF38LZVCFY';   // browser key: restrict it to the Picker API + https://marvyeo.github.io/* in Google Cloud
 const GCP_APP_ID = '669494100250';
 
 let tokenClient, accessToken = null, driveFileId = null;
@@ -1439,7 +1439,8 @@ function openCardImport() {
   showModal(`
     <h3>Import card JSON</h3>
     <p style="font-size:13px;color:#8AABBF;margin-bottom:14px;">Paste a single card <code style='background:#1C2F45;padding:1px 5px;border-radius:3px;'>{}</code> or an array of cards <code style='background:#1C2F45;padding:1px 5px;border-radius:3px;'>[]</code>. The app matches by name and merges, or adds new.</p>
-    <div class="form-row"><label>Card JSON</label><textarea id="import-json" rows="10" style="font-family:monospace;font-size:12px;" placeholder='{"name":"DBS Altitude","bonusRules":[...],...}'></textarea></div>
+    <div class="form-row"><label>Card file (.json)</label><input type="file" accept=".json,application/json" onchange="this.files[0] && this.files[0].text().then(t => { document.getElementById('import-json').value = t; })"/></div>
+    <div class="form-row"><label>…or paste card JSON</label><textarea id="import-json" rows="10" style="font-family:monospace;font-size:12px;" placeholder='{"name":"DBS Altitude","bonusRules":[...],...}'></textarea></div>
     <div class="modal-footer">
       <button class="btn-secondary" onclick="closeModal()">Cancel</button>
       <button class="btn-primary" onclick="doCardImport()">Import &amp; merge</button>
