@@ -3025,8 +3025,13 @@ function importTransactionsFile(e) {
     data.accounts = data.accounts || [];
     const acctIdByName = {};
     (j.accounts || []).forEach(a => {
-      let ex = data.accounts.find(x => x.name.toLowerCase() === a.name.toLowerCase());
+      // same account = same name and owner, or same owner and a shared account-number pattern (e.g. you typed "DBS Multiplier" for Caroline)
+      const digits = (x) => String(x || '').replace(/\D/g, '');
+      const pats = (a.patterns || []).map(digits).filter(d => d.length >= 4);
+      let ex = data.accounts.find(x => x.name.toLowerCase() === a.name.toLowerCase() && (!a.owner || (x.owner || 'marvin') === a.owner))
+        || (a.owner && data.accounts.find(x => (x.owner || 'marvin') === a.owner && (x.patterns || []).map(digits).some(d => d.length >= 4 && pats.some(p => p.endsWith(d) || d.endsWith(p)))));
       if (!ex) { ex = { id: 'acct_' + uid(), name: a.name, type: a.type || 'bank', owner: a.owner || 'marvin', patterns: a.patterns || [] }; data.accounts.push(ex); }
+      else ex.patterns = [...new Set((ex.patterns || []).concat(a.patterns || []))];
       acctIdByName[a.name.toLowerCase()] = ex.id;
     });
     // cards: resolve cardHint → held card (prefer the hint's owner)
