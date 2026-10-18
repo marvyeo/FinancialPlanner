@@ -3404,6 +3404,8 @@ function renderJoint() {
       <select style="${inp}padding:6px;" onchange="JOINT_UPTO=this.value;render()">${(months.length ? months : [upto]).map(m => `<option value="${m}" ${m === upto ? 'selected' : ''}>${m}</option>`).join('')}</select>
       <button class="btn-primary" ${sel.length ? '' : 'disabled'} onclick="jointSettle('${upto}')">Settle all to ${upto}</button>
       <button class="btn-secondary" onclick="jointCsv('${upto}')">↓ CSV for the joint sheet</button>
+      <button class="btn-secondary" title="Your list of joint spending already split in the sheet" onclick="document.getElementById('file-joint-sheet').click()">↑ Import settled sheet</button>
+      <input type="file" id="file-joint-sheet" accept=".json" style="display:none" onchange="importJointSheet(event)">
       ${sel.length ? `<button class="btn-secondary" title="For months you already settled in your Google Sheet" onclick="if(confirm('Mark everything up to ${upto} as already settled in your sheet? No transfer is recorded.'))jointSettle('${upto}',true)">Already settled in the sheet</button>` : ''}
       <label class="hint" style="display:flex;gap:5px;align-items:center;"><input type="checkbox" style="width:auto;" ${JOINT_SHOW_SETTLED ? 'checked' : ''} onchange="JOINT_SHOW_SETTLED=this.checked;render()"/> show settled</label>
     </div>
@@ -3416,6 +3418,76 @@ function renderJoint() {
       <tbody>${rows || '<tr><td colspan="6"><div class="empty">Nothing waiting to be settled ✓</div></td></tr>'}</tbody></table></div>
     ${jointStore().settlements.length ? `<div class="section-header" style="margin-top:22px;"><h2>Past settle-ups</h2></div>
       <div class="table-wrap"><table class="data-table mini-table"><tbody>${jointStore().settlements.slice().reverse().map(z => `<tr><td class="tabnum">${esc(z.date)}</td><td>${esc(z.label)}</td><td class="tabnum" style="text-align:right;">$${fmtAmt(z.amount)}</td><td class="hint">${z.items.length} items${z.openingBalance ? ' · marked as already done' : ''}</td><td><button class="btn-secondary" style="font-size:11px;padding:3px 8px;" onclick="jointUndo('${z.id}')">Undo</button></td></tr>`).join('')}</tbody></table></div>` : ''}`;
+}
+/* ---- Import the settled joint sheet: { format:'fp-joint-settled', rows:[{id,date,desc,amount,payer:'Marvin'|'Caroline',category}] } ---- */
+let JS_IMPORT = null;
+function importJointSheet(e) {
+  const f = e.target.files[0]; if (!f) return; e.target.value = '';
+  f.text().then(txt => {
+    let j; try { j = JSON.parse(txt); } catch (err) { alert('Not valid JSON'); return; }
+    if (j.format !== 'fp-joint-settled' || !(j.rows || []).length) { alert('That isn\'t a settled-joint file (format fp-joint-settled).'); return; }
+    const rows = j.rows.map(r => ({ ...r, payer: /caroline|wife/i.test(r.payer) ? 'wife' : 'marvin', amount: Number(r.amount) }));
+    const R = FPEngine.matchSettledJoint(rows, data.transactions || [], { payerOf: ownerOfTxn, isJointMoney, settled: jointStore().settled });
+    R.rows.forEach(x => { x.on = x.action === 'settle' || x.action === 'relabel'; });
+    R.extra.forEach(u => { u.choice = ''; });
+    JS_IMPORT = R; renderJointSheetReview();
+  });
+}
+function renderJointSheetReview() {
+  const R = JS_IMPORT, by = a => R.rows.map((x, i) => ({ x, i })).filter(o => o.x.action === a);
+  const amt = v => (v < 0 ? '−' : '') + '$' + fmtAmt(Math.abs(v));
+  const who = p => p === 'wife' ? 'Caroline' : 'Marvin';
+  const line = (o, tick) => `<tr><td>${tick ? `<input type="checkbox" style="width:auto;" ${o.x.on ? 'checked' : ''} onchange="JS_IMPORT.rows[${o.i}].on=this.checked;renderJointSheetReview()"/>` : ''}</td>
+    <td class="tabnum" style="white-space:nowrap;">${fmtMD(o.x.row.date)}</td><td>${esc(o.x.row.desc)}<div class="hint">${who(o.x.row.payer)}${o.x.m ? ` · app: ${esc(o.x.m.t.merchant || '')} ${fmtMD(o.x.m.t.date)}${o.x.m.part ? ' (part)' : ''}` : ''}${o.x.why ? ' · ' + esc(o.x.why) : ''}</div></td>
+    <td class="tabnum" style="text-align:right;">${amt(o.x.row.amount)}</td></tr>`;
+  const sec = (title, list, tick, note) => list.length ? `<div class="section-header" style="margin-top:14px;"><h2 style="font-size:14px;">${title} (${list.length})</h2></div>${note ? `<div class="hint" style="margin:-6px 0 6px;">${note}</div>` : ''}
+    <div class="table-wrap" style="max-height:32vh;overflow:auto;"><table class="data-table mini-table"><tbody>${list.map(o => line(o, tick)).join('')}</tbody></table></div>` : '';
+  const sel = 'background:#0D1B2A;border:1px solid #2A4A6B;color:#F0F4F8;border-radius:5px;padding:3px;font-size:12px;';
+  const extra = R.extra.length ? `<div class="section-header" style="margin-top:14px;"><h2 style="font-size:14px;">Joint in the app but not on the sheet, to ${esc(R.last)} (${R.extra.length})</h2></div>
+    <div class="hint" style="margin:-6px 0 6px;">Not split yet, or not joint after all.</div>
+    <div class="table-wrap" style="max-height:32vh;overflow:auto;"><table class="data-table mini-table"><tbody>${R.extra.map((u, i) => `<tr><td class="tabnum" style="white-space:nowrap;">${fmtMD(u.t.date)}</td><td>${esc(u.t.merchant || '')}<div class="hint">${who(ownerOfTxn(u.t))} · ${esc(u.t.category || '')}${u.part ? ' · part' : ''}</div></td><td class="tabnum" style="text-align:right;">${amt(u.amount)}</td>
+      <td><select style="${sel}" onchange="JS_IMPORT.extra[${i}].choice=this.value"><option value="">Leave open</option><option value="settled" ${u.choice === 'settled' ? 'selected' : ''}>Settled too</option><option value="payer" ${u.choice === 'payer' ? 'selected' : ''}>Not joint → ${who(ownerOfTxn(u.t))}</option></select></td></tr>`).join('')}</tbody></table></div>` : '';
+  const n = R.rows.filter(x => x.on).length;
+  showModal(`<h3>Settled joint sheet: ${R.rows.length} lines</h3>
+    <p class="hint" style="margin:-6px 0 8px;">Ticked lines are marked Joint and settled. Nothing changes until you press Apply.</p>
+    ${sec('Already Joint in the app', by('settle'), true)}
+    ${sec('Not filed as Joint — will be relabelled', by('relabel'), true)}
+    ${sec('Please check', by('check'), true, 'Likely the same line, but filed differently or described differently. Tick to relabel as Joint spending and settle.')}
+    ${sec('Paid from the joint account', by('jointAccount'), false, 'Already shared; left as is.')}
+    ${sec('Not found in the app', by('none'), true, 'No line with this amount within 4 days. Tick to add as a settled Joint line (only if it was never logged — otherwise fix the existing line).')}
+    ${extra}
+    <div class="modal-footer"><button class="btn-secondary" onclick="jointSheetCsv()" title="Send this to Claude to sort out the unclear ones">↓ Review CSV</button><button class="btn-secondary" onclick="JS_IMPORT=null;closeModal()">Cancel</button><button class="btn-primary" onclick="applyJointSheet()">Apply (${n} lines)</button></div>`);
+}
+function jointSheetCsv() {
+  const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`, R = JS_IMPORT;
+  const head = 'Section,Sheet id,Date,Description,Amount,Paid by,Sheet category,App date,App merchant,App for,App kind,App category,App source,Note';
+  const lines = R.rows.map(x => [x.action, x.row.id, x.row.date, x.row.desc, x.row.amount, x.row.payer, x.row.category, x.m && x.m.t.date, x.m && x.m.t.merchant, x.m && x.m.forProfile, x.m && x.m.kind, x.m && x.m.t.category, x.m && txnSourceName(x.m.t), x.why].map(q).join(','))
+    .concat(R.extra.map(u => ['app-joint-not-on-sheet', '', '', '', '', ownerOfTxn(u.t), '', u.t.date, u.t.merchant, u.forProfile, FPEngine.kindOf(u.t), u.t.category, txnSourceName(u.t), u.amount].map(q).join(',')));
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([[head].concat(lines).join('\n')], { type: 'text/csv' })); a.download = 'joint-sheet-review.csv'; a.click();
+}
+function applyJointSheet() {
+  const R = JS_IMPORT; if (!R) return;
+  const keys = [], J = jointStore(); let relabelled = 0, added = 0;
+  R.rows.filter(x => x.on).forEach(x => {
+    if (x.action === 'none') {
+      const t = { id: 'tx_' + uid() + added, date: x.row.date, merchant: x.row.desc, amount: Math.abs(x.row.amount), category: x.row.category || '', forProfile: 'joint', paidBy: x.row.payer,
+        kind: x.row.amount < 0 ? 'refund' : 'expense', direction: x.row.amount < 0 ? 'in' : 'out', source: 'joint-sheet', jointSheetId: x.row.id, createdAt: new Date().toISOString() };
+      data.transactions.push(t); keys.push(t.id); added++; return;
+    }
+    if (!x.m || x.action === 'jointAccount') return;
+    const t = x.m.t, target = x.m.part || t;
+    if (target.forProfile !== 'joint') { target.forProfile = 'joint'; relabelled++; }
+    if (x.action === 'check' && FPEngine.kindOf(t) !== 'expense' && FPEngine.kindOf(t) !== 'refund') { t.kind = x.row.amount < 0 ? 'refund' : 'expense'; t.review = []; }
+    t.jointSheetId = x.row.id; keys.push(x.m.key);
+  });
+  R.extra.forEach(u => { if (u.choice === 'settled') keys.push(u.key); else if (u.choice === 'payer') { (u.part || u.t).forProfile = ownerOfTxn(u.t); relabelled++; } });
+  const fresh = [...new Set(keys)].filter(k => !J.settled[k]);
+  if (fresh.length) {
+    const z = { id: 'js_' + uid(), date: today(), upto: R.last.slice(0, 7), label: `Settled in the joint sheet (to ${R.last})`, amount: 0, from: null, items: fresh, openingBalance: true };
+    J.settlements.push(z); fresh.forEach(k => J.settled[k] = z.id);
+  }
+  JS_IMPORT = null; closeModal(); saveToDrive(); render();
+  toast(`${fresh.length} lines marked settled · ${relabelled} relabelled${added ? ` · ${added} added` : ''}`, 7000);
 }
 function jointMove(key, who) {
   if (!who) return;

@@ -1689,6 +1689,68 @@
     return errors;
   }
 
+
+  /**
+   * Match a "settled joint" sheet (rows the two of you already split) to the ledger.
+   * rows: [{ id, date, desc, amount (negative = refund), payer: 'marvin'|'wife', category }]
+   * opts: { payerOf(t), isJointMoney(t), settled: {key:id} }
+   * Returns { rows: [{ row, m, action, why }], extra: [pieces marked joint, unsettled, not on the sheet, up to the sheet's last date] }.
+   * action: settle (already Joint) · relabel (not Joint yet) · check (unsure) · jointAccount (paid from the joint account) · none (not found)
+   */
+  function matchSettledJoint(rows, ledger, opts) {
+    opts = opts || {};
+    const payerOf = opts.payerOf || ((t) => t.paidBy || null), isJointMoney = opts.isJointMoney || (() => false), settled = opts.settled || {};
+    const words = (x) => new Set(norm(x).split(' ').filter((w) => w.length > 2 && !['shopping', 'the', 'and', 'for', 'pte', 'ltd', 'singapore', 'sgp'].includes(w)));
+    const sim = (a, b) => { const A = words(a), B = words(b); if (!A.size || !B.size) return 0; let n = 0; A.forEach((w) => { if ([...B].some((v) => v.startsWith(w) || w.startsWith(v))) n++; }); return n / Math.min(A.size, B.size); };
+    const units = [];
+    (ledger || []).forEach((t) => {
+      const k = kindOf(t); if (k === 'income' || k === 'repayment') return;
+      const out = k === 'refund' || t.direction === 'in' ? -1 : 1;
+      const parts = (t.parts || []).filter((p) => Number(p.amount) > 0);
+      units.push({ t, key: t.id, part: null, amount: out * Number(t.amount || 0), forProfile: t.forProfile, text: [t.merchant, t.rawDescription, t.note, t.category].join(' ') });
+      parts.forEach((p, i) => units.push({ t, key: t.id + '#' + (p.id || i), part: p, amount: out * Number(p.amount), forProfile: p.forProfile || t.forProfile, text: [t.merchant, p.note, p.category, t.rawDescription].join(' ') }));
+    });
+    const cands = [];
+    (rows || []).forEach((r, ri) => {
+      const amt = Number(r.amount) || 0;
+      units.forEach((u) => {
+        if (Math.abs(u.amount - amt) > 0.005) return;
+        const dd = Math.abs((parseYmd(u.t.date) - parseYmd(r.date)) / 864e5); if (!(dd <= 4)) return;
+        const payer = payerOf(u.t); if (payer && r.payer && payer !== r.payer && !isJointMoney(u.t)) return;
+        const s = sim(r.desc, u.text);
+        const k = kindOf(u.t);
+        const score = dd * 10 + (1 - s) * 6 + (payer ? 0 : 8) + (k === 'expense' || k === 'refund' ? 0 : 4) + (u.forProfile === 'joint' ? -3 : 0) + (u.part ? 1 : 0);
+        cands.push({ ri, u, dd, s, score });
+      });
+    });
+    cands.sort((a, b) => a.score - b.score);
+    const usedRow = new Set(), usedTxn = new Set(), match = {};
+    cands.forEach((c) => {
+      if (usedRow.has(c.ri) || usedTxn.has(c.u.t.id + (c.u.part ? '' : '*')) || usedTxn.has(c.u.key)) return;
+      // a whole line and its parts can't both be used
+      if (!c.u.part && [...usedTxn].some((x) => x.startsWith(c.u.t.id + '#'))) return;
+      if (c.u.part && usedTxn.has(c.u.t.id + '*')) return;
+      usedRow.add(c.ri); usedTxn.add(c.u.key); if (!c.u.part) usedTxn.add(c.u.t.id + '*');
+      match[c.ri] = c;
+    });
+    const res = (rows || []).map((row, ri) => {
+      const c = match[ri];
+      if (!c) return { row, m: null, action: 'none', why: 'no line with this amount within 4 days' };
+      const k = kindOf(c.u.t), m = { t: c.u.t, key: c.u.key, part: c.u.part, dateDiff: c.dd, textSim: c.s, kind: k, forProfile: c.u.forProfile };
+      if (isJointMoney(c.u.t)) return { row, m, action: 'jointAccount', why: 'paid from the joint account' };
+      if (settled[c.u.key]) return { row, m, action: 'settle', why: 'already settled in the app' };
+      if (k !== 'expense' && k !== 'refund') return { row, m, action: 'check', why: `filed as ${k.replace(/_/g, ' ')}` };
+      if (c.u.forProfile === 'joint') return { row, m, action: 'settle', why: '' };
+      if (c.s >= 0.34 || c.dd === 0) return { row, m, action: 'relabel', why: `filed as ${c.u.forProfile || 'no one'}` };
+      return { row, m, action: 'check', why: `filed as ${c.u.forProfile || 'no one'}; description differs` };
+    });
+    const last = (rows || []).reduce((mx, r) => (r.date > mx ? r.date : mx), '');
+    const matchedKeys = new Set(Object.values(match).map((c) => c.u.key));
+    const extra = units.filter((u) => u.forProfile === 'joint' && !matchedKeys.has(u.key) && !settled[u.key] && u.t.date <= last && !isJointMoney(u.t)
+      && (kindOf(u.t) === 'expense' || kindOf(u.t) === 'refund')
+      && ['marvin', 'wife'].includes(payerOf(u.t)));
+    return { rows: res, extra, last };
+  }
   const api = {
     ENGINE_VERSION, SCENARIOS, PROFILE_KEYS,
     cycleFor, resolveDef, autoLink, matchDefByName, legacyToDef, optionValue,
@@ -1698,7 +1760,7 @@
     splitsOf, yourShare, openSplits, personMatches, matchRepayments, owedSummary, migrateContra,
     parseDigiPortfolio, classifyHolding, mergeInvestmentStatement, mergeInvestmentData, investFlows, investmentSummary, investmentInsights, xirr,
     categorise, categoryForMcc, parseStatementText, parseCSV, guessCsvMapping, csvToRows, txnFingerprint,
-    reconcileStatement, mergeData, priceAt, ghostResult, adviceSummary,
+    reconcileStatement, mergeData, priceAt, ghostResult, adviceSummary, matchSettledJoint,
     util: { norm, mccIn, expandList, r2, ymd, parseYmd, daysUntil },
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

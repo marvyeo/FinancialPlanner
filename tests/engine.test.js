@@ -576,5 +576,28 @@ test('tax and insurance payments are not investment contributions', () => {
   const f = E.investFlows ? E.investFlows(L, inv) : null;
   if (f) { assert.strictEqual(f.filter(x => x.txn.id === 't1').length, 0); }
 });
+
+test('settled joint sheet: match, relabel, check, extras', () => {
+  const L = [
+    { id: 'a', date: '2026-01-01', amount: 138.3, merchant: 'Jiak Zhichar', forProfile: 'joint', paidBy: 'marvin', kind: 'expense' },
+    { id: 'b', date: '2026-01-18', amount: 65.93, merchant: 'Haruyama Udon', forProfile: 'wife', paidBy: 'wife', kind: 'expense' },
+    { id: 'c', date: '2026-01-01', amount: 400, merchant: 'PayNow babysitter', forProfile: 'cobae', paidBy: 'marvin', kind: 'paid_for_others' },
+    { id: 'd', date: '2026-01-05', amount: 20, merchant: 'Toast Box', forProfile: 'joint', paidBy: 'marvin', kind: 'expense' },
+    { id: 'e', date: '2026-01-09', amount: 8.4, merchant: 'Shopee', forProfile: 'joint', paidBy: 'marvin', kind: 'refund', direction: 'in' },
+    { id: 'f', date: '2026-01-02', amount: 100, merchant: 'Shopee order', forProfile: 'marvin', paidBy: 'marvin', kind: 'expense', parts: [{ id: 'p1', amount: 52.61, forProfile: 'marvin', note: 'Balmuda' }] },
+  ];
+  const rows = [
+    { date: '2026-01-01', desc: 'Dinner @ Jiak Zhichar', amount: 138.3, payer: 'marvin' },
+    { date: '2026-01-17', desc: 'Haruyama udon', amount: 65.93, payer: 'wife' },
+    { date: '2026-01-01', desc: 'Cobae Babysitting', amount: 400, payer: 'marvin' },
+    { date: '2026-01-09', desc: 'Floor Tiles Refund', amount: -8.4, payer: 'marvin' },
+    { date: '2026-01-02', desc: 'Shopee (Balmuda Accessories)', amount: 52.61, payer: 'marvin' },
+    { date: '2026-01-03', desc: 'Uniqlo', amount: 90, payer: 'marvin' },
+  ];
+  const r = E.matchSettledJoint(rows, L);
+  assert.deepStrictEqual(r.rows.map(x => x.action), ['settle', 'relabel', 'check', 'settle', 'relabel', 'none']);
+  assert.strictEqual(r.rows[4].m.key, 'f#p1');
+  assert.deepStrictEqual(r.extra.map(u => u.t.id), ['d']);
+});
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
