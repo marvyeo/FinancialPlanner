@@ -1334,7 +1334,7 @@ function cardImgUrl(name) {
 }
 
 function renderCards() {
-  const profiles = VIEW === 'family' || VIEW === 'cobae' ? ['marvin','wife','cobae','joint'] : [VIEW, 'joint'];
+  const profiles = VIEW === 'family' ? ['marvin','wife','joint','cobae'] : VIEW === 'cobae' ? ['cobae'] : [VIEW, 'joint'];
   const groups = profiles.map(p => ({
     profile: p,
     cards: data.cards.filter(c => (c.profile || 'marvin') === p).map((card, localIdx) => ({
