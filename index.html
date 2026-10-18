@@ -2767,9 +2767,23 @@ function renderStrategy() {
 }
 
 /* ---------------- Spending page ---------------- */
-let spendMonth = null, spendFilter = 'all', spendCard = 'all', spendKind = 'expense';
-function monthSummary(ym, profileFilter, cardFilter) {
-  const inScope = t => t.date && t.date.slice(0,7) === ym && (!profileFilter || profileFilter === 'all' || txnInView(t, profileFilter)) &&
+let spendMonth = null, spendFilter = 'all', spendCard = 'all', spendKind = 'expense', spendQuery = '';
+/** Search box: re-render as you type and keep the cursor in the box. */
+function spendSearch(v) {
+  clearTimeout(spendSearch._t);
+  spendSearch._t = setTimeout(() => {
+    spendQuery = v; render();
+    const el = document.getElementById('spend-q'); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+  }, 250);
+}
+function txnMatchesQuery(t, q) {
+  const words = String(q || '').toLowerCase().trim().split(/\s+/).filter(Boolean); if (!words.length) return true;
+  const hay = [t.merchant, t.rawDescription, t.note, t.category, txnSourceName(t), profileLabel(t.forProfile), Number(t.amount || 0).toFixed(2)]
+    .concat((t.parts || []).flatMap(p => [p.note, p.category])).concat(FPEngine.splitsOf(t).map(x => x.person)).join(' ').toLowerCase();
+  return words.every(w => hay.includes(w));
+}
+function monthSummary(ym, profileFilter, cardFilter, q) {
+  const inScope = t => t.date && (ym === '*' || t.date.slice(0,7) === ym) && (!q || txnMatchesQuery(t, q)) && (!profileFilter || profileFilter === 'all' || txnInView(t, profileFilter)) &&
     (!cardFilter || cardFilter === 'all' || t.cardId === cardFilter || t.accountId === cardFilter);
   const txns = (data.transactions || []).filter(inScope);
   const res = { txns, count: 0, spend: 0, othersPaid: 0, transfers: 0, income: 0, miles: 0, cashback: 0, missed: 0, missedCount: 0, rows: [], byKind: {} };
@@ -2798,7 +2812,8 @@ function splitLine(t) {
 }
 function renderSpend() {
   spendMonth = spendMonth || today().slice(0,7);
-  const sum = monthSummary(spendMonth, spendFilter, spendCard);
+  const searching = spendQuery.trim().length > 0;
+  const sum = monthSummary(searching ? '*' : spendMonth, spendFilter, spendCard, searching ? spendQuery : '');
   const spendTx = sum.txns.filter(FPEngine.isSpending);
   const byCat = {}, byWho = {};
   spendTx.forEach(t => piecesOf(t).forEach(pc => { byCat[pc.category || 'Other'] = (byCat[pc.category || 'Other'] || 0) + pc.amount; byWho[pc.forProfile] = (byWho[pc.forProfile] || 0) + pc.amount; }));
@@ -2813,7 +2828,7 @@ function renderSpend() {
     const earned = r.actual ? (r.actual.result.type === 'cashback' ? '$' + fmtAmt(r.actual.result.cashback) : Math.round(r.actual.result.miles).toLocaleString() + ' mi') : '—';
     const missed = r.missedCents > 0.5 ? `<div class="hint text-amber" title="${esc(r.best.card.name)} would have earned ${esc(r.best.unitLine)}">−$${fmtAmt(r.missedCents/100)} vs ${esc(r.best.card.name)}</div>` : '';
     return `<tr style="cursor:pointer;" onclick="openExpenseModal('${t.id}')">
-      <td class="tabnum" style="white-space:nowrap;">${esc(t.date.slice(5))}</td>
+      <td class="tabnum" style="white-space:nowrap;">${esc(searching ? t.date : t.date.slice(5))}</td>
       <td>${esc(t.merchant)} ${kindPill(t)} ${needsReview(t) ? '<span class="pill pill-red">review</span>' : ''}${splitLine(t)}<div class="hint" style="margin-top:1px;">${esc(t.category||'')}${t.mcc ? ' · ' + esc(t.mcc) : ''}${t.channel ? ' · ' + channelLabel(t.channel) : ''}${t.fcy ? ' · FCY' : ''}${t.note ? ' · ' + esc(t.note) : ''}</div></td>
       <td>${profileLabel(t.forProfile)}</td>
       <td style="font-size:12.5px;">${esc(txnSourceName(t))}</td>
@@ -2830,7 +2845,8 @@ function renderSpend() {
     <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center;">
       <button class="btn-primary" onclick="openExpenseModal()">+ Add expense</button>
       <button class="btn-secondary" onclick="openImportModal()">↑ Import statement</button>
-      <input type="month" value="${spendMonth}" onchange="spendMonth=this.value;render()" style="${sel}"/>
+      <input id="spend-q" type="search" placeholder="🔍 Search all months: merchant, note, amount…" value="${esc(spendQuery)}" oninput="spendSearch(this.value)" style="${sel}flex:1;min-width:200px;"/>
+      <input type="month" value="${spendMonth}" ${searching ? 'disabled title="Clear the search to pick a month"' : ''} onchange="spendMonth=this.value;render()" style="${sel}${searching ? 'opacity:.4;' : ''}"/>
       <select onchange="spendFilter=this.value;render()" style="${sel}"><option value="all">Everyone</option>${PROFILES.map(p => `<option value="${p}" ${spendFilter===p?'selected':''}>${profileLabel(p)}</option>`).join('')}</select>
       <select onchange="spendCard=this.value;render()" style="${sel}max-width:220px;"><option value="all">All cards & accounts</option>${srcOpts}</select>
     </div>
@@ -2847,11 +2863,12 @@ function renderSpend() {
       <div class="smart-spend-box" style="margin:0;"><div class="section-header"><h2>Spending by category</h2></div>${bars(byCat)}</div>
       <div class="smart-spend-box" style="margin:0;"><div class="section-header"><h2>Spending by person</h2></div>${bars(byWho, profileLabel)}</div>
     </div>
+    ${searching ? `<div class="banner" style="justify-content:space-between;margin-bottom:14px;"><div>Search <strong>"${esc(spendQuery)}"</strong> across all months: ${sum.txns.length} line${sum.txns.length !== 1 ? 's' : ''}. The totals above cover these results.</div><button class="btn-secondary" onclick="spendQuery='';render()">Clear search</button></div>` : ''}
     <div class="section-header"><h2>Transactions</h2><span class="hint">Tap a row to edit. Transfers between your own accounts are kept out of spending.</span></div>
     <div class="profile-tabs tabs-scroll" style="margin-bottom:12px;">${kindTabs}</div>
     <div class="table-wrap" style="overflow-x:auto;"><table class="data-table">
       <thead><tr><th>Date</th><th>Merchant</th><th>For</th><th>Card / account</th><th style="text-align:right;">Amount</th><th style="text-align:right;">Earned</th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="6"><div class="empty"><div class="icon">≡</div>Nothing here for this month.</div></td></tr>`}</tbody>
+      <tbody>${rows || `<tr><td colspan="6"><div class="empty"><div class="icon">≡</div>${searching ? 'No matches. Check the Spending / All tabs and the person filter.' : 'Nothing here for this month.'}</div></td></tr>`}</tbody>
     </table></div>`;
 }
 
