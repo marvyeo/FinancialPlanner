@@ -1337,7 +1337,7 @@ function renderCards() {
   const profiles = VIEW === 'family' || VIEW === 'cobae' ? ['marvin','wife','cobae','joint'] : [VIEW, 'joint'];
   const groups = profiles.map(p => ({
     profile: p,
-    cards: data.cards.filter(c => c.profile === p).map((card, localIdx) => ({
+    cards: data.cards.filter(c => (c.profile || 'marvin') === p).map((card, localIdx) => ({
       card, ci: data.cards.indexOf(card)
     }))
   })).filter(g => g.cards.length > 0);
@@ -1350,7 +1350,7 @@ function renderCards() {
       <button class="btn-secondary" onclick="openCardImport()">↑ Import card JSON</button>
       <button class="btn-secondary" onclick="openCardDays()">📅 Statement &amp; due days${data.cards.some(c => !c.cycleDate || !c.gracePeriodDays) ? ` <span class="pill pill-amber">${data.cards.filter(c => !c.cycleDate || !c.gracePeriodDays).length} missing</span>` : ''}</button>
     </div>
-    ${noCards ? `<div class="empty"><div class="icon">▤</div>No cards added yet</div>` :
+    ${noCards ? `<div class="empty"><div class="icon">▤</div>No cards added yet</div>` : !groups.length ? `<div class="empty"><div class="icon">▤</div>No cards saved as ${profileLabel(VIEW)}'s. Open a card and set <em>Whose card</em>, or add one.</div>` :
       groups.map(g => `
         <div style="margin-bottom:32px;">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid #1C2F45;">
@@ -2103,6 +2103,18 @@ function ensureEngineData() {
     data.migrations.contraSplitsV2 = { at: today(), stats };
     setTimeout(() => { saveToDrive(); toast(`Converted your Contra history: ${stats.merged + stats.standalone} shared bills, ${stats.linked + stats.linkedGroups} repayments linked. See "Owed to me".`, 6000); }, 1500);
   }
+  // Tracker rows marked joint-baby / joint-kid / Cobae were filed as Cobae's spending. They're joint spending paid by one of you.
+  if (!data.migrations.cobaeToJoint) {
+    let n = 0, amt = 0;
+    data.transactions.forEach(t => {
+      const k = FPEngine.kindOf(t); if (k !== 'expense' && k !== 'refund') return;
+      if (/invest|endowus|saving|srs|cpf/i.test([t.category, t.merchant].join(' '))) return;   // money put away for Cobae stays hers
+      if (t.forProfile === 'cobae') { t.forProfile = 'joint'; t.fromCobae = true; n++; amt += Number(t.amount) || 0; }
+      (t.parts || []).forEach(pt => { if (pt.forProfile === 'cobae') { pt.forProfile = 'joint'; pt.fromCobae = true; n++; } });
+    });
+    data.migrations.cobaeToJoint = { at: today(), n };
+    if (n) setTimeout(() => { saveToDrive(); toast(`Moved ${n} Cobae-tagged expenses ($${fmtAmt(amt)}) to Joint. They stay in each payer's spending and now show on Joint 50/50.`, 8000); }, 1800);
+  }
   try { refreshCardBills(); if (!data.migrations.billsTidy1) { tidyPastBills(); data.migrations.billsTidy1 = today(); setTimeout(saveToDrive, 1200); } } catch (e) { console.warn('bills refresh failed', e); }
   const n = relinkOrphanTxns();
   if (n) setTimeout(() => { saveToDrive(); toast(`Linked ${n} transaction${n!==1?'s':''} to your cards — their miles are now counted`, 5000); }, 800);
@@ -2710,7 +2722,9 @@ function saveCardSettings(cardId, cycleKey) {
 
 /* ---------------- Strategy page ---------------- */
 let strategyTab = 'marvin';
+let strategyViewSeen = null;
 function renderStrategy() {
+  if (strategyViewSeen !== VIEW) { strategyTab = VIEW === 'marvin' || VIEW === 'wife' ? VIEW : 'cobae'; strategyViewSeen = VIEW; }
   const tabs = [['marvin','Marvin'],['wife','Caroline'],['cobae','Household (Cobae & joint)']];
   const ctx = engineCtx();
   const rows = FPEngine.strategy(ctx, strategyTab, today(), 50).map(({ scenario, rec }) => {
@@ -2731,7 +2745,7 @@ function renderStrategy() {
   const valid = (RULES.cards||[]).filter(d => d.verify || (d.bonuses||[]).some(b => b.verify)).length;
   return `
     ${rulesBanner()}
-    <div class="profile-tabs tabs-scroll">${tabs.map(([k,l]) => `<div class="profile-tab ${strategyTab===k?'active':''}" onclick="strategyTab='${k}';render()">${l}</div>`).join('')}</div>
+    <div class="profile-tabs tabs-scroll">${tabs.map(([k,l]) => `<div class="profile-tab ${strategyTab===k?'active':''}" onclick="setView('${k}'==='cobae'?'family':'${k}')">${l}</div>`).join('')}</div>
     <p style="font-size:13px;color:#8AABBF;margin:-8px 0 16px;line-height:1.6;">Live cheat sheet for a S$50 spend today, using what's left under each cap this cycle. It changes as you log expenses and caps fill up.
       Rules ${esc(RULES.rulesVersion||'—')}${valid ? ` · <span class="text-amber">${valid} card${valid!==1?'s have':' has'} items marked "verify"</span>` : ''}.</p>
     <div class="table-wrap"><table class="data-table">
@@ -3354,21 +3368,30 @@ function jointBalance(items) {
   const m = items.filter(x => x.payer === 'marvin').reduce((s, x) => s + x.amount, 0), c = items.filter(x => x.payer === 'wife').reduce((s, x) => s + x.amount, 0);
   return { marvin: m, wife: c, total: m + c, owes: (m - c) / 2 };
 }
-let JOINT_UPTO = null, JOINT_SHOW_SETTLED = false;
+let JOINT_UPTO = null, JOINT_SHOW_SETTLED = false, JOINT_SEL = new Set();
+/** Personal view shows the lines that person paid; Family / Cobae show both. The balance always covers both of you. */
+function jointVisible(x) { return VIEW === 'marvin' || VIEW === 'wife' ? x.payer === VIEW : true; }
+function jointToggle(key, on) { if (on) JOINT_SEL.add(key); else JOINT_SEL.delete(key); render(); }
+function jointToggleAll(keys, on) { keys.forEach(k => on ? JOINT_SEL.add(k) : JOINT_SEL.delete(k)); render(); }
 function renderJoint() {
   const all = jointItems(), open = all.filter(x => !x.settled);
+  const openKeys = new Set(open.map(x => x.key)); JOINT_SEL.forEach(k => { if (!openKeys.has(k)) JOINT_SEL.delete(k); });
   const months = [...new Set(open.map(x => x.date.slice(0, 7)))];
   const upto = JOINT_UPTO && months.includes(JOINT_UPTO) ? JOINT_UPTO : months[months.length - 1] || today().slice(0, 7);
   const sel = open.filter(x => x.date.slice(0, 7) <= upto);
   const B = jointBalance(sel);
   const who = B.owes >= 0 ? ['Caroline', 'Marvin'] : ['Marvin', 'Caroline'];
   const inp = 'background:#0D1B2A;border:1px solid #2A4A6B;color:#F0F4F8;border-radius:5px;padding:3px 5px;font-size:12px;';
-  const rows = (JOINT_SHOW_SETTLED ? all.filter(x => x.date.slice(0, 7) <= upto) : sel).slice().reverse().map(x => `<tr${x.settled ? ' style="opacity:.5"' : ''}>
+  const listed = (JOINT_SHOW_SETTLED ? all.filter(x => x.date.slice(0, 7) <= upto) : sel).filter(jointVisible);
+  const listedOpen = listed.filter(x => !x.settled), allTicked = listedOpen.length > 0 && listedOpen.every(x => JOINT_SEL.has(x.key));
+  const picked = open.filter(x => JOINT_SEL.has(x.key)), PB = jointBalance(picked);
+  const rows = listed.slice().reverse().map(x => `<tr${x.settled ? ' style="opacity:.5"' : ''}>
+    <td>${x.settled ? '' : `<input type="checkbox" style="width:auto;" ${JOINT_SEL.has(x.key) ? 'checked' : ''} onchange="jointToggle('${x.key}',this.checked)"/>`}</td>
     <td class="tabnum">${fmtMD(x.date)}</td>
     <td style="cursor:pointer;" onclick="openExpenseModal('${x.t.id}')">${esc(x.merchant)}${x.part ? ' <span class="pill">part</span>' : ''}<div class="hint">${esc(x.category || '')}${x.note ? ' · ' + esc(x.note) : ''}</div></td>
     <td>${x.payer === 'marvin' ? 'Marvin' : 'Caroline'}</td>
     <td class="tabnum" style="text-align:right;">${x.amount < 0 ? '−' : ''}$${fmtAmt(Math.abs(x.amount))}</td>
-    <td>${x.settled ? '<span class="pill pill-green">settled</span>' : `<select style="${inp}" onchange="jointMove('${x.key}',this.value)"><option value="">Joint</option>${['marvin', 'wife', 'cobae'].map(p => `<option value="${p}">→ ${profileLabel(p)}</option>`).join('')}</select>`}</td></tr>`).join('');
+    <td>${x.settled ? '<span class="pill pill-green">settled</span>' : `<select style="${inp}" onchange="jointMove('${x.key}',this.value)"><option value="">Joint</option>${['marvin', 'wife'].map(p => `<option value="${p}">→ ${profileLabel(p)} only</option>`).join('')}</select>`}</td></tr>`).join('');
   return `
     <p class="hint" style="margin:0 0 14px;line-height:1.6;">Anything marked <strong>Joint</strong> that one of you paid from your own card or account. Spending from the joint account is already shared, so it's left out. Each of you bears half. Mark a line Joint when you log it, or in Spending; for a mixed order use <em>Break into parts</em>.</p>
     <div class="stat-row">
@@ -3379,13 +3402,18 @@ function renderJoint() {
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:4px 0 14px;">
       <label class="hint">Up to end of</label>
       <select style="${inp}padding:6px;" onchange="JOINT_UPTO=this.value;render()">${(months.length ? months : [upto]).map(m => `<option value="${m}" ${m === upto ? 'selected' : ''}>${m}</option>`).join('')}</select>
-      <button class="btn-primary" ${sel.length ? '' : 'disabled'} onclick="jointSettle('${upto}')">Mark settled</button>
+      <button class="btn-primary" ${sel.length ? '' : 'disabled'} onclick="jointSettle('${upto}')">Settle all to ${upto}</button>
       <button class="btn-secondary" onclick="jointCsv('${upto}')">↓ CSV for the joint sheet</button>
       ${sel.length ? `<button class="btn-secondary" title="For months you already settled in your Google Sheet" onclick="if(confirm('Mark everything up to ${upto} as already settled in your sheet? No transfer is recorded.'))jointSettle('${upto}',true)">Already settled in the sheet</button>` : ''}
       <label class="hint" style="display:flex;gap:5px;align-items:center;"><input type="checkbox" style="width:auto;" ${JOINT_SHOW_SETTLED ? 'checked' : ''} onchange="JOINT_SHOW_SETTLED=this.checked;render()"/> show settled</label>
     </div>
-    <div class="table-wrap"><table class="data-table"><thead><tr><th>Date</th><th>Item</th><th>Paid by</th><th style="text-align:right;">Amount</th><th>Joint?</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="5"><div class="empty">Nothing waiting to be settled ✓</div></td></tr>'}</tbody></table></div>
+    ${VIEW === 'marvin' || VIEW === 'wife' ? `<div class="hint" style="margin:-4px 0 10px;">Showing what ${profileLabel(VIEW)} paid. The totals above cover both of you; switch the top filter to Family (all) to tick both people's lines.</div>` : ''}
+    ${picked.length ? `<div class="banner" style="justify-content:space-between;margin-bottom:10px;"><div><strong>${picked.length} ticked</strong> · Marvin $${fmtAmt(PB.marvin)} · Caroline $${fmtAmt(PB.wife)} · ${Math.abs(PB.owes) >= 0.01 ? `${PB.owes > 0 ? 'Caroline pays Marvin' : 'Marvin pays Caroline'} <strong>$${fmtAmt(Math.abs(PB.owes))}</strong>` : 'all square'}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn-primary" onclick="jointSettleSelected()">Mark ticked settled</button>
+      <button class="btn-secondary" onclick="jointSettleSelected(true)">Already settled in the sheet</button>
+      <button class="btn-secondary" onclick="JOINT_SEL.clear();render()">Clear</button></div></div>` : ''}
+    <div class="table-wrap"><table class="data-table"><thead><tr><th style="width:28px;">${listedOpen.length ? `<input type="checkbox" title="Tick all shown" style="width:auto;" ${allTicked ? 'checked' : ''} onchange="jointToggleAll(${esc(JSON.stringify(listedOpen.map(x => x.key)))},this.checked)"/>` : ''}</th><th>Date</th><th>Item</th><th>Paid by</th><th style="text-align:right;">Amount</th><th>Joint?</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="6"><div class="empty">Nothing waiting to be settled ✓</div></td></tr>'}</tbody></table></div>
     ${jointStore().settlements.length ? `<div class="section-header" style="margin-top:22px;"><h2>Past settle-ups</h2></div>
       <div class="table-wrap"><table class="data-table mini-table"><tbody>${jointStore().settlements.slice().reverse().map(z => `<tr><td class="tabnum">${esc(z.date)}</td><td>${esc(z.label)}</td><td class="tabnum" style="text-align:right;">$${fmtAmt(z.amount)}</td><td class="hint">${z.items.length} items${z.openingBalance ? ' · marked as already done' : ''}</td><td><button class="btn-secondary" style="font-size:11px;padding:3px 8px;" onclick="jointUndo('${z.id}')">Undo</button></td></tr>`).join('')}</tbody></table></div>` : ''}`;
 }
@@ -3395,11 +3423,19 @@ function jointMove(key, who) {
   if (pid) { const p = (t.parts || []).find((x, i) => (x.id || String(i)) === pid); if (p) p.forProfile = who; } else t.forProfile = who;
   saveToDrive(); render(); toast(`Moved to ${profileLabel(who)}`);
 }
-function jointSettle(upto, opening) {
-  const items = jointItems().filter(x => !x.settled && x.date.slice(0, 7) <= upto);
+function jointSettleSelected(opening) {
+  const items = jointItems().filter(x => !x.settled && JOINT_SEL.has(x.key));
   if (!items.length) return;
+  if (opening && !confirm(`Mark these ${items.length} items as already settled in your sheet? No transfer is recorded.`)) return;
+  jointSettle(null, opening, items); JOINT_SEL.clear();
+}
+function jointSettle(upto, opening, chosen) {
+  const items = chosen || jointItems().filter(x => !x.settled && x.date.slice(0, 7) <= upto);
+  if (!items.length) return;
+  if (!upto) upto = items.reduce((m, x) => x.date.slice(0, 7) > m ? x.date.slice(0, 7) : m, '');
+  const scope = chosen ? `${items.length} ticked items` : `spending to ${upto}`;
   const B = jointBalance(items), J = jointStore();
-  const label = opening ? `Settled before using the app (to ${upto})` : (Math.abs(B.owes) < 0.01 ? `All square to ${upto}` : `${B.owes > 0 ? 'Caroline → Marvin' : 'Marvin → Caroline'} for spending to ${upto}`);
+  const label = opening ? `Settled before using the app (${scope})` : (Math.abs(B.owes) < 0.01 ? `All square (${scope})` : `${B.owes > 0 ? 'Caroline → Marvin' : 'Marvin → Caroline'} for ${scope}`);
   if (!opening && !confirm(`${label}: $${fmtAmt(Math.abs(B.owes))}, ${items.length} items. Mark as settled?`)) return;
   const z = { id: 'js_' + uid(), date: today(), upto, label, amount: Math.round(Math.abs(B.owes) * 100) / 100, from: B.owes > 0 ? 'wife' : 'marvin', items: items.map(x => x.key), openingBalance: !!opening };
   J.settlements.push(z); items.forEach(x => J.settled[x.key] = z.id);
@@ -3417,13 +3453,14 @@ function jointCsv(upto) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `joint-${upto}.csv`; a.click();
 }
 function renderOwed() {
-  const summ = FPEngine.owedSummary(data.transactions || [], today());
+  const mine = t => VIEW === 'family' || VIEW === 'cobae' || ownerOfTxn(t) === VIEW || (!ownerOfTxn(t) && VIEW === 'marvin');
+  const summ = FPEngine.owedSummary((data.transactions || []).filter(mine), today());
   const people = Object.values(summ).sort((a, b) => b.owed - a.owed);
   const total = people.reduce((s, p) => s + p.owed, 0);
   const n = people.reduce((s, p) => s + p.items.length, 0);
   const oldest = people.flatMap(p => p.items).reduce((m, x) => Math.max(m, x.ageDays || 0), 0);
   const settled = [];
-  (data.transactions || []).forEach(t => FPEngine.splitsOf(t).forEach(sp => { if ((sp.status || 'owed') !== 'owed') settled.push({ t, sp }); }));
+  (data.transactions || []).filter(mine).forEach(t => FPEngine.splitsOf(t).forEach(sp => { if ((sp.status || 'owed') !== 'owed') settled.push({ t, sp }); }));
   const ytdCollected = settled.filter(x => x.sp.status === 'collected' && (x.sp.collectedOn || '').slice(0, 4) === today().slice(0, 4)).reduce((s, x) => s + Number(x.sp.amount), 0);
   const personBlocks = people.map(p => `
     <div class="card-tile">
@@ -3448,7 +3485,7 @@ function renderOwed() {
       <td>${x.sp.status === 'collected' ? `<span class="pill pill-green">collected ${esc((x.sp.collectedOn || '').slice(5))}</span>${x.sp.repaymentId ? '' : ' <span class="hint">no statement link</span>'}` : x.sp.status === 'assumed' ? '<span class="pill pill-blue" title="From your spreadsheet; no repayment on record">assumed settled</span>' : '<span class="pill" style="background:#1C2F45;color:#8AABBF;">written off</span>'}</td>
       <td><button class="btn-secondary" style="font-size:11px;padding:3px 9px;" onclick="reopenSplit('${x.t.id}','${x.sp.id}')">Reopen</button></td></tr>`).join('');
   return `
-    <p style="font-size:13px;color:#8AABBF;margin-bottom:16px;line-height:1.6;">Bills you paid in full where others owe you their share. Split a bill from its edit screen (<em>Others owe me</em>). Incoming PayNow from those people is matched automatically and shows under <em>Repayments to link</em>.</p>
+    <p style="font-size:13px;color:#8AABBF;margin-bottom:16px;line-height:1.6;">${VIEW === 'marvin' || VIEW === 'wife' ? `<strong style="color:#F0F4F8;">${profileLabel(VIEW)}'s</strong> bills` : 'Bills either of you'} paid in full where others owe a share. Split a bill from its edit screen (<em>Others owe me</em>). Incoming PayNow from those people is matched automatically and shows under <em>Repayments to link</em>.</p>
     <div class="stat-row">
       <div class="stat-card"><div class="label">Owed to you</div><div class="value tabnum ${total > 0 ? 'text-amber' : 'text-green'}">$${fmtAmt(total)}</div><div class="sub">${n} share${n !== 1 ? 's' : ''} from ${people.length} ${people.length === 1 ? 'person' : 'people'}</div></div>
       <div class="stat-card"><div class="label">Oldest unpaid</div><div class="value tabnum ${oldest > 30 ? 'text-red' : ''}">${n ? oldest + 'd' : '—'}</div><div class="sub">days since the bill</div></div>
@@ -3845,7 +3882,10 @@ function reconProgress(person, month) {
   const done = items.filter(it => { const st = reconState(month, it.key); return st && (st.status === 'done' || st.status === 'skipped'); }).length;
   return { items: items.length, done };
 }
+let reconViewSeen = null;
 function renderRecon() {
+  if ((VIEW === 'marvin' || VIEW === 'wife') && reconViewSeen !== VIEW) { reconPerson = VIEW; reconMonth = null; }
+  reconViewSeen = VIEW;
   reconPerson = reconPerson || (ME.profile === 'wife' ? 'wife' : 'marvin');
   reconMonth = reconMonth || reconMonthFor(reconPerson);
   const items = reconItems(reconPerson);
@@ -3870,7 +3910,7 @@ function renderRecon() {
   const unloggedOpen = (data.transactions || []).filter(t => t.notLogged && !t.reviewed && (t.paidBy === reconPerson || t.forProfile === reconPerson));
   return `
     <div class="tabs-scroll" style="margin-bottom:14px;"><div class="chip-row">
-      ${['marvin','wife'].map(p => `<span class="chip ${reconPerson===p?'on':''}" onclick="reconPerson='${p}';reconMonth=reconMonthFor('${p}');render()">${profileLabel(p)}</span>`).join('')}
+      ${['marvin','wife'].map(p => `<span class="chip ${reconPerson===p?'on':''}" onclick="setView('${p}')">${profileLabel(p)}</span>`).join('')}
       <select onchange="reconMonth=this.value;render()" style="background:#0D1B2A;border:1px solid #2A4A6B;color:#F0F4F8;border-radius:20px;padding:5px 10px;font-size:12.5px;">${months.map(x => `<option value="${x}" ${x===reconMonth?'selected':''}>${x}</option>`).join('')}</select>
     </div></div>
     <div class="banner" style="justify-content:space-between;">
@@ -4028,9 +4068,19 @@ function adviceData() { data.advice = data.advice || { recommendations: [], pric
 const ADVICE_AREAS = { cash: 'Cash & savings', invest: 'Investing', cards: 'Cards', other: 'Other' };
 const ADVICE_STATUS = { proposed: ['pill-amber', 'To decide'], accepted: ['pill-blue', 'Taking it'], done: ['pill-green', 'Done'], rejected: ['pill-red', 'Not taking it'] };
 let adviceFilter = 'open';
+/** Whose advice: the file's "owner" (marvin | wife | cobae | household); older files are read from the text. */
+function adviceOwner(r) {
+  const o = String(r.owner || '').toLowerCase();
+  if (o === 'caroline') return 'wife';
+  if (['marvin', 'wife', 'cobae', 'household'].includes(o)) return o;
+  const txt = [r.title, r.detail].concat(r.steps || []).join(' ');
+  const hits = [['marvin', /\bmarvin/i], ['wife', /\bcaroline/i], ['cobae', /\bcobae/i]].filter(([, re]) => re.test(txt)).map(([k]) => k);
+  return hits.length === 1 ? hits[0] : 'household';
+}
+function adviceInView(r) { const o = adviceOwner(r); return VIEW === 'family' || o === 'household' || o === VIEW; }
 function renderAdvice() {
   const A = adviceData();
-  const S = FPEngine.adviceSummary(A.recommendations, A.prices, today());
+  const S = FPEngine.adviceSummary(A.recommendations.filter(adviceInView), A.prices, today());
   const shown = S.rows.filter(x => adviceFilter === 'all' || (adviceFilter === 'open' ? (!x.rec.status || x.rec.status === 'proposed' || x.rec.status === 'accepted') : x.rec.status === adviceFilter))
     .sort((a, b) => (b.rec.priority || 0) - (a.rec.priority || 0) || (a.rec.date < b.rec.date ? 1 : -1));
   const money = v => (v >= 0 ? '+' : '−') + '$' + fmtAmt(Math.abs(v));
@@ -4048,7 +4098,7 @@ function renderAdvice() {
     return `<div class="card-tile" style="margin-bottom:12px;">
       <div style="display:flex;gap:8px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;">
         <div style="min-width:0;flex:1;"><div style="font-weight:700;font-size:14px;">${esc(r.title)}</div>
-          <div class="hint">${esc(ADVICE_AREAS[r.area] || r.area || '')} · suggested ${esc(r.date)}${r.amountSgd ? ' · $' + fmtAmt(r.amountSgd) : ''}${r.expectedPerYear ? ` · worth about $${fmtAmt(r.expectedPerYear)}/yr` : ''}</div></div>
+          <div class="hint">${adviceOwner(r) === 'household' ? 'Household' : profileLabel(adviceOwner(r))} · ${esc(ADVICE_AREAS[r.area] || r.area || '')} · suggested ${esc(r.date)}${r.amountSgd ? ' · $' + fmtAmt(r.amountSgd) : ''}${r.expectedPerYear ? ` · worth about $${fmtAmt(r.expectedPerYear)}/yr` : ''}</div></div>
         <span class="pill ${pc}">${pl}</span></div>
       <div style="font-size:13px;color:#C8D6E2;line-height:1.55;margin-top:8px;">${esc(r.detail || '')}</div>
       ${r.steps && r.steps.length ? `<ol style="font-size:12.5px;color:#8AABBF;margin:6px 0 0 18px;padding:0;line-height:1.6;">${r.steps.map(x2 => `<li>${esc(x2)}</li>`).join('')}</ol>` : ''}
@@ -4061,7 +4111,7 @@ function renderAdvice() {
       </div></div>`; }).join('');
   const tickers = Object.entries(A.prices).map(([k, v]) => { const last = (v || []).slice().sort((a, b) => (a.date < b.date ? -1 : 1)).pop(); return `<tr><td>${esc(k)}</td><td class="tabnum">${last ? last.price : '—'}</td><td class="tabnum">${last ? esc(last.date) : ''}</td><td class="hint">${(v || []).length} prices</td></tr>`; }).join('');
   return `
-    <p style="font-size:13px;color:#8AABBF;margin:0 0 14px;line-height:1.6;">Recommendations from your check-ins with Claude. You decide; the app keeps score. Advice you take is tracked as it plays out, and advice you pass on is tracked as a <strong style="color:#F0F4F8;">ghost</strong> — what it would have made or lost — so you can judge the advice over time.</p>
+    <p style="font-size:13px;color:#8AABBF;margin:0 0 14px;line-height:1.6;">${VIEW === 'family' ? '' : `Showing ${profileLabel(VIEW)}'s and household advice. `}Recommendations from your check-ins with Claude. You decide; the app keeps score. Advice you take is tracked as it plays out, and advice you pass on is tracked as a <strong style="color:#F0F4F8;">ghost</strong> — what it would have made or lost — so you can judge the advice over time.</p>
     <div class="stat-row">
       <div class="stat-card"><div class="label">Waiting on you</div><div class="value tabnum ${S.open ? 'text-amber' : ''}">${S.open}</div><div class="sub">recommendation${S.open!==1?'s':''} to decide</div></div>
       <div class="stat-card"><div class="label">From advice you took</div><div class="value tabnum ${S.taken >= 0 ? 'text-green' : 'text-red'}">${money(S.taken)}</div><div class="sub">so far, where measurable</div></div>
