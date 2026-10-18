@@ -2103,6 +2103,17 @@ function ensureEngineData() {
     data.migrations.contraSplitsV2 = { at: today(), stats };
     setTimeout(() => { saveToDrive(); toast(`Converted your Contra history: ${stats.merged + stats.standalone} shared bills, ${stats.linked + stats.linkedGroups} repayments linked. See "Owed to me".`, 6000); }, 1500);
   }
+  if (!data.migrations.acctOwnerFix1) {
+    let n = 0;
+    data.transactions.forEach(t => {
+      const a = t.accountId && accountById(t.accountId); if (!a) return;
+      const who = t.accountOwner || t.paidBy; if (!who || who === (a.owner || 'marvin')) return;
+      const twin = data.accounts.find(x => x.id !== a.id && x.name.toLowerCase() === a.name.toLowerCase() && (x.owner || 'marvin') === who);
+      if (twin) { t.accountId = twin.id; n++; }
+    });
+    data.migrations.acctOwnerFix1 = { at: today(), n };
+    if (n) setTimeout(() => { saveToDrive(); toast(`Fixed ${n} line${n !== 1 ? 's' : ''} that were linked to the other person's same-named account`, 7000); }, 2200);
+  }
   // Tracker rows marked joint-baby / joint-kid / Cobae were filed as Cobae's spending. They're joint spending paid by one of you.
   if (!data.migrations.cobaeToJoint) {
     let n = 0, amt = 0;
@@ -2528,7 +2539,7 @@ function qaSyncCardSelect() {
   const pool = FPEngine.candidateCards(f.forProfile, data.cards, engineSettings());
   const others = data.cards.filter(c => !pool.includes(c));
   const opt = c => `<option value="${c.id}" ${c.id===f.cardId?'selected':''}>${esc(c.name)}${c.name.toLowerCase().includes(profileLabel(c.profile).toLowerCase()) ? '' : ' (' + profileLabel(c.profile) + ')'}${f.lastRec && f.lastRec.pick && f.lastRec.pick.card.id===c.id ? ' ★ best' : ''}</option>`;
-  const accts = (data.accounts || []).map(a => `<option value="acct:${a.id}" ${f.cardId==='acct:'+a.id?'selected':''}>${esc(a.name)}</option>`).join('');
+  const accts = (data.accounts || []).map(a => `<option value="acct:${a.id}" ${f.cardId==='acct:'+a.id?'selected':''}>${esc(acctLabel(a))}</option>`).join('');
   sel.innerHTML = pool.map(opt).join('') + (others.length ? `<optgroup label="Other cards">${others.map(opt).join('')}</optgroup>` : '') +
     (accts ? `<optgroup label="PayNow / bank / wallet">${accts}</optgroup>` : '') + `<option value="__cash" ${f.cardId==='__cash'?'selected':''}>Cash / other (no card)</option>`;
 }
@@ -2854,7 +2865,7 @@ function openImportModal(preVal, recon) {
   IMPORT = { rows: [] };
   const sel = v => (preVal && preVal === v ? 'selected' : '');
   const cardOpts = data.cards.map(c => `<option value="${c.id}" ${sel(c.id)}>${esc(c.name)} (${profileLabel(c.profile)})</option>`).join('');
-  const acctOpts = (data.accounts || []).map(a => `<option value="acct:${a.id}" ${sel('acct:' + a.id)}>${esc(a.name)}</option>`).join('');
+  const acctOpts = (data.accounts || []).map(a => `<option value="acct:${a.id}" ${sel('acct:' + a.id)}>${esc(acctLabel(a))}</option>`).join('');
   showModal(`
     <h3>${recon ? 'Reconcile a statement' : 'Import a statement'}</h3>
     <p style="font-size:12.5px;color:#8AABBF;margin:-8px 0 14px;">Card, bank account or wallet. CSV export, PDF, or text copied from internet banking. Lines are checked against what you already logged; nothing is saved until you confirm.</p>
@@ -3074,7 +3085,9 @@ const KIND_PILL = { expense: '', paid_for_others: 'pill-amber', transfer: 'pill-
 const kindPill = t => { const k = FPEngine.kindOf(t); return k === 'expense' ? '' : `<span class="pill ${KIND_PILL[k]}">${KIND_LABELS[k]}</span>`; };
 const ACCOUNT_TYPES = { bank: 'Bank account', wallet: 'Wallet / stored value', card: 'Card not in engine', other: 'Other' };
 function accountById(id) { return (data.accounts || []).find(a => a.id === id); }
-function txnSourceName(t) { return t.cardId ? (cardById(t.cardId)?.name || t.cardName) : (accountById(t.accountId)?.name || t.cardName || '—'); }
+/** "DBS Multiplier (Marvin)" — both of you have accounts with the same name. */
+function acctLabel(a) { if (!a) return ''; const who = profileLabel(a.owner || 'marvin'); return a.name.toLowerCase().includes(who.toLowerCase()) ? a.name : `${a.name} (${who})`; }
+function txnSourceName(t) { return t.cardId ? (cardById(t.cardId)?.name || t.cardName) : (acctLabel(accountById(t.accountId)) || t.cardName || '—'); }
 const REVIEW_LABELS = { paynow: 'PayNow / transfer out — spending, paid for someone, or your own account?', incoming: 'Money in — income, repayment, or from your own account?', check: 'Card credit — refund or payment?', joint: 'Joint?', unknown: 'Unknown merchant' };
 function needsReview(t) { return (t.review && t.review.length) || (t.source === 'import' && !t.reviewed); }
 function flowCtx(sourceId, isCard) {
@@ -3207,7 +3220,7 @@ function importTransactionsFile(e) {
         || (a.owner && data.accounts.find(x => (x.owner || 'marvin') === a.owner && (x.patterns || []).map(digits).some(d => d.length >= 4 && pats.some(p => p.endsWith(d) || d.endsWith(p)))));
       if (!ex) { ex = { id: 'acct_' + uid(), name: a.name, type: a.type || 'bank', owner: a.owner || 'marvin', patterns: a.patterns || [] }; data.accounts.push(ex); }
       else ex.patterns = [...new Set((ex.patterns || []).concat(a.patterns || []))];
-      acctIdByName[a.name.toLowerCase()] = ex.id;
+      acctIdByName[a.name.toLowerCase() + '|' + (a.owner || '')] = ex.id;
     });
     // cards: resolve cardHint → held card (prefer the hint's owner)
     const unresolved = new Set();
@@ -3222,7 +3235,12 @@ function importTransactionsFile(e) {
         if (c) { out.cardId = c.id; out.cardName = c.name; out.paidBy = c.profile; }
         else { unresolved.add(t.cardHint); out.cardName = t.cardHint; }
       }
-      if (t.accountName) out.accountId = acctIdByName[t.accountName.toLowerCase()] || null;
+      if (t.accountName) {
+        const nm = t.accountName.toLowerCase(), who = t.accountOwner || t.paidBy || t.cardOwner || '';
+        const keys = Object.keys(acctIdByName).filter(k => k.split('|')[0] === nm);
+        const exact = keys.find(k => k.split('|')[1] === who);
+        out.accountId = exact ? acctIdByName[exact] : keys.length === 1 ? acctIdByName[keys[0]] : (data.accounts.find(a => a.name.toLowerCase() === nm && (a.owner || 'marvin') === (who || 'marvin')) || {}).id || null;
+      }
       delete out.cardHint; delete out.cardOwner; delete out.accountName;
       data.transactions.push(out); added++;
     });
@@ -3940,7 +3958,7 @@ function reconItems(person) {
   const cards = data.cards.filter(c => !c.archived && (c.profile === person || (c.profile === 'joint' && person === jointBy)))
     .map(c => ({ key: c.id, name: c.name, kind: 'card', statementDay: c.cycleDate }));
   const accts = (data.accounts || []).filter(a => !a.archived && ((a.owner || 'marvin') === person || (a.owner === 'joint' && person === jointBy)))
-    .map(a => ({ key: 'acct:' + a.id, name: a.name, kind: a.type || 'bank' }));
+    .map(a => ({ key: 'acct:' + a.id, name: acctLabel(a), kind: a.type || 'bank' }));
   return cards.concat(accts);
 }
 function reconState(month, key) { return ((data.recon || {})[month] || {})[key] || null; }
@@ -4047,9 +4065,11 @@ async function openClaudeStatementHelp() {
 function guessSourceFor(st) {
   const opts = data.cards.map(c => ({ v: c.id, name: c.name, owner: c.profile, pats: [] })).concat((data.accounts || []).map(a => ({ v: 'acct:' + a.id, name: a.name, owner: a.owner, pats: a.patterns || [] })));
   const n = (x) => FPEngine.util.norm(x);
-  const exact = opts.find(o => n(o.name) === n(st.source || ''));
-  if (exact) return exact.v;
   const who = /caroline/i.test(st.owner || '') ? 'wife' : /marvin/i.test(st.owner || '') ? 'marvin' : null;
+  const src = n(String(st.source || '').replace(OWNER_SUFFIX, ''));
+  const exacts = opts.filter(o => n(String(o.name).replace(OWNER_SUFFIX, '')) === src);
+  const exact = exacts.find(o => who && (o.owner || 'marvin') === who) || (exacts.length === 1 ? exacts[0] : null);
+  if (exact) return exact.v;
   const text = n([st.source, st.institution, st.product, st.last4].filter(Boolean).join(' '));
   let best = null, bestScore = 0;
   opts.forEach(o => {
@@ -4067,7 +4087,7 @@ function importPreparedStatements(e) {
     if (!sts.length) { document.getElementById('cs-status').innerHTML = '<span class="text-red">No statements with lines in that file.</span>'; return; }
     PREPARED = { sts, checks: j.checks || [] };
     const optsHtml = (v) => `<option value="">— choose —</option>` + data.cards.map(c => `<option value="${c.id}" ${v===c.id?'selected':''}>${esc(c.name)} (${profileLabel(c.profile)})</option>`).join('') +
-      (data.accounts || []).map(a => `<option value="acct:${a.id}" ${v==='acct:'+a.id?'selected':''}>${esc(a.name)}</option>`).join('');
+      (data.accounts || []).map(a => `<option value="acct:${a.id}" ${v==='acct:'+a.id?'selected':''}>${esc(acctLabel(a))}</option>`).join('');
     const rows = sts.map((st, i) => { const g = guessSourceFor(st); st._src = g; const chk = PREPARED.checks.find(c => c.source === st.source);
       return `<tr><td><strong>${esc(st.source || st.product || 'Statement ' + (i + 1))}</strong><div class="hint">${esc(st.statementDate || '')} · ${st.lines.length} lines${chk && chk.ok === false ? ` · <span class="text-red">doesn't add up: ${esc(chk.note || '')}</span>` : chk ? ' · <span class="text-green">adds up</span>' : ''}</div></td>
         <td><select onchange="PREPARED.sts[${i}]._src=this.value" style="background:#0D1B2A;border:1px solid #2A4A6B;color:#F0F4F8;border-radius:5px;padding:5px;font-size:12px;">${optsHtml(g)}</select></td></tr>`; }).join('');
