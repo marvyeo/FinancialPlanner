@@ -795,7 +795,7 @@
     ['sephora', 'Sephora', '5977', 'Pharmacy & beauty', 'mobile_contactless'],
     ['starbucks', 'Starbucks', '5814', 'Dining', 'mobile_contactless'], ['mcdonald', "McDonald's", '5814', 'Dining', 'mobile_contactless'], ['kfc', 'KFC', '5814', 'Dining', 'mobile_contactless'],
     ['toast box', 'Toast Box', '5814', 'Dining', 'mobile_contactless'], ['ya kun', 'Ya Kun', '5814', 'Dining', 'mobile_contactless'], ['koufu', 'Koufu', '5812', 'Dining', 'mobile_contactless'],
-    ['kopitiam', 'Kopitiam', '5812', 'Dining', 'mobile_contactless'], ['food republic', 'Food Republic', '5812', 'Dining', 'mobile_contactless'], ['chagee', 'CHAGEE', '5814', 'Dining', 'online'],
+    ['kopitiam investment', 'Kopitiam', '5814', 'Dining', 'online'], ['kopitiam', 'Kopitiam', '5812', 'Dining', 'mobile_contactless'], ['food republic', 'Food Republic', '5812', 'Dining', 'mobile_contactless'], ['chagee', 'CHAGEE', '5814', 'Dining', 'online'],
     ['restaurant', 'Restaurant', '5812', 'Dining', 'mobile_contactless'], ['cafe', 'Café', '5814', 'Dining', 'mobile_contactless'],
     ['shell', 'Shell', '5541', 'Petrol', 'card_contactless'], ['esso', 'Esso', '5541', 'Petrol', 'card_contactless'], ['caltex', 'Caltex', '5541', 'Petrol', 'card_contactless'], ['spc', 'SPC', '5541', 'Petrol', 'card_contactless'], ['sinopec', 'Sinopec', '5541', 'Petrol', 'card_contactless'],
     ['singapore airlines', 'Singapore Airlines', '3005', 'Flights', 'online'], ['singaporeair', 'Singapore Airlines', '3005', 'Flights', 'online'], ['scoot', 'Scoot', '3000', 'Flights', 'online'],

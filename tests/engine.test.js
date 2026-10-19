@@ -281,7 +281,7 @@ test('curated merchant list: statement aliases resolve to the right merchant and
   const cases = [
     ['NTUC FP-XTRA JURONG', '5411'], ['GRAB*A-8KX2 SINGAPORE SG', '4121'], ['GRABFOOD SINGAPORE', '5812'],
     ['BUS/MRT 123456', '4111'], ['SHOPEE SINGAPORE MP', '5399'], ['7-ELEVEN #1234', '5499'],
-    ['RYDE TECHNOLOGIES', '5734'], ['KOPITIAM INVESTMENT PTE', '5812'], ['UNIQLO ION', '5651'],
+    ['RYDE TECHNOLOGIES', '5734'], ['KOPITIAM INVESTMENT PTE', '5814'], ['KOPITIAM LAU PA SAT', '5812'], ['UNIQLO ION', '5651'],
     ['SP DIGITAL PTE LTD', '4900'], ['COMMUNITY CLUB FEES', null],
   ];
   cases.forEach(([desc, mcc]) => {

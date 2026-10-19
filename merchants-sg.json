@@ -1,7 +1,7 @@
 {
  "_meta": {
-  "version": "2026-10-14",
-  "lastUpdated": "2026-10-14",
+  "version": "2026-10-20",
+  "lastUpdated": "2026-10-20",
   "source": "Financial Planner curated SG merchant list (repo). Your Drive merchants.json entries override these.",
   "confidence": {
    "reported": "Published by a named source (see source).",
@@ -24,35 +24,34 @@
    "category": "Food court",
    "channel": "mobile_contactless",
    "aliases": [
-    "KOPITIAM",
-    "KOPITIAM INVESTMENT"
+    "KOPITIAM"
    ],
    "mccAlt": [
     "5814"
    ],
    "confidence": "unverified",
    "source": "",
-   "notes": "Food court chain (FairPrice Group). Card terminals usually code as eating places.",
+   "notes": "Food court chain (FairPrice Group), paying a stall by card at the counter. MCC not confirmed; paying in the FairPrice Group app is a separate entry (5814).",
    "id": "kopitiam"
   },
   {
    "name": "Kopitiam",
    "service": "via FairPrice Group app",
-   "mcc": "5812",
+   "mcc": "5814",
    "category": "Food court",
    "channel": "online",
    "aliases": [
+    "KOPITIAM INVESTMENT",
     "FAIRPRICE GROUP APP",
     "FP GROUP",
     "FAIRPRICE APP"
    ],
    "mccAlt": [
-    "5814",
-    "5411"
+    "5812"
    ],
-   "confidence": "unverified",
-   "source": "https://www.fairprice.com.sg/events/in-store/kopitiam-now-on-fairprice-group-app/",
-   "notes": "Pay-in-app at ~70 Kopitiam outlets incl. Lau Pa Sat. Counts as an online/in-app payment. MCC not published — check the first statement line; if it shows as FAIRPRICE with 5411, change this entry.",
+   "confidence": "reported",
+   "source": "Household statements, Oct 2026 (DBS: \"KOPITIAM INVESTMENT PT SINGAPORE\", MCC 5814); https://www.fairprice.com.sg/events/in-store/kopitiam-now-on-fairprice-group-app/",
+   "notes": "Pay-in-app at ~70 Kopitiam outlets incl. Lau Pa Sat. Charged as an online payment, MCC 5814 (fast food), statement name KOPITIAM INVESTMENT PT.",
    "id": "kopitiam-via-fairprice-group-app"
   },
   {
