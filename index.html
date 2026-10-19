@@ -2321,7 +2321,8 @@ function resolveMerchantInput(text) {
     return { merchant: merchantDisplayName(m), mcc: m.mcc || '', category: m.category || FPEngine.categoryForMcc(m.mcc), source: 'db', variants: sameName.slice(1), pickVariant: sameName.length > 1 };
   }
   const g = FPEngine.categorise(t, merchantPool(), data.merchantMappings);
-  return { merchant: g.confidence === 'none' ? t : g.merchant, mcc: g.mcc, category: g.category, channel: g.confidence === 'none' ? null : g.channel, fcy: g.fcy, source: g.confidence, variants: [] };
+  const merchant = g.confidence === 'none' ? t : g.merchant, hc = g.confidence === 'learned' ? '' : historyCategory(merchant);
+  return { merchant, mcc: g.mcc, category: hc || g.category, channel: g.confidence === 'none' ? null : g.channel, fcy: g.fcy, source: hc ? 'learned' : g.confidence, variants: [] };
 }
 
 /* ---------------- spend form (shared by dashboard, Which card?, expense modal) ---------------- */
@@ -2371,6 +2372,7 @@ function spendFormMerchant(p) {
   const hint = document.getElementById(p + '-mhint');
   if (!r) { f.merchant = ''; if (!f.mccManual) f.mcc = ''; hint.innerHTML = ''; spendFormRefresh(p); return; }
   f.merchant = r.merchant; f.category = r.category;
+  const catEl = document.getElementById(p + '-cat'); if (catEl && !catEl.dataset.touched) catEl.value = r.category || '';
   if (!f.mccManual) { f.mcc = r.mcc || ''; document.getElementById(p + '-mcc').value = f.mcc; }
   if (r.channel && r.source !== 'db') spendFormSet(p, 'channel', r.channel);
   else if (r.source === 'db' && /online|delivery|e-?commerce|subscription|app/i.test(r.category || '')) spendFormSet(p, 'channel', 'online');
@@ -2517,7 +2519,10 @@ function openExpenseModal(init) {
       <div class="form-row"><label>Paid with</label><select id="qa-card" onchange="qaChooseCard(this.value)"></select></div>
       <div class="form-row"><label>Type</label><select id="qa-kind">${Object.entries(KIND_LABELS).map(([k, l]) => `<option value="${k}" ${((init||{}).kind || 'expense') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
     </div>
-    <div class="form-row"><label>Note (optional)</label><input id="qa-note" value="${esc((init||{}).note||'')}" placeholder="e.g. Cobae's swimming class"/></div>
+    <div class="form-grid">
+      <div class="form-row"><label>Category</label><input id="qa-cat" list="qa-cats" value="${esc((init||{}).category||'')}" ${editing ? 'data-touched="1"' : ''} oninput="this.dataset.touched=1" placeholder="Filled in from the merchant"/><datalist id="qa-cats">${categoryList().map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
+      <div class="form-row"><label>Note (optional)</label><input id="qa-note" value="${esc((init||{}).note||'')}" placeholder="e.g. Cobae's swimming class"/></div>
+    </div>
     <div id="qa-parts-wrap">${partsEditorHtml(editing ? editing.parts : [])}</div>
     <div style="font-size:11.5px;font-weight:600;color:#4A6580;letter-spacing:.06em;margin:8px 0 2px;">RECOMMENDATION — tap a card to choose it</div>
     <div id="qa-rec"></div>
@@ -2573,6 +2578,7 @@ function saveExpense() {
     note: document.getElementById('qa-note').value.trim(),
     source: 'manual', createdAt: new Date().toISOString(),
   };
+  const catTyped = (document.getElementById('qa-cat')?.value || '').trim(); if (catTyped) txn.category = catTyped;
   if (f.editId) {
     const i = data.transactions.findIndex(x => x.id === f.editId);
     const prev = data.transactions[i];
@@ -2581,9 +2587,10 @@ function saveExpense() {
     Object.keys(prev).forEach(k => { if (!(k in txn)) txn[k] = prev[k]; });   // keep statement links, review flags etc.
     if (prev.rawDescription && FPEngine.kindOf(prev) !== txn.kind) learnKindRule(prev.rawDescription, txn.kind);
     // Learn the correction for future statement imports
-    if (prev.rawDescription && (prev.merchant !== txn.merchant || prev.mcc !== txn.mcc || prev.channel !== txn.channel)) learnMapping(prev.rawDescription, txn);
+    if (prev.merchant !== txn.merchant || prev.mcc !== txn.mcc || prev.channel !== txn.channel || prev.category !== txn.category) learnMapping(prev.rawDescription || txn.merchant, txn);
+    if (prev.category !== txn.category || prev.merchant !== txn.merchant) delete txn.catGuess;
     data.transactions[i] = txn;
-  } else data.transactions.push(txn);
+  } else { if (catTyped && catTyped !== historyCategory(txn.merchant)) learnMapping(txn.merchant, txn); data.transactions.push(txn); }
   closeModal(); saveToDrive(); render();
   const earned = card ? FPEngine.ledgerEarnings(engineCtx(), x => x.cardId === card.id).get(txn.id) : null;
   const e = earned ? (earned.result.type === 'cashback' ? '$' + fmtAmt(earned.result.cashback) + ' cashback' : Math.round(earned.result.miles) + ' miles') : 'no rewards';
@@ -2594,12 +2601,64 @@ function deleteExpense(id) {
   data.transactions = data.transactions.filter(t => t.id !== id);
   closeModal(); saveToDrive(); render();
 }
+/** Remember a merchant's name and category for future lines: keyed by the statement text, and by the name you typed. */
 function learnMapping(raw, txn) {
-  const pattern = FPEngine.util.norm(raw).replace(/\d+/g, ' ').replace(/\s+/g, ' ').trim().split(' ').slice(0, 3).join(' ');
-  if (pattern.length < 3) return;
-  data.merchantMappings = (data.merchantMappings || []).filter(m => m.pattern !== pattern);
-  data.merchantMappings.unshift({ pattern, merchant: txn.merchant, mcc: txn.mcc, category: txn.category, channel: txn.channel, learnedAt: today() });
+  const keys = [FPEngine.mappingPattern(raw || '')];
+  if (txn.merchant) keys.push(FPEngine.mappingPattern(txn.merchant));
+  [...new Set(keys)].filter(k => k && k.length >= 3).forEach(pattern => {
+    data.merchantMappings = (data.merchantMappings || []).filter(m => m.pattern !== pattern);
+    data.merchantMappings.unshift({ pattern, merchant: txn.merchant, mcc: txn.mcc, category: txn.category, channel: txn.channel, learnedAt: today() });
+  });
 }
+/** The category you've used most for this merchant before (ignores "Other"). */
+function historyCategory(merchant, exceptId) {
+  const k = String(merchant || '').trim().toLowerCase(); if (!k) return '';
+  const c = {};
+  (data.transactions || []).forEach(t => { if (t.id !== exceptId && !t.catGuess && String(t.merchant || '').trim().toLowerCase() === k && t.category && t.category !== 'Other') c[t.category] = (c[t.category] || 0) + 1; });
+  const top = Object.entries(c).sort((a, b) => b[1] - a[1])[0];
+  return top ? top[0] : '';
+}
+/** Every category in use, most used first. */
+function categoryList() {
+  const c = {};
+  (data.transactions || []).forEach(t => { if (t.category) c[t.category] = (c[t.category] || 0) + 1; (t.parts || []).forEach(p => { if (p.category) c[p.category] = (c[p.category] || 0) + 1; }); });
+  ['Dining', 'Groceries', 'Transport', 'Shopping', 'House', 'Utilities', 'Cobae', 'Holiday', 'Medical', 'Insurance', 'Gift', 'Family', 'Taxes', 'Entertainment', 'Other'].forEach(x => { if (!(x in c)) c[x] = 0; });
+  return Object.entries(c).sort((a, b) => b[1] - a[1]).map(([k]) => k);
+}
+/** Other lines that are the same merchant: same statement wording, or the same name. */
+function sameMerchantLines(t) {
+  const pat = t.rawDescription ? FPEngine.mappingPattern(t.rawDescription) : '';
+  const nm = String(t.merchant || '').trim().toLowerCase();
+  return (data.transactions || []).filter(x => x.id !== t.id && ((pat && x.rawDescription && FPEngine.mappingPattern(x.rawDescription) === pat) || (nm && String(x.merchant || '').trim().toLowerCase() === nm)));
+}
+
+/* ---- quick "name & category" editor, from the Spending list ---- */
+function openNameCat(id) {
+  const t = data.transactions.find(x => x.id === id); if (!t) return;
+  const cats = categoryList();
+  const same = sameMerchantLines(t);
+  showModal(`<h3>Name &amp; category</h3>
+    ${t.rawDescription ? `<div class="hint" style="margin:-8px 0 12px;">On the statement: <strong style="color:#C9D6E2;">${esc(t.rawDescription)}</strong></div>` : ''}
+    <div class="form-row"><label>Merchant name (what you'll recognise)</label><input id="nc-name" value="${esc(t.merchant || '')}"/></div>
+    <div class="form-row"><label>Category</label><input id="nc-cat" list="nc-cats" value="${esc(t.category || '')}" placeholder="Type or pick"/>
+      <datalist id="nc-cats">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist>
+      <div class="chip-row" style="margin-top:8px;">${cats.slice(0, 12).map(c => `<span class="chip ${c === t.category ? 'on' : ''}" onclick="document.getElementById('nc-cat').value=this.textContent;document.querySelectorAll('#modal-container .chip').forEach(x=>x.classList.toggle('on',x===this))">${esc(c)}</span>`).join('')}</div></div>
+    <label class="hint" style="display:flex;gap:6px;align-items:center;margin-top:6px;"><input type="checkbox" id="nc-learn" style="width:auto;" checked/> Remember for future lines from this merchant</label>
+    ${same.length ? `<label class="hint" style="display:flex;gap:6px;align-items:center;margin-top:6px;"><input type="checkbox" id="nc-past" style="width:auto;" checked/> Also update ${same.length} other line${same.length !== 1 ? 's' : ''} from this merchant</label>` : ''}
+    <div class="modal-footer"><button class="btn-secondary" onclick="closeModal()">Cancel</button><button class="btn-primary" onclick="saveNameCat('${t.id}')">Save</button></div>`);
+  setTimeout(() => document.getElementById('nc-cat')?.focus(), 50);
+}
+function saveNameCat(id) {
+  const t = data.transactions.find(x => x.id === id); if (!t) return;
+  const name = document.getElementById('nc-name').value.trim() || t.merchant, cat = document.getElementById('nc-cat').value.trim() || t.category || 'Other';
+  const same = document.getElementById('nc-past')?.checked ? sameMerchantLines(t) : [];
+  const oldName = t.merchant;
+  [t].concat(same).forEach(x => { if (x.merchant === oldName || x === t || (t.rawDescription && x.rawDescription)) x.merchant = name; x.category = cat; delete x.catGuess; x.edited = true; });
+  if (document.getElementById('nc-learn').checked) learnMapping(t.rawDescription || oldName, t);
+  closeModal(); saveToDrive(); render();
+  toast(`${esc(name)} · ${esc(cat)}${same.length ? ` · ${same.length + 1} lines updated` : ''}`);
+}
+
 
 /* ---------------- Which card? page ---------------- */
 function renderSmartSpend() {
@@ -2767,7 +2826,21 @@ function renderStrategy() {
 }
 
 /* ---------------- Spending page ---------------- */
-let spendMonth = null, spendFilter = 'all', spendCard = 'all', spendKind = 'expense', spendQuery = '';
+let spendMonth = null, spendFilter = 'all', spendCard = 'all', spendKind = 'expense', spendQuery = '', spendCatCheck = false;
+/* Period: one month, a quarter, year to date, or any run of months. */
+let SPEND_PERIOD = (() => { try { return JSON.parse(LS.get('fp_spend_period') || 'null') || { mode: 'month' }; } catch (e) { return { mode: 'month' }; } })();
+function spendYears() { const ys = new Set([Number(today().slice(0, 4))]); (data.transactions || []).forEach(t => t.date && ys.add(Number(t.date.slice(0, 4)))); return [...ys].sort((a, b) => b - a); }
+function setSpendPeriod(patch) { SPEND_PERIOD = Object.assign({}, SPEND_PERIOD, patch); try { LS.set('fp_spend_period', JSON.stringify(SPEND_PERIOD)); } catch (e) {} render(); }
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const ymLabel = ym => MONTHS_SHORT[Number(ym.slice(5, 7)) - 1] + ' ' + ym.slice(0, 4);
+function spendRange() {
+  const P = SPEND_PERIOD, now = today().slice(0, 7), y = Number(P.year) || Number(now.slice(0, 4));
+  if (P.mode === 'quarter') { const q = Number(P.q) || Math.ceil(Number(now.slice(5, 7)) / 3); const a = `${y}-${String(q * 3 - 2).padStart(2, '0')}`, b = `${y}-${String(q * 3).padStart(2, '0')}`; return { from: a, to: b, label: `Q${q} ${y}` }; }
+  if (P.mode === 'ytd') { const to = String(y) === now.slice(0, 4) ? now : `${y}-12`; return { from: `${y}-01`, to, label: String(y) === now.slice(0, 4) ? `${y} year to date` : `${y}` }; }
+  if (P.mode === 'range') { let a = P.from || now, b = P.to || now; if (a > b) [a, b] = [b, a]; return { from: a, to: b, label: a === b ? ymLabel(a) : `${ymLabel(a)} – ${ymLabel(b)}` }; }
+  const m = spendMonth || now; return { from: m, to: m, label: ymLabel(m) };
+}
+function monthsIn(r) { const out = []; let [y, m] = r.from.split('-').map(Number); const [ty, tm] = r.to.split('-').map(Number); while (y < ty || (y === ty && m <= tm)) { out.push(`${y}-${String(m).padStart(2, '0')}`); m++; if (m > 12) { m = 1; y++; } if (out.length > 120) break; } return out; }
 /** Search box: re-render as you type and keep the cursor in the box. */
 function spendSearch(v) {
   clearTimeout(spendSearch._t);
@@ -2783,7 +2856,7 @@ function txnMatchesQuery(t, q) {
   return words.every(w => hay.includes(w));
 }
 function monthSummary(ym, profileFilter, cardFilter, q) {
-  const inScope = t => t.date && (ym === '*' || t.date.slice(0,7) === ym) && (!q || txnMatchesQuery(t, q)) && (!profileFilter || profileFilter === 'all' || txnInView(t, profileFilter)) &&
+  const inScope = t => t.date && (ym === '*' || (typeof ym === 'object' ? (t.date.slice(0, 7) >= ym.from && t.date.slice(0, 7) <= ym.to) : t.date.slice(0,7) === ym)) && (!q || txnMatchesQuery(t, q)) && (!profileFilter || profileFilter === 'all' || txnInView(t, profileFilter)) &&
     (!cardFilter || cardFilter === 'all' || t.cardId === cardFilter || t.accountId === cardFilter);
   const txns = (data.transactions || []).filter(inScope);
   const res = { txns, count: 0, spend: 0, othersPaid: 0, transfers: 0, income: 0, miles: 0, cashback: 0, missed: 0, missedCount: 0, rows: [], byKind: {} };
@@ -2813,23 +2886,29 @@ function splitLine(t) {
 function renderSpend() {
   spendMonth = spendMonth || today().slice(0,7);
   const searching = spendQuery.trim().length > 0;
-  const sum = monthSummary(searching ? '*' : spendMonth, spendFilter, spendCard, searching ? spendQuery : '');
+  const range = spendRange(), months = monthsIn(range), multi = months.length > 1;
+  const sum = monthSummary(searching ? '*' : (multi ? range : range.from), spendFilter, spendCard, searching ? spendQuery : '');
   const spendTx = sum.txns.filter(FPEngine.isSpending);
-  const byCat = {}, byWho = {};
+  const byCat = {}, byWho = {}, byMonth = {};
+  spendTx.forEach(t => { const k = ymLabel(t.date.slice(0, 7)); byMonth[k] = (byMonth[k] || 0) + FPEngine.yourShare(t); });
   spendTx.forEach(t => piecesOf(t).forEach(pc => { byCat[pc.category || 'Other'] = (byCat[pc.category || 'Other'] || 0) + pc.amount; byWho[pc.forProfile] = (byWho[pc.forProfile] || 0) + pc.amount; }));
-  const bars = (obj, labelFn) => {
-    const entries = Object.entries(obj).sort((a,b) => b[1]-a[1]);
-    const max = entries[0] ? entries[0][1] : 1;
+  const bars = (obj, labelFn, ordered) => {
+    const entries = ordered ? Object.keys(obj).map(k => [k, ordered[k] || 0]) : Object.entries(obj).sort((a,b) => b[1]-a[1]);
+    const max = Math.max(1e-9, ...entries.map(e => e[1]));
     return entries.map(([k,v]) => `<div class="bar-row"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(labelFn ? labelFn(k) : k)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.max(2, v/max*100)}%"></div></div><span class="tabnum" style="text-align:right;">$${fmtAmt(v)}</span></div>`).join('') || '<div class="hint">Nothing yet</div>';
   };
-  const shown = sum.rows.filter(r => spendKind === 'all' || FPEngine.kindOf(r.txn) === spendKind);
+  const guessCount = sum.rows.filter(r => r.txn.catGuess && FPEngine.kindOf(r.txn) === 'expense').length;
+  const shown = sum.rows.filter(r => (spendKind === 'all' || FPEngine.kindOf(r.txn) === spendKind) && (!spendCatCheck || r.txn.catGuess));
+  const crossYear = searching || range.from.slice(0, 4) !== range.to.slice(0, 4);
   const rows = shown.sort((a,b) => (b.txn.date||'').localeCompare(a.txn.date||'') || String(b.txn.createdAt||'').localeCompare(String(a.txn.createdAt||''))).map(r => {
     const t = r.txn;
     const earned = r.actual ? (r.actual.result.type === 'cashback' ? '$' + fmtAmt(r.actual.result.cashback) : Math.round(r.actual.result.miles).toLocaleString() + ' mi') : '—';
     const missed = r.missedCents > 0.5 ? `<div class="hint text-amber" title="${esc(r.best.card.name)} would have earned ${esc(r.best.unitLine)}">−$${fmtAmt(r.missedCents/100)} vs ${esc(r.best.card.name)}</div>` : '';
     return `<tr style="cursor:pointer;" onclick="openExpenseModal('${t.id}')">
-      <td class="tabnum" style="white-space:nowrap;">${esc(searching ? t.date : t.date.slice(5))}</td>
-      <td>${esc(t.merchant)} ${kindPill(t)} ${needsReview(t) ? '<span class="pill pill-red">review</span>' : ''}${splitLine(t)}<div class="hint" style="margin-top:1px;">${esc(t.category||'')}${t.mcc ? ' · ' + esc(t.mcc) : ''}${t.channel ? ' · ' + channelLabel(t.channel) : ''}${t.fcy ? ' · FCY' : ''}${t.note ? ' · ' + esc(t.note) : ''}</div></td>
+      <td class="tabnum" style="white-space:nowrap;">${esc(crossYear ? t.date : t.date.slice(5))}</td>
+      <td>${esc(t.merchant)} <span title="Rename / category" style="color:#4A6580;cursor:pointer;padding:0 4px;" onclick="event.stopPropagation();openNameCat('${t.id}')">✎</span>${kindPill(t)} ${needsReview(t) ? '<span class="pill pill-red">review</span>' : ''}${splitLine(t)}
+        ${t.rawDescription && FPEngine.mappingPattern(t.rawDescription) && !FPEngine.util.norm(t.rawDescription).includes(FPEngine.util.norm(t.merchant || '').split(' ')[0] || '~') ? `<div class="hint" style="margin-top:1px;font-style:italic;">${esc(t.rawDescription.slice(0, 48))}</div>` : ''}
+        <div class="hint" style="margin-top:1px;"><span onclick="event.stopPropagation();openNameCat('${t.id}')" style="cursor:pointer;border:1px solid ${t.catGuess ? '#F5A623' : '#2A4A6B'};color:${t.catGuess ? '#F5A623' : '#C9D6E2'};border-radius:10px;padding:0 7px;" title="${t.catGuess ? 'Best guess — tap to confirm or change' : 'Tap to change'}">${esc(t.category || 'Other')}${t.catGuess ? ' ?' : ''}</span>${t.mcc ? ' · ' + esc(t.mcc) : ''}${t.channel ? ' · ' + channelLabel(t.channel) : ''}${t.fcy ? ' · FCY' : ''}${t.note ? ' · ' + esc(t.note) : ''}</div></td>
       <td>${profileLabel(t.forProfile)}</td>
       <td style="font-size:12.5px;">${esc(txnSourceName(t))}</td>
       <td class="tabnum" style="text-align:right;">${t.direction === 'in' ? '+' : ''}$${fmtAmt(t.amount)}</td>
@@ -2847,7 +2926,13 @@ function renderSpend() {
       <button class="btn-secondary" onclick="openImportModal()">↑ Import statement</button>
       <button class="btn-secondary" title="A file Claude made from screenshots or statements: adds what you haven't logged, without ticking off the month-end check" onclick="openClaudeLogImport()">✦ Import from Claude</button>
       <input id="spend-q" type="search" placeholder="🔍 Search all months: merchant, note, amount…" value="${esc(spendQuery)}" oninput="spendSearch(this.value)" style="${sel}flex:1;min-width:200px;"/>
-      <input type="month" value="${spendMonth}" ${searching ? 'disabled title="Clear the search to pick a month"' : ''} onchange="spendMonth=this.value;render()" style="${sel}${searching ? 'opacity:.4;' : ''}"/>
+      <span style="display:inline-flex;gap:6px;flex-wrap:wrap;${searching ? 'opacity:.4;pointer-events:none;' : ''}" title="${searching ? 'Clear the search to pick a period' : ''}">
+        <select style="${sel}" onchange="setSpendPeriod({mode:this.value})">${[['month', 'Month'], ['quarter', 'Quarter'], ['ytd', 'Year to date'], ['range', 'Months from – to']].map(([k, l]) => `<option value="${k}" ${(SPEND_PERIOD.mode || 'month') === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+        ${SPEND_PERIOD.mode === 'quarter' ? `<select style="${sel}" onchange="setSpendPeriod({q:this.value})">${[1, 2, 3, 4].map(q => `<option value="${q}" ${range.label.startsWith('Q' + q) ? 'selected' : ''}>Q${q}</option>`).join('')}</select>` : ''}
+        ${SPEND_PERIOD.mode === 'quarter' || SPEND_PERIOD.mode === 'ytd' ? `<select style="${sel}" onchange="setSpendPeriod({year:this.value})">${spendYears().map(y => `<option ${String(y) === range.from.slice(0, 4) ? 'selected' : ''}>${y}</option>`).join('')}</select>` : ''}
+        ${SPEND_PERIOD.mode === 'range' ? `<input type="month" value="${range.from}" onchange="setSpendPeriod({from:this.value})" style="${sel}"/><span class="hint" style="align-self:center;">to</span><input type="month" value="${range.to}" onchange="setSpendPeriod({to:this.value})" style="${sel}"/>` : ''}
+        ${(SPEND_PERIOD.mode || 'month') === 'month' ? `<input type="month" value="${spendMonth}" onchange="spendMonth=this.value;render()" style="${sel}"/>` : ''}
+      </span>
       <select onchange="spendFilter=this.value;render()" style="${sel}"><option value="all">Everyone</option>${PROFILES.map(p => `<option value="${p}" ${spendFilter===p?'selected':''}>${profileLabel(p)}</option>`).join('')}</select>
       <select onchange="spendCard=this.value;render()" style="${sel}max-width:220px;"><option value="all">All cards & accounts</option>${srcOpts}</select>
     </div>
@@ -2855,21 +2940,22 @@ function renderSpend() {
     ${repaymentSuggestionsHtml()}
     ${reviewQueueHtml()}
     <div class="stat-row">
-      <div class="stat-card"><div class="label">Spent</div><div class="value tabnum">$${fmtAmt(sum.spend)}</div><div class="sub">${sum.count} expense${sum.count!==1?'s':''}${sum.othersPaid ? ` · +$${fmtAmt(sum.othersPaid)} paid for others` : ''}</div></div>
+      <div class="stat-card"><div class="label">Spent${searching ? '' : ' · ' + esc(range.label)}</div><div class="value tabnum">$${fmtAmt(sum.spend)}</div><div class="sub">${sum.count} expense${sum.count!==1?'s':''}${sum.othersPaid ? ` · +$${fmtAmt(sum.othersPaid)} paid for others` : ''}</div></div>
       <div class="stat-card"><div class="label">Miles earned</div><div class="value tabnum text-green">${Math.round(sum.miles).toLocaleString()}</div><div class="sub">${sum.cashback ? '+ $' + fmtAmt(sum.cashback) + ' cashback' : 'on card spending'}</div></div>
       <div class="stat-card"><div class="label">Money in</div><div class="value tabnum">$${fmtAmt(sum.income)}</div><div class="sub">income &amp; refunds (repayments are under Owed to me)</div></div>
       <div class="stat-card"><div class="label">Missed value</div><div class="value tabnum ${sum.missed>0.5?'text-amber':'text-green'}">$${fmtAmt(sum.missed)}</div><div class="sub">${sum.missedCount} sub-optimal card choice${sum.missedCount!==1?'s':''}</div></div>
     </div>
+    ${multi && !searching ? `<div class="smart-spend-box" style="margin:0 0 20px;"><div class="section-header"><h2>${esc(range.label)} by month</h2><span class="hint">average $${fmtAmt(sum.spend / months.length)} a month</span></div>${bars(Object.fromEntries(months.map(m => [ymLabel(m), 0])), null, byMonth)}</div>` : ''}
     <div class="form-grid" style="gap:20px;margin-bottom:24px;">
       <div class="smart-spend-box" style="margin:0;"><div class="section-header"><h2>Spending by category</h2></div>${bars(byCat)}</div>
       <div class="smart-spend-box" style="margin:0;"><div class="section-header"><h2>Spending by person</h2></div>${bars(byWho, profileLabel)}</div>
     </div>
     ${searching ? `<div class="banner" style="justify-content:space-between;margin-bottom:14px;"><div>Search <strong>"${esc(spendQuery)}"</strong> across all months: ${sum.txns.length} line${sum.txns.length !== 1 ? 's' : ''}. The totals above cover these results.</div><button class="btn-secondary" onclick="spendQuery='';render()">Clear search</button></div>` : ''}
     <div class="section-header"><h2>Transactions</h2><span class="hint">Tap a row to edit. Transfers between your own accounts are kept out of spending.</span></div>
-    <div class="profile-tabs tabs-scroll" style="margin-bottom:12px;">${kindTabs}</div>
+    <div class="profile-tabs tabs-scroll" style="margin-bottom:12px;">${kindTabs}${guessCount || spendCatCheck ? `<div class="profile-tab ${spendCatCheck ? 'active' : ''}" style="padding:6px 12px;font-size:12.5px;color:#F5A623;" title="Categories the app guessed: confirm or change them" onclick="spendCatCheck=!spendCatCheck;render()">Check categories <span class="hint">${guessCount}</span></div>` : ''}</div>
     <div class="table-wrap" style="overflow-x:auto;"><table class="data-table">
       <thead><tr><th>Date</th><th>Merchant</th><th>For</th><th>Card / account</th><th style="text-align:right;">Amount</th><th style="text-align:right;">Earned</th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="6"><div class="empty"><div class="icon">≡</div>${searching ? 'No matches. Check the Spending / All tabs and the person filter.' : 'Nothing here for this month.'}</div></td></tr>`}</tbody>
+      <tbody>${rows || `<tr><td colspan="6"><div class="empty"><div class="icon">≡</div>${searching ? 'No matches. Check the Spending / All tabs and the person filter.' : spendCatCheck ? 'No guessed categories left ✓' : 'Nothing here for this period.'}</div></td></tr>`}</tbody>
     </table></div>`;
 }
 
@@ -2961,7 +3047,9 @@ function buildReview(srcVal, parsed, recon, queue) {
       channel: src.isCard ? (g.channel || 'chip') : 'paynow', fcy: g.fcy || !!r.fcy, forProfile: src.owner, confidence: g.confidence,
       kind: f.kind, reason: f.reason, review: f.review.slice(), direction: r.credit ? 'in' : 'out' };
     if (row.kind === 'expense' && g.confidence === 'none' && !row.review.length) row.review.push('unknown');
+    if (g.confidence !== 'learned') { const hc = historyCategory(row.merchant); if (hc) row.category = hc; else if (g.confidence === 'none' || g.confidence === 'keyword') row.catGuess = true; }
     applyLineHint(row, r.hint);
+    if (r.hint && r.hint.category) row.catGuess = false;
     row.guess = { merchant: row.merchant, mcc: row.mcc, channel: row.channel, kind: row.kind };
     return row;
   });
@@ -3057,6 +3145,7 @@ function commitReview(IMPORT) {
     };
     if (r.note) txn.note = r.note;
     if (r.parts) txn.parts = r.parts;
+    if (r.catGuess && r.kind === 'expense') txn.catGuess = true;
     if (r.recon === 'new') txn.notLogged = true;
     if (r.kind === 'expense' && (r.merchant !== r.guess.merchant || r.mcc !== r.guess.mcc || r.channel !== r.guess.channel)) { learnMapping(r.description, txn); learned++; }
     if (r.kind !== r.guess.kind && learnKindRule(r.description, r.kind)) learned++;

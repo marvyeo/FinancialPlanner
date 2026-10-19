@@ -839,13 +839,31 @@
    * Guess merchant / MCC / category / channel from a statement description.
    * Order: learned mappings → merchant DB → keyword table.
    */
+  /* Words that say how money moved, not who was paid: never enough on their own to recognise a merchant. */
+  const PAY_WORDS = new Set(('paynow fast othr other transfer trf funds fund mobile uen nets debit consumer credit payment pay bill giro inward outward ibg ict ' +
+    'qsb sqr qashier sg sgp singapore pte pt ltd llp inc co the and ref no pib mbk epos send back via card visa mastercard purchase pos online shopback pending n a na').split(' '));
+  /** The words that identify a merchant in a statement line: digits, references and payment words removed. */
+  function mappingPattern(raw) {
+    const words = norm(String(raw || '').replace(/\d{3,}/g, ' ')).split(' ').filter((w) => w.length > 1 && !/\d/.test(w) && !PAY_WORDS.has(w));
+    return words.slice(0, 3).join(' ');
+  }
+  function mappingMatches(pattern, tokens, d) {
+    const words = norm(pattern).split(' ').filter(Boolean);
+    if (!words.length || words.every((w) => PAY_WORDS.has(w))) return 0;      // old, too-generic patterns ("paynow fast othr")
+    if (d.includes(norm(pattern))) return words.length + 0.5;
+    return words.every((w) => tokens.has(w)) ? words.length : 0;
+  }
   function categorise(desc, merchantsDb, mappings) {
     const d = norm(desc);
     const fcyMatch = String(desc || '').toUpperCase().match(new RegExp('\\b(' + FCY_CODES.join('|') + ')\\s*[\\d,]+\\.\\d{2}'));
     const fcy = !!fcyMatch;
+    const tokens = new Set(d.split(' '));
+    let mBest = null, mScore = 0;
     for (const m of (mappings || [])) {
-      if (m.pattern && d.includes(norm(m.pattern))) return { merchant: m.merchant, mcc: m.mcc, category: m.category || categoryForMcc(m.mcc), channel: m.channel || 'chip', confidence: 'learned', fcy };
+      const sc = m.pattern ? mappingMatches(m.pattern, tokens, d) : 0;
+      if (sc > mScore) { mBest = m; mScore = sc; }
     }
+    if (mBest) { const m = mBest; return { merchant: m.merchant, mcc: m.mcc, category: m.category || categoryForMcc(m.mcc), channel: m.channel || 'chip', confidence: 'learned', fcy }; }
     let best = null, bestLen = 0, bestOnBrand = false;
     const servicesPerBrand = {};
     (merchantsDb || []).forEach((m) => { const b = norm(m.name); servicesPerBrand[b] = (servicesPerBrand[b] || 0) + 1; });
@@ -1760,7 +1778,7 @@
     splitsOf, yourShare, openSplits, personMatches, matchRepayments, owedSummary, migrateContra,
     parseDigiPortfolio, classifyHolding, mergeInvestmentStatement, mergeInvestmentData, investFlows, investmentSummary, investmentInsights, xirr,
     categorise, categoryForMcc, parseStatementText, parseCSV, guessCsvMapping, csvToRows, txnFingerprint,
-    reconcileStatement, mergeData, priceAt, ghostResult, adviceSummary, matchSettledJoint,
+    reconcileStatement, mergeData, priceAt, ghostResult, adviceSummary, matchSettledJoint, mappingPattern,
     util: { norm, mccIn, expandList, r2, ymd, parseYmd, daysUntil },
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
