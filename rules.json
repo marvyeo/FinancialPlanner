@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
-  "rulesVersion": "2026-10-14",
-  "generatedAt": "2026-10-14T23:30:00+08:00",
-  "generatedBy": "Manual update (requested by Marvin)",
+  "rulesVersion": "2026-10-19",
+  "generatedAt": "2026-10-19T08:58:48+08:00",
+  "generatedBy": "Weekly scheduled refresh",
   "notes": "mpd = miles per S$ for the card's best airline programme, including the base rate. pct = total cashback % including base. Caps are in S$ of spend unless the cap group says cashback. Items with verify:true need a T&C check.",
   "sharedLists": {
     "GENERAL_EXCLUSIONS": [
@@ -110,10 +110,52 @@
           "label": "10Xcelerator merchant",
           "mpd": 2.84,
           "when": {
-            "merchantsOption": "tenXMerchants"
+            "merchantsOption": "tenXMerchants",
+            "merchants": [
+              "ba&sh",
+              "brunello cucinelli",
+              "emporio armani",
+              "giorgio armani",
+              "fred perry",
+              "kevin seah",
+              "manolo blahnik",
+              "stone island",
+              "baume & mercier",
+              "baume mercier",
+              "breitling",
+              "iwc",
+              "montblanc",
+              "panerai",
+              "piaget",
+              "roger dubuis",
+              "tag heuer",
+              "flutes",
+              "parkroyal collection",
+              "venchi",
+              "1918 heritage",
+              "1-alfaro",
+              "1-atico",
+              "botanico",
+              "il giardino",
+              "kaarla",
+              "oumi",
+              "sol & luna",
+              "wildseed",
+              "grand cru",
+              "malt & wine",
+              "blissfulthots",
+              "b1 florist",
+              "frette",
+              "loy contemporary",
+              "miele",
+              "royal albatross",
+              "samsonite",
+              "silky miracle",
+              "steinway",
+              "maison 21g"
+            ]
           },
-          "notes": "Add the current 10Xcelerator partner list under card options. No cap.",
-          "verify": true
+          "notes": "Official partner list as of 19 Oct 2026 (fashion, watches, dining, wine, home, beauty). Partner participation ends 31 Dec 2026 — recheck in January. Short names (Camille, Monti, UNA) and Chubb insurance are left out to avoid false matches; add them under card options if you use them."
         }
       ],
       "transfer": {
@@ -121,7 +163,8 @@
         "feeSGD": 0
       },
       "sources": [
-        "https://milelion.com/2026/02/24/review-american-express-platinum-credit-card/"
+        "https://milelion.com/2026/02/24/review-american-express-platinum-credit-card/",
+        "https://www.americanexpress.com/en-sg/benefits/promotions/shopping/10Xcelerator/"
       ]
     },
     {
@@ -509,8 +552,7 @@
               }
             ]
           },
-          "notes": "Which sub-cap SimplyGo draws from is not stated; assumed the contactless cap.",
-          "verify": true
+          "notes": "SimplyGo counts as mobile contactless and shares its UNI$1,080 (S$600) monthly cap (UOB T&C v3.0, 10 Mar 2026)."
         },
         {
           "id": "uobpv-online",
@@ -524,28 +566,66 @@
               "online"
             ],
             "mcc": [
+              "4816",
+              "5262",
+              "5306",
+              "5309",
+              "5310",
               "5311",
               "5331",
               "5399",
-              "5999",
-              "5722",
+              "5611",
+              "5621",
+              "5631",
+              "5641",
+              "5651",
+              "5661",
+              "5691",
+              "5699",
               "5732",
+              "5733",
+              "5734",
+              "5735",
+              "5912",
+              "5942",
+              "5944",
+              "5945",
+              "5946",
+              "5947",
+              "5948",
+              "5949",
+              "5964",
+              "5966",
+              "5967",
+              "5968",
+              "5969",
+              "5970",
+              "5992",
+              "5999",
+              "5333",
               "5411",
+              "5441",
+              "5462",
+              "5499",
               "5811",
               "5812",
               "5814",
-              "5499",
+              "8012",
+              "9751",
+              "7278",
               "7832",
+              "7841",
               "7922",
-              "7929",
-              "7996"
+              "7991",
+              "7996",
+              "7998",
+              "7999"
             ],
             "mccExclude": [
               "@TRAVEL"
             ]
           },
-          "notes": "MCC list approximated from UOB's category descriptions.",
-          "verify": true
+          "notes": "Official MCC list (UOB T&C v3.0, 10 Mar 2026). MCC 5965 is excluded. Recurring payments don't qualify."
         }
       ],
       "capGroups": {
@@ -562,7 +642,9 @@
       },
       "sources": [
         "https://milelion.com/2026/03/29/review-uob-preferred-platinum-visa-card/",
-        "https://milelion.com/2026/03/10/goodbye-uob-preferred-platinum-visa-hello-uob-preferred-visa/"
+        "https://milelion.com/2026/03/10/goodbye-uob-preferred-platinum-visa-hello-uob-preferred-visa/",
+        "https://www.uob.com.sg/web-resources/personal/pdf/personal/cards/credit-cards/rewards-cards/uob-preferred-platinum-visa-card/terms-and-conditions-for-preferred-plat-visa.pdf",
+        "https://mainlymiles.com/2026/07/22/uob-preferred-visa-review-2026/"
       ]
     },
     {
@@ -1359,9 +1441,10 @@
         }
       },
       "sources": [
-        "https://www.singsaver.com.sg/credit-card/blog/cimb-visa-signature-card-review"
+        "https://www.singsaver.com.sg/credit-card/blog/cimb-visa-signature-card-review",
+        "https://www.cimb.com.sg/content/dam/cimbsg/personal/document/cards/terms-and-conditions/Terms%20and%20conditions%20governing%20CIMB%20Visa%20Signature%20Cashback%20Promotion%202023%20(1Aug23).pdf"
       ],
-      "notes": "Sources disagree on whether the S$800 minimum is total spend or category spend; engine uses total card spend."
+      "notes": "S$800 minimum is total eligible card spend, not just the 10% categories (CIMB T&C wording: 'including but not limited to' the bonus categories)."
     },
     {
       "id": "cimb-visa-infinite",
@@ -1371,8 +1454,8 @@
       "issuer": "CIMB",
       "reward": {
         "type": "cashback",
-        "pct": 0,
-        "fcyPct": 0,
+        "pct": 1,
+        "fcyPct": 1,
         "rounding": {
           "mode": "exact"
         }
@@ -1406,19 +1489,23 @@
               "type": "minSpend",
               "amount": 2000,
               "basis": "card",
-              "label": "S$2,000 spend this month (else no cashback)"
+              "label": "S$2,000 spend this statement month (else 1%)"
             }
           ]
         }
       ],
       "sources": [
-        "https://moneysmart.sg/credit-cards/cimb-visa-infinite"
+        "https://moneysmart.sg/credit-cards/cimb-visa-infinite",
+        "https://www.cimb.com.sg/content/dam/cimbsg/personal/document/tnc/cards/cards-tnc/vi-card.pdf"
       ],
-      "notes": "Local non-travel cashback rate not published in sources checked; set to 0% until verified.",
-      "verify": true
+      "notes": "1% unlimited cashback on local spend (S$1+ per transaction). Travel/FCY earns 2% in a statement month with S$2,000+ total spend, otherwise 1%."
     }
   ],
   "changeLog": [
-    "OCBC Rewards: 6 mpd at Watsons, Shopee, Lazada, TikTok Shop and Taobao from 1 Jul 2026 to 31 Mar 2027 (extra 2 mpd capped at S$1,000/month, then 4 mpd up to the regular S$1,110 cap). Source: MileLion, 1 Jul 2026."
+    "AMEX Platinum Credit: 10Xcelerator partner list now filled in from AMEX's official pages (41 merchants); partner participation runs to 31 Dec 2026. Verify flag removed. (americanexpress.com/en-sg, checked 19 Oct 2026)",
+    "UOB Preferred Visa: online 4 mpd MCC list replaced with UOB's official 54-code list. Adds e.g. 4816, 5262, 5441, 5462, 5912, 5942–5949, 5964–5970, 7278, 7841, 7991, 7998, 7999, 8012, 9751; drops 5722 and 7929 (not eligible). Verify flag removed. (UOB T&C v3.0, 10 Mar 2026; Mainly Miles, 22 Jul 2026)",
+    "UOB Preferred Visa: confirmed SimplyGo shares the S$600 mobile-contactless cap. No rate change; verify flag removed. (UOB T&C v3.0)",
+    "CIMB Visa Infinite: local cashback 0% → 1% unlimited (was a placeholder); FCY/travel below the S$2,000 minimum now earns 1% instead of 0%. Verify flag removed. (CIMB VI T&C)",
+    "CIMB Visa Signature: confirmed the S$800 minimum is total card spend, which the engine already used. Note updated, no rate change. (CIMB T&C)"
   ]
 }
