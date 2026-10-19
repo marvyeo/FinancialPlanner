@@ -2929,6 +2929,27 @@ function startReview(srcVal, parsed, recon, queue) {
   IMPORT = buildReview(srcVal, parsed, recon, queue);
   renderImportPreview();
 }
+/** A statement line from Claude can carry what you already told Claude: { merchant, category, forProfile, kind, note, parts:[{amount,forProfile,category,note}] }. */
+const HINT_PROFILES = { marvin: 'marvin', caroline: 'wife', wife: 'wife', joint: 'joint', cobae: 'cobae' };
+function applyLineHint(row, h) {
+  if (!h || typeof h !== 'object') return;
+  if (h.merchant) row.merchant = String(h.merchant);
+  if (h.category) row.category = String(h.category);
+  const fp = HINT_PROFILES[String(h.forProfile || '').toLowerCase()]; if (fp) row.forProfile = fp;
+  if (FPEngine.KINDS.includes(h.kind)) { row.kind = h.kind; row.review = []; }
+  if (h.note) row.note = String(h.note);
+  if (Array.isArray(h.parts) && h.parts.length) row.parts = h.parts.map((p, i) => ({ id: 'p' + i, amount: Math.round(Number(p.amount) * 100) / 100, forProfile: HINT_PROFILES[String(p.forProfile || '').toLowerCase()] || row.forProfile, category: p.category || row.category, note: p.note || '' }));
+  row.hinted = true;
+}
+/** Matched to a line you logged: what you told Claude wins over the logged person / category. */
+function applyHintToLogged(t, r) {
+  if (!r.hinted) return false;
+  let ch = false; const set = (k, v) => { if (v != null && v !== '' && t[k] !== v) { t[k] = v; ch = true; } };
+  set('forProfile', r.forProfile); set('category', r.category); if (r.note) set('note', r.note);
+  if (r.hint && FPEngine.KINDS.includes(r.hint.kind)) set('kind', r.kind);
+  if (r.parts) { t.parts = r.parts; ch = true; }
+  return ch;
+}
 function buildReview(srcVal, parsed, recon, queue) {
   const src = sourceFromValue(srcVal);
   const ctx = flowCtx(src.id, src.isCard);
@@ -2939,6 +2960,7 @@ function buildReview(srcVal, parsed, recon, queue) {
       channel: src.isCard ? (g.channel || 'chip') : 'paynow', fcy: g.fcy || !!r.fcy, forProfile: src.owner, confidence: g.confidence,
       kind: f.kind, reason: f.reason, review: f.review.slice(), direction: r.credit ? 'in' : 'out' };
     if (row.kind === 'expense' && g.confidence === 'none' && !row.review.length) row.review.push('unknown');
+    applyLineHint(row, r.hint);
     row.guess = { merchant: row.merchant, mcc: row.mcc, channel: row.channel, kind: row.kind };
     return row;
   });
@@ -3020,7 +3042,7 @@ function commitImport() {
 /** Apply one reviewed statement: add the lines you ticked, link the matched ones, fix amounts, act on missing ones, tick the checklist. */
 function commitReview(IMPORT) {
   const src = IMPORT.src;
-  let n = 0, learned = 0, linked = 0, fixed = 0, removed = 0;
+  let n = 0, learned = 0, linked = 0, fixed = 0, removed = 0, relabelled = 0;
   const now = new Date().toISOString();
   IMPORT.rows.filter(r => r.include).forEach(r => {
     const txn = {
@@ -3029,9 +3051,11 @@ function commitReview(IMPORT) {
       channel: r.channel, fcy: !!r.fcy, wallet: false, forProfile: r.forProfile,
       kind: r.kind, direction: r.direction, review: r.review.filter(x => r.kind === r.guess.kind || x === 'unknown'),
       cardId: src.isCard ? src.id : null, accountId: src.isCard ? null : src.id, cardName: src.name, paidBy: src.owner,
-      source: 'import', importBatch: IMPORT.batch, rawDescription: r.description, reviewed: false, createdAt: now,
+      source: 'import', importBatch: IMPORT.batch, rawDescription: r.description, reviewed: !!r.hinted, createdAt: now,
       reconciled: true, stmtLine: IMPORT.batch,
     };
+    if (r.note) txn.note = r.note;
+    if (r.parts) txn.parts = r.parts;
     if (r.recon === 'new') txn.notLogged = true;
     if (r.kind === 'expense' && (r.merchant !== r.guess.merchant || r.mcc !== r.guess.mcc || r.channel !== r.guess.channel)) { learnMapping(r.description, txn); learned++; }
     if (r.kind !== r.guess.kind && learnKindRule(r.description, r.kind)) learned++;
@@ -3043,6 +3067,7 @@ function commitReview(IMPORT) {
       t.reconciled = true; t.stmtLine = IMPORT.batch; t.postDate = t.postDate || r.postDate || null;
       if (!t.rawDescription) t.rawDescription = r.description;
       if (r.recon === 'differs' && r.useStatement) { t.amount = Math.round(r.amount * 100) / 100; t.edited = true; fixed++; }
+      if (r.matchIds.length === 1 && applyHintToLogged(t, r)) relabelled++;
       linked++;
     });
   });
@@ -3055,7 +3080,7 @@ function commitReview(IMPORT) {
   const rc = IMPORT.recon || { month: reconMonthFor(ME.profile), key: IMPORT.srcVal };
   data.recon = data.recon || {}; data.recon[rc.month] = data.recon[rc.month] || {};
   data.recon[rc.month][IMPORT.srcVal] = { status: 'imported', at: today(), by: ME.email, counts, period: IMPORT.period };
-  return { added: n, learned, linked, fixed, removed, paired, notLogged, counts };
+  return { added: n, learned, linked, fixed, removed, paired, notLogged, counts, relabelled };
 }
 async function loadPdfJs() {
   if (window.pdfjsLib) return;
@@ -4121,7 +4146,7 @@ function reviewPrepared() {
   if (!list.length) { alert('Choose the card or account for at least one statement.'); return; }
   const month = reconMonth || reconMonthFor(ME.profile);
   if (document.getElementById('cs-one-by-one') && document.getElementById('cs-one-by-one').checked) return reviewPreparedOneByOne(list, month);
-  BULK = list.map(st => buildReview(st._src, st.lines.map(l => ({ date: l.date, postDate: l.postDate || null, description: l.description, amount: Math.abs(Number(l.amount) || 0), credit: !!l.credit, fcy: !!l.fcy })), { month, key: st._src }));
+  BULK = list.map(st => buildReview(st._src, st.lines.map(l => ({ date: l.date, postDate: l.postDate || null, description: l.description, amount: Math.abs(Number(l.amount) || 0), credit: !!l.credit, fcy: !!l.fcy, hint: l.hint || null })), { month, key: st._src }));
   renderBulkReview();
 }
 let BULK = null;
@@ -4164,7 +4189,7 @@ function commitBulk() {
   toast(`${n} statement${n !== 1 ? 's' : ''} done: ${tot.linked} lines matched your log${tot.fixed ? `, ${tot.fixed} amounts corrected` : ''} · ${tot.added} added${tot.notLogged ? ` (${tot.notLogged} you hadn't logged)` : ''}${tot.removed ? ` · ${tot.removed} removed` : ''}`, 7000);
 }
 function reviewPreparedOneByOne(list, month) {
-  const queue = list.map(st => ({ srcVal: st._src, lines: st.lines.map(l => ({ date: l.date, postDate: l.postDate || null, description: l.description, amount: Math.abs(Number(l.amount) || 0), credit: !!l.credit, fcy: !!l.fcy })) }));
+  const queue = list.map(st => ({ srcVal: st._src, lines: st.lines.map(l => ({ date: l.date, postDate: l.postDate || null, description: l.description, amount: Math.abs(Number(l.amount) || 0), credit: !!l.credit, fcy: !!l.fcy, hint: l.hint || null })) }));
   const first = queue.shift();
   startReview(first.srcVal, first.lines, { month, key: first.srcVal }, queue.map(q => ({ ...q })));
 }
