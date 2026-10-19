@@ -339,6 +339,14 @@
   .recent-chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin: -4px 0 8px; }
   .recent-chips .chip { white-space: nowrap; flex: none; }
   .claude-box { background: #0D1B2A; border: 1px dashed #2A4A6B; border-radius: 8px; padding: 10px 12px; margin-top: 6px; }
+
+  /* our own pick-list for inputs that suggest values (the browser's datalist doesn't open reliably, and hides options once a value is filled in) */
+  input[data-combo] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238AABBF' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 30px !important; }
+  #combo-pop { position: fixed; z-index: 9999; background: #0D1B2A; border: 1px solid #2A4A6B; border-radius: 8px; max-height: 260px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+  #combo-pop div { padding: 9px 12px; font-size: 13.5px; color: #E8EEF4; cursor: pointer; border-bottom: 1px solid #14263A; }
+  #combo-pop div:hover, #combo-pop div.on { background: #1C2F45; }
+  #combo-pop div.cur { color: #00C896; font-weight: 600; }
+  #combo-pop .none { color: #8AABBF; cursor: default; }
 </style>
 </head>
 <body>
@@ -4415,6 +4423,48 @@ function showModal(html) {
 function closeModal() {
   document.getElementById('modal-container').innerHTML = '';
 }
+
+
+/* =================== PICK-LISTS =================== */
+// Every <input list="…"> becomes a pick-list: tap shows all options (the current one highlighted), typing filters, tap an option to fill it in.
+const Combo = {
+  pop: null, input: null,
+  convert(root) { (root.querySelectorAll ? root.querySelectorAll('input[list]') : []).forEach(el => { el.dataset.combo = el.getAttribute('list'); el.removeAttribute('list'); el.setAttribute('autocomplete', 'off'); }); },
+  options(el) {
+    const dl = document.getElementById(el.dataset.combo), base = dl ? [...dl.options].map(o => o.value).filter(Boolean) : [];
+    if (el.dataset.combo !== 'merchant-list') return base;
+    const c = {}; (data.transactions || []).forEach(t => { if (t.merchant && FPEngine.kindOf(t) === 'expense') c[t.merchant] = (c[t.merchant] || 0) + 1; });
+    return Object.entries(c).sort((x, y) => y[1] - x[1]).map(([k]) => k).concat(base);   // names you've used first, then the merchant list
+  },
+  open(el, filter) {
+    this.input = el;
+    const all = [...new Set(this.options(el))], v = el.value.trim().toLowerCase();
+    const exact = all.some(o => o.toLowerCase() === v);
+    let list = filter && v && !exact ? all.filter(o => o.toLowerCase().includes(v)) : all;
+    if (filter && v && !exact) list.sort((a, b) => (a.toLowerCase().startsWith(v) ? 0 : 1) - (b.toLowerCase().startsWith(v) ? 0 : 1));
+    list = list.slice(0, 60);
+    if (!this.pop) { this.pop = document.createElement('div'); this.pop.id = 'combo-pop'; document.body.appendChild(this.pop);
+      this.pop.addEventListener('pointerdown', e => e.preventDefault());
+      this.pop.addEventListener('click', e => { const d = e.target.closest('div[data-v]'); if (d) this.pick(d.dataset.v); }); }
+    this.pop.innerHTML = list.length ? list.map(o => `<div data-v="${esc(o)}" class="${o.toLowerCase() === v ? 'cur' : ''}">${esc(o)}</div>`).join('') : '<div class="none">No matches — keep typing to use a new one</div>';
+    const r = el.getBoundingClientRect(), below = window.innerHeight - r.bottom;
+    Object.assign(this.pop.style, { display: 'block', left: r.left + 'px', width: Math.max(r.width, 200) + 'px' });
+    if (below < 200 && r.top > below) { this.pop.style.top = ''; this.pop.style.bottom = (window.innerHeight - r.top + 4) + 'px'; this.pop.style.maxHeight = Math.min(260, r.top - 12) + 'px'; }
+    else { this.pop.style.bottom = ''; this.pop.style.top = (r.bottom + 4) + 'px'; this.pop.style.maxHeight = Math.min(260, below - 12) + 'px'; }
+    const cur = this.pop.querySelector('.cur'); if (cur) cur.scrollIntoView({ block: 'nearest' });
+  },
+  close() { if (this.pop) this.pop.style.display = 'none'; this.input = null; },
+  pick(v) { const el = this.input; if (!el) return; el.value = v; el.dataset.touched = '1'; this.close();
+    el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); },
+};
+new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => { if (n.nodeType === 1) { if (n.matches && n.matches('input[list]')) Combo.convert(n.parentNode); else Combo.convert(n); } }))).observe(document.documentElement, { childList: true, subtree: true });
+document.addEventListener('DOMContentLoaded', () => Combo.convert(document));
+document.addEventListener('click', e => { const el = e.target.closest && e.target.closest('input[data-combo]'); if (el) Combo.open(el, false); else if (!e.target.closest('#combo-pop')) Combo.close(); });
+document.addEventListener('input', e => { if (e.target.matches && e.target.matches('input[data-combo]') && e.isTrusted) Combo.open(e.target, true); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' || e.key === 'Tab') Combo.close(); });
+document.addEventListener('focusout', e => { if (e.target === Combo.input) setTimeout(() => { if (document.activeElement !== Combo.input) Combo.close(); }, 150); });
+window.addEventListener('resize', () => Combo.close());
+document.addEventListener('scroll', e => { if (Combo.pop && !Combo.pop.contains(e.target)) Combo.close(); }, true);
 
 /* =================== INIT =================== */
 window.onload = () => { init(); };
