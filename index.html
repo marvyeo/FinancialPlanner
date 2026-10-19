@@ -2845,6 +2845,7 @@ function renderSpend() {
     <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center;">
       <button class="btn-primary" onclick="openExpenseModal()">+ Add expense</button>
       <button class="btn-secondary" onclick="openImportModal()">↑ Import statement</button>
+      <button class="btn-secondary" title="A file Claude made from screenshots or statements: adds what you haven't logged, without ticking off the month-end check" onclick="openClaudeLogImport()">✦ Import from Claude</button>
       <input id="spend-q" type="search" placeholder="🔍 Search all months: merchant, note, amount…" value="${esc(spendQuery)}" oninput="spendSearch(this.value)" style="${sel}flex:1;min-width:200px;"/>
       <input type="month" value="${spendMonth}" ${searching ? 'disabled title="Clear the search to pick a month"' : ''} onchange="spendMonth=this.value;render()" style="${sel}${searching ? 'opacity:.4;' : ''}"/>
       <select onchange="spendFilter=this.value;render()" style="${sel}"><option value="all">Everyone</option>${PROFILES.map(p => `<option value="${p}" ${spendFilter===p?'selected':''}>${profileLabel(p)}</option>`).join('')}</select>
@@ -3036,7 +3037,7 @@ function commitImport() {
   const src = R.src, queue = R.queue || [], recon = R.recon;
   IMPORT = null; closeModal(); saveToDrive();
   toast(`${esc(src.name)}: ${res.linked} matched your log${res.fixed ? `, ${res.fixed} amount${res.fixed!==1?'s':''} corrected` : ''}${res.added ? ` · added ${res.added}${res.notLogged ? ` (${res.notLogged} you hadn't logged)` : ''}` : ''}${res.removed ? ` · removed ${res.removed}` : ''}${res.paired ? ` · matched ${res.paired} transfer${res.paired!==1?'s':''}` : ''}${res.learned ? ` · learned ${res.learned} correction${res.learned!==1?'s':''}` : ''}`, 6000);
-  if (queue.length) { const next = queue.shift(); startReview(next.srcVal, next.lines, recon, queue); return; }
+  if (queue.length) { const next = queue.shift(); startReview(next.srcVal, next.lines, recon, queue); if (R.logOnly) IMPORT.logOnly = true; return; }
   if (recon) navigate('recon'); else { spendMonth = null; navigate('spend'); }
 }
 /** Apply one reviewed statement: add the lines you ticked, link the matched ones, fix amounts, act on missing ones, tick the checklist. */
@@ -3077,9 +3078,11 @@ function commitReview(IMPORT) {
   const paired = FPEngine.pairTransfers(data.transactions, { onlyIds: data.transactions.filter(t => t.importBatch === IMPORT.batch).map(t => t.id) });
   const notLogged = IMPORT.rows.filter(r => r.recon === 'new' && r.include).length;
   const counts = { lines: IMPORT.rows.length, matched: IMPORT.rows.filter(r => r.recon === 'matched').length, differs: IMPORT.rows.filter(r => r.recon === 'differs').length, added: n, notLogged, missing: IMPORT.missing.length, removed };
-  const rc = IMPORT.recon || { month: reconMonthFor(ME.profile), key: IMPORT.srcVal };
-  data.recon = data.recon || {}; data.recon[rc.month] = data.recon[rc.month] || {};
-  data.recon[rc.month][IMPORT.srcVal] = { status: 'imported', at: today(), by: ME.email, counts, period: IMPORT.period };
+  if (!IMPORT.logOnly) {
+    const rc = IMPORT.recon || { month: reconMonthFor(ME.profile), key: IMPORT.srcVal };
+    data.recon = data.recon || {}; data.recon[rc.month] = data.recon[rc.month] || {};
+    data.recon[rc.month][IMPORT.srcVal] = { status: 'imported', at: today(), by: ME.email, counts, period: IMPORT.period };
+  }
   return { added: n, learned, linked, fixed, removed, paired, notLogged, counts, relabelled };
 }
 async function loadPdfJs() {
@@ -4091,7 +4094,18 @@ Rules:
 - If a line is unreadable, include it with "description":"UNREADABLE …" rather than dropping it.
 Give me the result as a downloadable file named statements-<month>.json.`;
 }
+/** Catch up mid-month from a Claude file: same matching review, but the month-end checklist is left alone. */
+let PREPARED_LOG = false;
+function openClaudeLogImport() {
+  PREPARED_LOG = true;
+  showModal(`<h3>Import from Claude</h3>
+    <p class="hint" style="margin:-6px 0 12px;line-height:1.6;">For catching up mid-month (screenshots or part of a statement). Lines you already logged are matched, the rest are added, and Claude's labels (who it was for, category, notes) are kept. Your month-end check is not ticked off. Do that at month end with the full statements.</p>
+    <div class="form-row"><label>Claude's file (.json)</label><input type="file" accept=".json,application/json" onchange="importPreparedStatements(event)"/></div>
+    <div id="cs-status" class="hint"></div>
+    <div class="modal-footer"><button class="btn-secondary" onclick="PREPARED_LOG=false;closeModal()">Close</button></div>`);
+}
 async function openClaudeStatementHelp() {
+  PREPARED_LOG = false;
   const prompt = claudeStatementPrompt();
   let copied = false; try { await navigator.clipboard.writeText(prompt); copied = true; } catch (e) {}
   showModal(`<h3>Prepare statements with Claude</h3>
@@ -4127,7 +4141,7 @@ function importPreparedStatements(e) {
     let j; try { j = JSON.parse(txt); } catch (err) { document.getElementById('cs-status').innerHTML = '<span class="text-red">Not valid JSON.</span>'; return; }
     const sts = (j.statements || []).filter(x => (x.lines || []).length);
     if (!sts.length) { document.getElementById('cs-status').innerHTML = '<span class="text-red">No statements with lines in that file.</span>'; return; }
-    PREPARED = { sts, checks: j.checks || [] };
+    PREPARED = { sts, checks: j.checks || [], log: PREPARED_LOG || j.purpose === 'log' };
     const optsHtml = (v) => `<option value="">— choose —</option>` + data.cards.map(c => `<option value="${c.id}" ${v===c.id?'selected':''}>${esc(c.name)} (${profileLabel(c.profile)})</option>`).join('') +
       (data.accounts || []).map(a => `<option value="acct:${a.id}" ${v==='acct:'+a.id?'selected':''}>${esc(acctLabel(a))}</option>`).join('');
     const rows = sts.map((st, i) => { const g = guessSourceFor(st); st._src = g; const chk = PREPARED.checks.find(c => c.source === st.source);
@@ -4146,7 +4160,8 @@ function reviewPrepared() {
   if (!list.length) { alert('Choose the card or account for at least one statement.'); return; }
   const month = reconMonth || reconMonthFor(ME.profile);
   if (document.getElementById('cs-one-by-one') && document.getElementById('cs-one-by-one').checked) return reviewPreparedOneByOne(list, month);
-  BULK = list.map(st => buildReview(st._src, st.lines.map(l => ({ date: l.date, postDate: l.postDate || null, description: l.description, amount: Math.abs(Number(l.amount) || 0), credit: !!l.credit, fcy: !!l.fcy, hint: l.hint || null })), { month, key: st._src }));
+  const logOnly = !!PREPARED.log;
+  BULK = list.map(st => Object.assign(buildReview(st._src, st.lines.map(l => ({ date: l.date, postDate: l.postDate || null, description: l.description, amount: Math.abs(Number(l.amount) || 0), credit: !!l.credit, fcy: !!l.fcy, hint: l.hint || null })), logOnly ? null : { month, key: st._src }), { logOnly }));
   renderBulkReview();
 }
 let BULK = null;
@@ -4185,13 +4200,15 @@ function renderBulkReview() {
 function commitBulk() {
   let tot = { added: 0, linked: 0, fixed: 0, notLogged: 0, removed: 0 };
   BULK.forEach(R => { const r = commitReview(R); Object.keys(tot).forEach(k => tot[k] += r[k] || 0); });
-  const n = BULK.length; BULK = null; closeModal(); saveToDrive(); navigate('recon');
+  const n = BULK.length, logOnly = BULK.some(R => R.logOnly); BULK = null; PREPARED_LOG = false; closeModal(); saveToDrive(); spendMonth = null; navigate(logOnly ? 'spend' : 'recon');
   toast(`${n} statement${n !== 1 ? 's' : ''} done: ${tot.linked} lines matched your log${tot.fixed ? `, ${tot.fixed} amounts corrected` : ''} · ${tot.added} added${tot.notLogged ? ` (${tot.notLogged} you hadn't logged)` : ''}${tot.removed ? ` · ${tot.removed} removed` : ''}`, 7000);
 }
 function reviewPreparedOneByOne(list, month) {
   const queue = list.map(st => ({ srcVal: st._src, lines: st.lines.map(l => ({ date: l.date, postDate: l.postDate || null, description: l.description, amount: Math.abs(Number(l.amount) || 0), credit: !!l.credit, fcy: !!l.fcy, hint: l.hint || null })) }));
   const first = queue.shift();
-  startReview(first.srcVal, first.lines, { month, key: first.srcVal }, queue.map(q => ({ ...q })));
+  const logOnly = !!(PREPARED && PREPARED.log);
+  startReview(first.srcVal, first.lines, logOnly ? null : { month, key: first.srcVal }, queue.map(q => ({ ...q, logOnly })));
+  if (logOnly) IMPORT.logOnly = true;
 }
 
 
