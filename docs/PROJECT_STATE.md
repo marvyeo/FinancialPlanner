@@ -38,3 +38,5 @@ recommend / analyseLedger / ledgerEarnings (card engine, caps, conditions, miles
 - [ ] Joint 50/50 settle-up page (offered twice, no answer).
 - [ ] Add Caroline's cards to the app: DBS Altitude (stmt ~12th), DBS Woman's World (12th), Citi Rewards (15th), HSBC Revolution (1st/2nd), OCBC Rewards (19th). Add bank accounts for both (for transfers + recon checklist).
 - [ ] Import investment files: `endowus-2026-10-17.json` (Amundi relabelled cash), `sgx-shares-2026-10-16.json`, `cpf-2026-10-16.json`, `caroline-investments-2026-10-16.json`; `advice-2026-10-17.json` on Advice page.
+
+- 2026-10-21 (conductor): new app icon from the ecosystem icon set; app is now installable (manifest.json, network-first sw.js, icons). iPhone redirect sign-in fallback not added yet.
