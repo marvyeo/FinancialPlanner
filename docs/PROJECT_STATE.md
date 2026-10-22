@@ -1,5 +1,32 @@
-# Financial Planner — technical state
-*Updated 2026-10-17. Personal/household data is kept outside this public repo.*
+# Financial Planner — Project State
+
+**State version:** 2 (Session Rules added 2026-10-22 by the conductor chat "Life Plan Roadmap ver 3")
+**Next chat name:** `Financial Planner ver 3`
+**Where this lives:** `PROJECT_STATE.md` in the repo. New chats `git pull` and read it; no uploads needed.
+*Personal/household data is kept outside this public repo.*
+
+## ⚙ Session Rules (every chat that works on this app follows these)
+
+**1. Pick the cheapest model that can do the job.** At the start of every session Claude names the model it recommends and the estimated size (below). If the chat is on a pricier model than needed, Claude says so before starting.
+
+| Model | Use for |
+|---|---|
+| **Haiku** | State-file edits, text or label changes, small data packs, lookups, "where is X" questions |
+| **Sonnet** (default) | Features, bug fixes, refactors, data processing (e.g. novel volumes, PullList), most app work |
+| **Opus** | Only for new-app builds, cross-app architecture, or a bug Sonnet has failed on twice. Claude says why before using it |
+
+**2. Every push updates this file in the same commit.** No exceptions, including PR branches and one-line fixes.
+- `git pull` before starting, so you build on the latest state.
+- Add a dated line to the change log (what changed and why, in plain words) and update any section the change made wrong.
+- If a session ends without a push, nothing changes here.
+
+**3. Size the work first, and plan the pause points.**
+- Before starting, Claude lists the steps and sizes the job: **S** (under ~20k tokens), **M** (~20–60k), **L** (over ~60k).
+- **M and L jobs are split into checkpoints.** Each checkpoint ends with a commit and a state update, so a cut-off session loses nothing.
+- **Pause** when usage is around half the window, when the chat has grown long (heavy file reads, ~30+ turns), or before a step that won't finish in what's left. Claude can't see the remaining credit directly, so on L jobs it asks Marvin to check usage at each checkpoint.
+- **On pause,** Claude writes a `▶ RESUME HERE` block at the top of this file: what's done, the exact next step, branch and files, and the first command to run. It also gives Marvin a one-line restart prompt ("Continue <App> ver X from RESUME HERE"). The next session starts from that block and deletes it once the step is done.
+
+**4. Chat naming.** When this file starts a new chat, name it "<App> ver X" (X = previous + 1).
 
 
 | Item | Value |
@@ -40,3 +67,5 @@ recommend / analyseLedger / ledgerEarnings (card engine, caps, conditions, miles
 - [ ] Import investment files: `endowus-2026-10-17.json` (Amundi relabelled cash), `sgx-shares-2026-10-16.json`, `cpf-2026-10-16.json`, `caroline-investments-2026-10-16.json`; `advice-2026-10-17.json` on Advice page.
 
 - 2026-10-21 (conductor): new app icon from the ecosystem icon set; app is now installable (manifest.json, network-first sw.js, icons). iPhone redirect sign-in fallback not added yet.
+- 2026-10-22 (conductor): manifest id set to `/FinancialPlanner/` (the old `./` made Android treat all marvyeo.github.io apps as one).
+- 2026-10-22 (conductor): added Session Rules and `CLAUDE.md`.
