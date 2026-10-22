@@ -1,7 +1,9 @@
 # Financial Planner — Project State
 
+> **Next chat name: `Financial Planner ver 3`**
+> Claude: your FIRST reply in a new chat must start with "Rename this chat to: **Financial Planner ver 3**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
+
 **State version:** 2 (Session Rules added 2026-10-22 by the conductor chat "Life Plan Roadmap ver 3")
-**Next chat name:** `Financial Planner ver 3`
 **Where this lives:** `PROJECT_STATE.md` in the repo. New chats `git pull` and read it; no uploads needed.
 *Personal/household data is kept outside this public repo.*
 
@@ -26,7 +28,7 @@
 - **Pause** when usage is around half the window, when the chat has grown long (heavy file reads, ~30+ turns), or before a step that won't finish in what's left. Claude can't see the remaining credit directly, so on L jobs it asks Marvin to check usage at each checkpoint.
 - **On pause,** Claude writes a `▶ RESUME HERE` block at the top of this file: what's done, the exact next step, branch and files, and the first command to run. It also gives Marvin a one-line restart prompt ("Continue <App> ver X from RESUME HERE"). The next session starts from that block and deletes it once the step is done.
 
-**4. Chat naming.** When this file starts a new chat, name it "<App> ver X" (X = previous + 1).
+**4. Chat naming.** Use the **Next chat name** line at the top of this file; tell Marvin in the first reply, then bump it.
 
 
 | Item | Value |
