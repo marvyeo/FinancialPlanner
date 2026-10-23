@@ -59,6 +59,9 @@ recommend / analyseLedger / ledgerEarnings (card engine, caps, conditions, miles
 - File found via remembered id → shared-with-me → own. No file → "Join household" screen (Google Picker, needs `PICKER_API_KEY` in index.html; currently EMPTY).
 - `settings.household.members [{email, profile}]`; `ME.profile` drives default "for whom" and recon list. Share button: Settings → Household (writer permission on data + merchants files).
 - Save = check Drive `version`; if changed, `mergeData(base, local, remote)` then upload. Refresh on returning to the tab.
+- **Shared sign-in (2026-10-23, Sprint 13.4):** the app reads and publishes `lp-sso` in localStorage (a valid `drive.file` token from Life Plan or another app on the shared client means no second sign-in; a 401 or sign-out clears it). **Sign out no longer revokes the Google token**: revoking on the shared client would cancel the file grants of every app on that Google account.
+- **iPhone (2026-10-23, Sprint 13.3):** "Sign-in window not opening? Try another way" (redirect sign-in, state `fp`) plus an iPhone "Share → Add to Home Screen" hint on the sign-in card (iOS can't install web apps from a prompt). Needs `https://marvyeo.github.io/FinancialPlanner/` under Authorized redirect URIs.
+- **Sprint 13.2 (2026-10-23):** "← Life Plan" link (sidebar; "←" in the mobile top bar), `viewport-fit=cover`, safe-area padding, shared theme tokens `--lp-bg/--lp-surface/--lp-text/--lp-muted/--lp-accent`.
 - **TODO (user):** GCP → OAuth consent screen test user (partner's Gmail); enable Picker API; create API key restricted to Picker API + `https://marvyeo.github.io/*`; put key in `PICKER_API_KEY`; Settings → Household → Share.
 
 ### Open app items
@@ -71,3 +74,4 @@ recommend / analyseLedger / ledgerEarnings (card engine, caps, conditions, miles
 - 2026-10-21 (conductor): new app icon from the ecosystem icon set; app is now installable (manifest.json, network-first sw.js, icons). iPhone redirect sign-in fallback not added yet.
 - 2026-10-22 (conductor): manifest id set to `/FinancialPlanner/` (the old `./` made Android treat all marvyeo.github.io apps as one).
 - 2026-10-22 (conductor): added Session Rules and `CLAUDE.md`.
+- 2026-10-23 (conductor, Sprints 13.4 + 13.3 + 13.2): shared `lp-sso` sign-in, no token revoke on sign out, iOS redirect fallback and hint, "← Life Plan" link, safe areas, theme tokens; `sw.js` cache `financialplanner-v3`. Not tested live.

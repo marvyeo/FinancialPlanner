@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -264,6 +264,13 @@
   #viz-tip { position: fixed; z-index: 100; display: none; pointer-events: none; background: #0D1B2A; border: 1px solid #2A4A6B; border-radius: 7px; padding: 7px 10px; font-size: 12px; color: #F0F4F8; box-shadow: 0 6px 18px rgba(0,0,0,.4); }
   #viz-tip b { font-weight: 600; margin-left: 4px; }
 
+  /* Sprint 13.2: shared theme tokens (same names in every app, mapped to this app's palette), back links, safe areas */
+  :root { --lp-bg: #10151B; --lp-surface: #0D1B2A; --lp-text: #F0F4F8; --lp-muted: #8AABBF; --lp-accent: #00C896; }
+  .lp-back { display: block; padding: calc(12px + env(safe-area-inset-top)) 16px 0; font-size: 12px; color: var(--lp-muted); text-decoration: none; }
+  .lp-back:hover { color: var(--lp-text); }
+  .lp-back-top { display: none; color: var(--lp-muted); text-decoration: none; font-size: 18px; padding: 6px 8px 6px 0; }
+  @media (max-width: 768px) { .lp-back-top { display: block; } }
+
   /* Mobile nav */
   @media (max-width: 768px) {
     #sidebar { transform: translateX(-100%); }
@@ -283,7 +290,7 @@
     }
     .mob-nav-btn .icon { font-size: 18px; }
     .mob-nav-btn.active { color: #00C896; }
-    #main { padding-bottom: 64px; }
+    #main { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
     .stat-row { grid-template-columns: 1fr 1fr; }
     .stat-card { min-width: 0; padding: 14px 14px; }
     .stat-card .value { font-size: 21px; overflow-wrap: anywhere; }
@@ -369,12 +376,15 @@
       <span id="sign-in-label">Loading…</span>
     </button>
     <p id="auth-msg" style="margin:14px 0 0;font-size:12.5px;color:#F59E0B;"></p>
+    <a href="#" onclick="event.preventDefault();startRedirectSignIn()" style="display:inline-block;margin-top:12px;font-size:11.5px;color:#4A6580;text-decoration:underline;">Sign-in window not opening? Try another way</a>
+    <p id="ios-hint" style="display:none;margin-top:10px;font-size:11.5px;color:#4A6580;">On iPhone, install it from Safari: tap <b>Share</b>, then <b>Add to Home Screen</b>.</p>
     <p style="margin-top:16px;font-size:11.5px;color:#2A4A6B;">drive.file scope only — the app can open only the planner files it created or that you picked</p>
   </div>
 </div>
 
 <!-- Sidebar -->
 <nav id="sidebar">
+  <a class="lp-back" href="https://marvyeo.github.io/LifePlan/" aria-label="Back to Life Plan">← Life Plan</a>
   <div class="logo">FP<span> / Financial Planner</span></div>
   <div style="padding:8px 4px;">
     <div class="nav-section">Overview</div>
@@ -415,6 +425,7 @@
 <!-- Main -->
 <div id="main">
   <div class="topbar">
+    <a class="lp-back-top" href="https://marvyeo.github.io/LifePlan/" aria-label="Back to Life Plan">←</a>
     <button class="hamburger btn-secondary" style="padding:6px 10px;font-size:16px;border:none;background:none;color:#8AABBF;" onclick="toggleSidebar()">☰</button>
     <h1 id="page-title">Dashboard</h1>
     <select id="view-sel" title="Whose money to show" onchange="setView(this.value)" style="margin-left:12px;background:#0D1B2A;border:1px solid #2A4A6B;color:#00C896;border-radius:20px;padding:5px 10px;font-size:12.5px;font-weight:600;max-width:130px;">
@@ -454,6 +465,39 @@ let DATA_BASE = null, DATA_VERSION = null, SAVING = null, SAVE_AGAIN = false;
 const LS = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }, del: (k) => { try { localStorage.removeItem(k); } catch (e) {} } };
 
 function savedToken() { try { return JSON.parse(LS.get('fp_token') || 'null'); } catch (e) { return null; } }
+
+/* Shared sign-in with Life Plan and the other apps (Sprint 13.4). All apps share the origin https://marvyeo.github.io,
+   so localStorage is shared. Key `lp-sso` = { t, exp, email, scope, client }. Only a drive.file token for the shared
+   client is used or published. */
+const SSO_KEY = 'lp-sso';
+function ssoPublish(t, expiresIn) {
+  let email = ''; try { email = (JSON.parse(LS.get(SSO_KEY) || 'null') || {}).email || ''; } catch (e) {}
+  LS.set(SSO_KEY, JSON.stringify({ t, exp: Date.now() + (Number(expiresIn) || 3599) * 1000, email, scope: SCOPES, client: CLIENT_ID }));
+}
+function ssoClear() { LS.del(SSO_KEY); }
+function ssoRead() {
+  try { const x = JSON.parse(LS.get(SSO_KEY) || 'null'); return x && x.t && x.client === CLIENT_ID && x.scope === SCOPES && x.exp > Date.now() + 60000 ? x : null; } catch (e) { return null; }
+}
+/* Redirect sign-in: fallback for iPhone home-screen apps where the Google pop-up can't open.
+   Needs https://marvyeo.github.io/FinancialPlanner/ under "Authorized redirect URIs" on the OAuth client. */
+const REDIRECT_URI = location.origin + location.pathname;
+function startRedirectSignIn() {
+  const p = new URLSearchParams({ client_id: CLIENT_ID, redirect_uri: REDIRECT_URI, response_type: 'token', scope: SCOPES,
+    include_granted_scopes: 'true', prompt: 'select_account', state: 'fp' });
+  location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + p.toString();
+}
+function consumeRedirectToken() {
+  if (!location.hash.includes('access_token=')) return false;
+  const h = new URLSearchParams(location.hash.slice(1));
+  history.replaceState(null, '', REDIRECT_URI);
+  if (h.get('state') !== 'fp' || !h.get('access_token')) return false;
+  accessToken = h.get('access_token');
+  const exp = Number(h.get('expires_in')) || 3599;
+  LS.set('fp_token', JSON.stringify({ t: accessToken, exp: Date.now() + exp * 1000, email: (savedToken() || {}).email || '' }));
+  ssoPublish(accessToken, exp);
+  onSignedIn();
+  return true;
+}
 function init() {
   if (typeof gapi === 'undefined' || typeof google === 'undefined') { setTimeout(init, 100); return; }
   gapi.load('client', async () => {
@@ -464,12 +508,16 @@ function init() {
         if (resp.error) { authMessage('Sign-in was cancelled. Tap the button to try again.'); return; }
         accessToken = resp.access_token;
         LS.set('fp_token', JSON.stringify({ t: accessToken, exp: Date.now() + (Number(resp.expires_in) || 3599) * 1000, email: (savedToken() || {}).email || '' }));
+        ssoPublish(accessToken, resp.expires_in);
         onSignedIn();
       }
     });
     // Stay signed in on this device: a Google token lasts about an hour; after that one tap gets a new one.
+    if (consumeRedirectToken()) return;
     const tok = savedToken();
     if (tok && tok.t && tok.exp > Date.now() + 60000) { accessToken = tok.t; onSignedIn(); return; }
+    const shared = ssoRead(); // signed in through Life Plan or another app: no second sign-in
+    if (shared) { accessToken = shared.t; LS.set('fp_token', JSON.stringify({ t: shared.t, exp: shared.exp, email: (tok && tok.email) || shared.email || '' })); onSignedIn(); return; }
     const btn = document.getElementById('sign-in-btn'), lbl = document.getElementById('sign-in-label');
     btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer';
     lbl.textContent = tok && tok.email ? 'Continue as ' + tok.email : 'Sign in with Google';
@@ -488,8 +536,8 @@ function authMessage(msg) {
   document.getElementById('auth-msg').textContent = msg || '';
 }
 function signOut() {
-  if (accessToken && google.accounts.oauth2.revoke) google.accounts.oauth2.revoke(accessToken, () => {});
-  LS.del('fp_token'); LS.del('fp_file_id'); accessToken = null; location.reload();
+  // No token revoke: every app shares one OAuth client, and revoking would cancel the file grants for all of them.
+  LS.del('fp_token'); LS.del('fp_file_id'); ssoClear(); accessToken = null; location.reload();
 }
 /** fetch() to Google Drive with the token; an expired session sends you back to the one-tap sign-in. */
 async function driveFetch(url, opts) {
@@ -497,6 +545,7 @@ async function driveFetch(url, opts) {
   const res = await fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: `Bearer ${accessToken}` } });
   if (res.status === 401) {
     const tok = savedToken(); if (tok) { tok.exp = 0; LS.set('fp_token', JSON.stringify(tok)); }
+    ssoClear();
     authMessage('Your Google session timed out. Tap to continue — nothing you entered is lost.');
     throw new Error('session expired');
   }
@@ -4530,7 +4579,14 @@ window.addEventListener('resize', () => Combo.close());
 document.addEventListener('scroll', e => { if (Combo.pop && !Combo.pop.contains(e.target)) Combo.close(); }, true);
 
 /* =================== INIT =================== */
-window.onload = () => { init(); };
+window.onload = () => {
+  init();
+  const ua = navigator.userAgent;
+  const ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  const hint = document.getElementById('ios-hint');
+  if (hint && ios && !standalone) hint.style.display = 'block';
+};
 </script>
 <script>
 // Installable app: register the service worker (only on https, i.e. GitHub Pages)
