@@ -1,7 +1,7 @@
 # Financial Planner — Project State
 
-> **Next chat name: `Financial Planner ver 3`**
-> Claude: your FIRST reply in a new chat must start with "Rename this chat to: **Financial Planner ver 3**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
+> **Next chat name: `Financial Planner ver 4`**
+> Claude: your FIRST reply in a new chat must start with "Rename this chat to: **Financial Planner ver 4**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
 
 **State version:** 2 (Session Rules added 2026-10-22 by the conductor chat "Life Plan Roadmap ver 3")
 **Where this lives:** `PROJECT_STATE.md` in the repo. New chats `git pull` and read it; no uploads needed.
@@ -36,7 +36,7 @@
 | Repo | `marvyeo/FinancialPlanner` (**public**), branch `main` — never commit personal data |
 | Live URL | https://marvyeo.github.io/FinancialPlanner/ |
 | Stack | Static `index.html` (vanilla JS + Tailwind CDN) + `engine.js` (pure, Node-testable) + `rules.json` + `merchants-sg.json` |
-| Tests | `node tests/engine.test.js` → 58 passing |
+| Tests | `node tests/engine.test.js` → 60 passing |
 | Data | Google Drive `financialplanner-data.json` (+ `merchants.json`), scope `drive.file` |
 | OAuth client | `669494100250-gvromuq72r7j0djmkd4vdbdq5damncj7.apps.googleusercontent.com` (GCP project number 669494100250) |
 | Rules refresh | `RULES_REFRESH.md` weekly → `rules.json` (version 2026-10-14) → in-app banner |
@@ -75,3 +75,4 @@ recommend / analyseLedger / ledgerEarnings (card engine, caps, conditions, miles
 - 2026-10-22 (conductor): manifest id set to `/FinancialPlanner/` (the old `./` made Android treat all marvyeo.github.io apps as one).
 - 2026-10-22 (conductor): added Session Rules and `CLAUDE.md`.
 - 2026-10-23 (conductor, Sprints 13.4 + 13.3 + 13.2): shared `lp-sso` sign-in, no token revoke on sign out, iOS redirect fallback and hint, "← Life Plan" link, safe areas, theme tokens; `sw.js` cache `financialplanner-v3`. Not tested live.
+- 2026-10-29 (ver 3, checkpoint 1 of 4): add-expense form: merchant on its own row, amount + date side by side (no scrolling), recent-merchant chips removed from all spend forms. Rename (pen) dialog: 'remember' and 'update previous' now start unticked. Card/account pickers (Spending filter, Import statement, quick-add) grouped by owner via `sourceGroupsHtml` + `cardLabel` ("Marvin — cards", "Caroline — accounts & wallets"…); Spending source column shows owner. Remaining this session: (2) balances views, (3) map bank-statement lines into ledger from Nov, (4) merchant-name alignment tool.

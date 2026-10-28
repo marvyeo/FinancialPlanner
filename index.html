@@ -330,11 +330,11 @@
   .mini-table input, .mini-table select { background: #0D1B2A; border: 1px solid #2A4A6B; color: #F0F4F8; border-radius: 5px; padding: 4px 6px; font-size: 12px; width: 100%; }
   .cond-row { font-size: 11.5px; color: #8AABBF; display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; }
   .tabs-scroll { overflow-x: auto; }
-  .form-grid.sf-top { grid-template-columns: 2fr 1fr; }
-  .form-grid.sf-top.with-date { grid-template-columns: 2fr 1fr 1fr; }
+  .form-grid.sf-top { grid-template-columns: 1fr 1fr; gap: 0 14px; }
+  .sf-top .sf-merchant { grid-column: 1 / -1; }
+  .sf-top input[type=number], .sf-top input[type=date] { min-width: 0; width: 100%; box-sizing: border-box; }
   @media (max-width: 768px) {
     .form-grid.sf-top, .form-grid.sf-top.with-date { grid-template-columns: 1fr 1fr; gap: 0 12px; }
-    .sf-top .sf-merchant { grid-column: 1 / -1; }
   }
   @media (max-width: 768px) { .bar-row { grid-template-columns: 100px 1fr 70px; } .modal { padding: 20px 18px; } }
   /* phone: modals become full-screen sheets with the main button always reachable; 16px inputs stop iOS zooming */
@@ -2429,7 +2429,6 @@ function spendFormHtml(p, init) {
   return `<div id="${p}-form">
     <div class="form-grid sf-top ${p==='qa'?'with-date':''}">
       <div class="form-row sf-merchant"><label>Merchant</label>
-        ${(p === 'qa' || p === 'ss' || p === 'dash') && !f.merchantText ? recentMerchantChips(p, f.forProfile) : ''}
         <input id="${p}-merchant" list="merchant-list" autocomplete="off" placeholder="e.g. Cold Storage, GrabFood, Shopee, MCC 5812" value="${esc(f.merchantText)}"
           oninput="spendFormMerchant('${p}')" />
         <div class="hint" id="${p}-mhint"></div>
@@ -2657,7 +2656,7 @@ function qaSyncCardSelect() {
   const f = FORMS.qa;
   const pool = FPEngine.candidateCards(f.forProfile, data.cards, engineSettings());
   const others = data.cards.filter(c => !pool.includes(c));
-  const opt = c => `<option value="${c.id}" ${c.id===f.cardId?'selected':''}>${esc(c.name)}${c.name.toLowerCase().includes(profileLabel(c.profile).toLowerCase()) ? '' : ' (' + profileLabel(c.profile) + ')'}${f.lastRec && f.lastRec.pick && f.lastRec.pick.card.id===c.id ? ' ★ best' : ''}</option>`;
+  const opt = c => `<option value="${c.id}" ${c.id===f.cardId?'selected':''}>${esc(cardLabel(c))}${f.lastRec && f.lastRec.pick && f.lastRec.pick.card.id===c.id ? ' ★ best' : ''}</option>`;
   const accts = (data.accounts || []).map(a => `<option value="acct:${a.id}" ${f.cardId==='acct:'+a.id?'selected':''}>${esc(acctLabel(a))}</option>`).join('');
   sel.innerHTML = pool.map(opt).join('') + (others.length ? `<optgroup label="Other cards">${others.map(opt).join('')}</optgroup>` : '') +
     (accts ? `<optgroup label="PayNow / bank / wallet">${accts}</optgroup>` : '') + `<option value="__cash" ${f.cardId==='__cash'?'selected':''}>Cash / other (no card)</option>`;
@@ -2758,8 +2757,8 @@ function openNameCat(id) {
     <div class="form-row"><label>Category</label><input id="nc-cat" list="nc-cats" value="${esc(t.category || '')}" placeholder="Type or pick"/>
       <datalist id="nc-cats">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist>
       <div class="chip-row" style="margin-top:8px;">${cats.slice(0, 12).map(c => `<span class="chip ${c === t.category ? 'on' : ''}" onclick="document.getElementById('nc-cat').value=this.textContent;document.querySelectorAll('#modal-container .chip').forEach(x=>x.classList.toggle('on',x===this))">${esc(c)}</span>`).join('')}</div></div>
-    <label class="hint" style="display:flex;gap:6px;align-items:center;margin-top:6px;"><input type="checkbox" id="nc-learn" style="width:auto;" checked/> Remember for future lines from this merchant</label>
-    ${same.length ? `<label class="hint" style="display:flex;gap:6px;align-items:center;margin-top:6px;"><input type="checkbox" id="nc-past" style="width:auto;" checked/> Also update ${same.length} other line${same.length !== 1 ? 's' : ''} from ${esc(brandOf(t.merchant))}</label>` : ''}
+    <label class="hint" style="display:flex;gap:6px;align-items:center;margin-top:6px;"><input type="checkbox" id="nc-learn" style="width:auto;"/> Remember for future lines from this merchant</label>
+    ${same.length ? `<label class="hint" style="display:flex;gap:6px;align-items:center;margin-top:6px;"><input type="checkbox" id="nc-past" style="width:auto;"/> Also update ${same.length} other line${same.length !== 1 ? 's' : ''} from ${esc(brandOf(t.merchant))}</label>` : ''}
     <div class="hint" style="margin-top:8px;">Tip: name a stall or a delivery order as <em>Brand - Place - Shop</em> (e.g. <em>Kopitiam - Lau Pa Sat - Yuen Kee Dumpling</em>, <em>Foodpanda - Pizza Hut</em>). It's still counted under the brand, and other lines keep their own shop names.</div>
     <div class="modal-footer"><button class="btn-secondary" onclick="closeModal()">Cancel</button><button class="btn-primary" onclick="saveNameCat('${t.id}')">Save</button></div>`);
   setTimeout(() => document.getElementById('nc-cat')?.focus(), 50);
@@ -3035,8 +3034,7 @@ function renderSpend() {
     </tr>`;
   }).join('');
   const sel = 'background:#0D1B2A;border:1px solid #2A4A6B;color:#F0F4F8;border-radius:7px;padding:7px 10px;font-size:13px;';
-  const srcOpts = `<optgroup label="Cards">${data.cards.map(c => `<option value="${c.id}" ${spendCard===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</optgroup>` +
-    ((data.accounts||[]).length ? `<optgroup label="Accounts & wallets">${data.accounts.map(a => `<option value="${a.id}" ${spendCard===a.id?'selected':''}>${esc(a.name)}</option>`).join('')}</optgroup>` : '');
+  const srcOpts = sourceGroupsHtml(spendCard);
   const kindTabs = [['expense','Spending'],['paid_for_others','Paid for others'],['transfer','Transfers'],['income','Income'],['refund','Refunds'],['all','All']]
     .map(([k,l]) => `<div class="profile-tab ${spendKind===k?'active':''}" style="padding:6px 12px;font-size:12.5px;" onclick="spendKind='${k}';render()">${l}${k!=='all' && sum.byKind[k] ? ` <span class="hint">${sum.byKind[k]}</span>` : ''}</div>`).join('');
   return `
@@ -3088,13 +3086,12 @@ function sourceFromValue(v) {
 function openImportModal(preVal, recon) {
   IMPORT = { rows: [] };
   const sel = v => (preVal && preVal === v ? 'selected' : '');
-  const cardOpts = data.cards.map(c => `<option value="${c.id}" ${sel(c.id)}>${esc(c.name)} (${profileLabel(c.profile)})</option>`).join('');
-  const acctOpts = (data.accounts || []).map(a => `<option value="acct:${a.id}" ${sel('acct:' + a.id)}>${esc(acctLabel(a))}</option>`).join('');
+  const groupedOpts = sourceGroupsHtml(preVal, { acctPrefix: 'acct:' });
   showModal(`
     <h3>${recon ? 'Reconcile a statement' : 'Import a statement'}</h3>
     <p style="font-size:12.5px;color:#8AABBF;margin:-8px 0 14px;">Card, bank account or wallet. CSV export, PDF, or text copied from internet banking. Lines are checked against what you already logged; nothing is saved until you confirm.</p>
     <div class="form-grid">
-      <div class="form-row"><label>Statement for</label><select id="im-card"><optgroup label="Cards">${cardOpts}</optgroup>${acctOpts ? `<optgroup label="Bank accounts & wallets">${acctOpts}</optgroup>` : ''}</select>
+      <div class="form-row"><label>Statement for</label><select id="im-card">${groupedOpts}</select>
         <div class="hint">Bank account missing? Add it in Settings → Your accounts.</div></div>
       <div class="form-row"><label>Statement date (helps with the year)</label><input id="im-ref" type="date" value="${today()}"/></div>
     </div>
@@ -3341,7 +3338,21 @@ const ACCOUNT_TYPES = { bank: 'Bank account', wallet: 'Wallet / stored value', c
 function accountById(id) { return (data.accounts || []).find(a => a.id === id); }
 /** "DBS Multiplier (Marvin)" — both of you have accounts with the same name. */
 function acctLabel(a) { if (!a) return ''; const who = profileLabel(a.owner || 'marvin'); return a.name.toLowerCase().includes(who.toLowerCase()) ? a.name : `${a.name} (${who})`; }
-function txnSourceName(t) { return t.cardId ? (cardById(t.cardId)?.name || t.cardName) : (acctLabel(accountById(t.accountId)) || t.cardName || '—'); }
+/** "DBS Altitude VISA (Marvin)" — name plus owner, unless the name already says who. */
+function cardLabel(c) { if (!c) return ''; const who = profileLabel(c.profile || 'marvin'); return c.name.toLowerCase().includes(who.toLowerCase()) ? c.name : `${c.name} (${who})`; }
+/** <optgroup>s split by owner (Marvin, Caroline, Joint, Cobae): cards first, then accounts & wallets. */
+function sourceGroupsHtml(selectedId, opts) {
+  opts = opts || {};
+  const pre = opts.acctPrefix === undefined ? '' : opts.acctPrefix;
+  return ['marvin', 'wife', 'joint', 'cobae'].map(p => {
+    const cards = data.cards.filter(c => (c.profile || 'marvin') === p);
+    const accts = (data.accounts || []).filter(a => !a.archived && (a.owner || 'marvin') === p);
+    const o1 = cards.map(c => `<option value="${c.id}" ${selectedId === c.id ? 'selected' : ''}>${esc(cardLabel(c))}</option>`).join('');
+    const o2 = accts.map(a => `<option value="${pre}${a.id}" ${selectedId === pre + a.id ? 'selected' : ''}>${esc(acctLabel(a))}</option>`).join('');
+    return (o1 ? `<optgroup label="${profileLabel(p)} — cards">${o1}</optgroup>` : '') + (o2 ? `<optgroup label="${profileLabel(p)} — accounts &amp; wallets">${o2}</optgroup>` : '');
+  }).join('');
+}
+function txnSourceName(t) { return t.cardId ? (cardLabel(cardById(t.cardId)) || t.cardName) : (acctLabel(accountById(t.accountId)) || t.cardName || '—'); }
 const REVIEW_LABELS = { paynow: 'PayNow / transfer out — spending, paid for someone, or your own account?', incoming: 'Money in — income, repayment, or from your own account?', check: 'Card credit — refund or payment?', joint: 'Joint?', unknown: 'Unknown merchant' };
 function needsReview(t) { return (t.review && t.review.length) || (t.source === 'import' && !t.reviewed); }
 function flowCtx(sourceId, isCard) {
