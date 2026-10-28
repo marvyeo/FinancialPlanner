@@ -36,7 +36,7 @@
 | Repo | `marvyeo/FinancialPlanner` (**public**), branch `main` — never commit personal data |
 | Live URL | https://marvyeo.github.io/FinancialPlanner/ |
 | Stack | Static `index.html` (vanilla JS + Tailwind CDN) + `engine.js` (pure, Node-testable) + `rules.json` + `merchants-sg.json` |
-| Tests | `node tests/engine.test.js` → 60 passing |
+| Tests | `node tests/engine.test.js` → 61 passing |
 | Data | Google Drive `financialplanner-data.json` (+ `merchants.json`), scope `drive.file` |
 | OAuth client | `669494100250-gvromuq72r7j0djmkd4vdbdq5damncj7.apps.googleusercontent.com` (GCP project number 669494100250) |
 | Rules refresh | `RULES_REFRESH.md` weekly → `rules.json` (version 2026-10-14) → in-app banner |
@@ -46,7 +46,7 @@
 Dashboard (phone quick buttons; month-end reminder) · Spending · Investments · Month-end check · Advice · Owed to me · Profiles · Which card? · Strategy · Cards · Merchants · Settings (Household, accounts, policy, rules, valuations).
 
 ### Key engine functions (engine.js)
-recommend / analyseLedger / ledgerEarnings (card engine, caps, conditions, miles-first policy with cashback gap 2.5¢) · categorise (merchant DB + learned mappings + keywords) · parseStatementText / csvToRows / classifyFlow / pairTransfers · owedSummary / migrateContra (splits) · parseDigiPortfolio / mergeInvestmentData / investmentSummary (Modified Dietz, XIRR, paid-out coupons count in gain, fee rate annualised) / investmentInsights · **reconcileStatement** (matched / split / grouped / amount-differs / not-logged / logged-but-missing) · **mergeData** (3-way merge for two phones) · **ghostResult / adviceSummary** (ghost tracking: `rate`, `position`, `switch`).
+recommend / analyseLedger / ledgerEarnings (card engine, caps, conditions, miles-first policy with cashback gap 2.5¢) · categorise (merchant DB + learned mappings + keywords) · parseStatementText / csvToRows / classifyFlow / pairTransfers · owedSummary / migrateContra (splits) · parseDigiPortfolio / mergeInvestmentData / investmentSummary (Modified Dietz, XIRR, paid-out coupons count in gain, fee rate annualised) / investmentInsights · **accountBalance** (anchor + ledger movement, segment check between balances, running balance) · **reconcileStatement** (matched / split / grouped / amount-differs / not-logged / logged-but-missing) · **mergeData** (3-way merge for two phones) · **ghostResult / adviceSummary** (ghost tracking: `rate`, `position`, `switch`).
 
 ### File formats the app imports
 - `fp-investments` (Investments → Import): accounts/snapshots/activity; matched by `provider:key`; activity `paidOut:true` for coupons paid to bank.
@@ -76,3 +76,4 @@ recommend / analyseLedger / ledgerEarnings (card engine, caps, conditions, miles
 - 2026-10-22 (conductor): added Session Rules and `CLAUDE.md`.
 - 2026-10-23 (conductor, Sprints 13.4 + 13.3 + 13.2): shared `lp-sso` sign-in, no token revoke on sign out, iOS redirect fallback and hint, "← Life Plan" link, safe areas, theme tokens; `sw.js` cache `financialplanner-v3`. Not tested live.
 - 2026-10-29 (ver 3, checkpoint 1 of 4): add-expense form: merchant on its own row, amount + date side by side (no scrolling), recent-merchant chips removed from all spend forms. Rename (pen) dialog: 'remember' and 'update previous' now start unticked. Card/account pickers (Spending filter, Import statement, quick-add) grouped by owner via `sourceGroupsHtml` + `cardLabel` ("Marvin — cards", "Caroline — accounts & wallets"…); Spending source column shows owner. Remaining this session: (2) balances views, (3) map bank-statement lines into ledger from Nov, (4) merchant-name alignment tool.
+- 2026-10-29 (ver 3, checkpoint 2 of 4): **Balances page** (sidebar). Per account: latest known balance + logged lines since; per person and Family totals (chips). Tap an account → set a balance, see whether lines add up between two balances (red = unlogged money), balances on file, running balance per line. Data: `account.balanceChecks[{date,balance,source:'statement'|'manual'}]`. Statement imports (Month-end check → Prepare with Claude, accounts only) now save opening (day before periodFrom) and closing balances automatically. Not tested live; `mergeData` treats `balanceChecks` as part of the account object (last writer wins on a conflict).

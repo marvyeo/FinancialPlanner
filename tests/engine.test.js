@@ -599,5 +599,28 @@ test('settled joint sheet: match, relabel, check, extras', () => {
   assert.strictEqual(r.rows[4].m.key, 'f#p1');
   assert.deepStrictEqual(r.extra.map(u => u.t.id), ['d']);
 });
+
+test('accountBalance: anchor + movement, segments, running balance', () => {
+  const acct = { id: 'a1', balanceChecks: [{ date: '2026-10-31', balance: 1200 }, { date: '2026-10-01', balance: 1000 }] };
+  const L = [
+    { id: '1', accountId: 'a1', date: '2026-10-01', amount: 50, direction: 'out', kind: 'expense' },      // inside the 1 Oct balance
+    { id: '2', accountId: 'a1', date: '2026-10-05', amount: 500, direction: 'in', kind: 'income' },
+    { id: '3', accountId: 'a1', date: '2026-10-10', amount: 100, direction: 'out', kind: 'transfer' },
+    { id: '4', accountId: 'a1', date: '2026-11-03', amount: 30, direction: 'out', kind: 'expense' },
+    { id: '5', accountId: 'a1', date: '2026-11-04', amount: 5, direction: 'in', kind: 'refund' },
+    { id: 'x', accountId: 'other', date: '2026-11-04', amount: 999, direction: 'out', kind: 'expense' },
+  ];
+  const b = E.accountBalance(acct, L);
+  assert.strictEqual(b.anchor.date, '2026-10-31');
+  assert.strictEqual(b.movement, -25);
+  assert.strictEqual(b.current, 1175);
+  assert.strictEqual(b.segments.length, 1);
+  assert.strictEqual(b.segments[0].expected, 1400);
+  assert.strictEqual(b.segments[0].diff, -200);          // $200 of movement isn't logged yet
+  assert.strictEqual(b.rows[0].balance, 1175);
+  assert.strictEqual(b.rows[1].balance, 1170);
+  const n = E.accountBalance({ id: 'a2' }, L);
+  assert.strictEqual(n.noBalance, true); assert.strictEqual(n.current, null);
+});
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

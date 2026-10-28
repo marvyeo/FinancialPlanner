@@ -392,6 +392,7 @@
     <div class="nav-item" data-nav="spend" onclick="navigate('spend')"><span class="icon">≡</span> Spending</div>
     <div class="nav-item" data-nav="invest" onclick="navigate('invest')"><span class="icon">↗</span> Investments</div>
     <div class="nav-item" data-nav="recon" onclick="navigate('recon')"><span class="icon">☑</span> Month-end check <span id="recon-badge" style="margin-left:auto;font-size:11px;color:#F59E0B;"></span></div>
+    <div class="nav-item" data-nav="balances" onclick="navigate('balances')"><span class="icon">$</span> Balances</div>
     <div class="nav-item" data-nav="advice" onclick="navigate('advice')"><span class="icon">✧</span> Advice</div>
     <div class="nav-item" data-nav="joint" onclick="navigate('joint')"><span class="icon">⚖</span> Joint 50/50 <span id="joint-badge" style="margin-left:auto;font-size:11px;color:#F59E0B;"></span></div>
     <div class="nav-item" data-nav="owed" onclick="navigate('owed')"><span class="icon">⇄</span> Owed to me <span id="owed-badge" style="margin-left:auto;font-size:11px;color:#F59E0B;"></span></div>
@@ -925,7 +926,7 @@ function toggleSidebar() {
 
 /* =================== RENDER DISPATCHER =================== */
 function render() {
-  const titles = { joint: 'Joint 50/50', recon: 'Month-end check', advice: 'Advice & ghost tracker', dashboard: 'Dashboard', spend: 'Spending', owed: 'Owed to me', invest: 'Investments', smartspend: 'Which card?', strategy: 'Strategy', cards: 'Cards', merchants: 'Merchants', settings: 'Settings' };
+  const titles = { balances: 'Balances', joint: 'Joint 50/50', recon: 'Month-end check', advice: 'Advice & ghost tracker', dashboard: 'Dashboard', spend: 'Spending', owed: 'Owed to me', invest: 'Investments', smartspend: 'Which card?', strategy: 'Strategy', cards: 'Cards', merchants: 'Merchants', settings: 'Settings' };
   document.getElementById('page-title').textContent =
     currentView === 'profile' ? profileLabel(currentProfile) : titles[currentView] || '';
   const content = document.getElementById('page-content');
@@ -938,6 +939,7 @@ function render() {
   else if (currentView === 'owed') content.innerHTML = renderOwed();
   else if (currentView === 'joint') content.innerHTML = renderJoint();
   else if (currentView === 'recon') content.innerHTML = renderRecon();
+  else if (currentView === 'balances') content.innerHTML = renderBalances();
   else if (currentView === 'advice') content.innerHTML = renderAdvice();
   else if (currentView === 'invest') content.innerHTML = renderInvest();
   else if (currentView === 'strategy') content.innerHTML = renderStrategy();
@@ -3289,6 +3291,9 @@ function commitReview(IMPORT) {
     data.recon = data.recon || {}; data.recon[rc.month] = data.recon[rc.month] || {};
     data.recon[rc.month][IMPORT.srcVal] = { status: 'imported', at: today(), by: ME.email, counts, period: IMPORT.period };
   }
+  if (!src.isCard && STMT_BAL[IMPORT.srcVal]) { const sb = STMT_BAL[IMPORT.srcVal]; delete STMT_BAL[IMPORT.srcVal];
+    if (sb.opening) recordBalanceCheck(src.id, sb.opening.date, sb.opening.balance, 'statement', true);
+    if (sb.closing) recordBalanceCheck(src.id, sb.closing.date, sb.closing.balance, 'statement'); }
   return { added: n, learned, linked, fixed, removed, paired, notLogged, counts, relabelled };
 }
 async function loadPdfJs() {
@@ -4381,6 +4386,7 @@ function reviewPrepared() {
   const month = reconMonth || reconMonthFor(ME.profile);
   if (document.getElementById('cs-one-by-one') && document.getElementById('cs-one-by-one').checked) return reviewPreparedOneByOne(list, month);
   const logOnly = !!PREPARED.log;
+  list.forEach(stashStatementBalance);
   BULK = list.map(st => Object.assign(buildReview(st._src, st.lines.map(l => ({ date: l.date, postDate: l.postDate || null, description: l.description, amount: Math.abs(Number(l.amount) || 0), credit: !!l.credit, fcy: !!l.fcy, hint: l.hint || null })), logOnly ? null : { month, key: st._src }), { logOnly }));
   renderBulkReview();
 }
@@ -4424,6 +4430,7 @@ function commitBulk() {
   toast(`${n} statement${n !== 1 ? 's' : ''} done: ${tot.linked} lines matched your log${tot.fixed ? `, ${tot.fixed} amounts corrected` : ''} · ${tot.added} added${tot.notLogged ? ` (${tot.notLogged} you hadn't logged)` : ''}${tot.removed ? ` · ${tot.removed} removed` : ''}`, 7000);
 }
 function reviewPreparedOneByOne(list, month) {
+  list.forEach(stashStatementBalance);
   const queue = list.map(st => ({ srcVal: st._src, lines: st.lines.map(l => ({ date: l.date, postDate: l.postDate || null, description: l.description, amount: Math.abs(Number(l.amount) || 0), credit: !!l.credit, fcy: !!l.fcy, hint: l.hint || null })) }));
   const first = queue.shift();
   const logOnly = !!(PREPARED && PREPARED.log);
@@ -4431,6 +4438,95 @@ function reviewPreparedOneByOne(list, month) {
   if (logOnly) IMPORT.logOnly = true;
 }
 
+
+/* =====================================================================
+   BALANCES — bank accounts & stored value, per account / person / family
+   ===================================================================== */
+let balScope = null;                 // 'family' | 'marvin' | 'wife'
+const STMT_BAL = {};                 // statement balances waiting for the user to confirm the import
+const money$ = v => (v < 0 ? '−' : '') + '$' + fmtAmt(Math.abs(v));
+function balAccounts() { return (data.accounts || []).filter(a => !a.archived && a.type !== 'card'); }
+function dayBefore(d) { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() - 1); return x.toISOString().slice(0, 10); }
+/** Remember what a statement said the balance was, so the account can be balanced against the ledger. */
+function stashStatementBalance(st) {
+  if (!st._src || !String(st._src).startsWith('acct:')) return;
+  const close = Number(st.closingBalance), open = Number(st.openingBalance);
+  const to = st.periodTo || st.statementDate, from = st.periodFrom;
+  STMT_BAL[st._src] = {
+    closing: Number.isFinite(close) && st.closingBalance !== '' && st.closingBalance != null && to ? { date: to, balance: close } : null,
+    opening: Number.isFinite(open) && st.openingBalance !== '' && st.openingBalance != null && from ? { date: dayBefore(from), balance: open } : null,
+  };
+}
+function recordBalanceCheck(accountId, date, balance, source, keepExisting) {
+  const a = accountById(accountId); if (!a || !date || !Number.isFinite(Number(balance))) return;
+  a.balanceChecks = a.balanceChecks || [];
+  const i = a.balanceChecks.findIndex(c => c.date === date);
+  if (i >= 0) { if (keepExisting) return; a.balanceChecks.splice(i, 1); }
+  a.balanceChecks.push({ date, balance: Math.round(Number(balance) * 100) / 100, source: source || 'manual', addedAt: today() });
+}
+function balStatus(b) {
+  if (b.noBalance) return `<span class="pill pill-amber">No balance set</span>`;
+  const bad = b.segments.filter(sg => Math.abs(sg.diff) >= 0.01);
+  if (bad.length) { const last = bad[bad.length - 1]; return `<span class="pill pill-red" title="Between ${esc(last.from)} and ${esc(last.to)} the logged lines don't add up to the balance">${money$(last.diff)} unexplained</span>`; }
+  return b.segments.length ? `<span class="pill pill-green">Balanced ✓</span>` : `<span class="pill pill-blue">1 balance on file</span>`;
+}
+function renderBalances() {
+  const scope = balScope || (VIEW === 'wife' || VIEW === 'marvin' ? VIEW : 'family');
+  const all = balAccounts().map(a => ({ a, b: FPEngine.accountBalance(a, data.transactions || []) }));
+  const inScope = o => scope === 'family' || o === scope;
+  const groups = ['marvin', 'wife', 'joint', 'cobae'].filter(inScope).map(o => ({ o, items: all.filter(x => (x.a.owner || 'marvin') === o) })).filter(g => g.items.length);
+  const sum = items => items.reduce((t, x) => t + (x.b.current || 0), 0);
+  const unset = items => items.filter(x => x.b.noBalance).length;
+  const shown = groups.flatMap(g => g.items);
+  const chip = (k, l) => `<span class="chip ${scope === k ? 'on' : ''}" onclick="balScope='${k}';render()">${l}</span>`;
+  const rowsFor = g => g.items.map(({ a, b }) => `<tr style="cursor:pointer;" onclick="openBalance('${a.id}')">
+      <td><strong>${esc(acctLabel(a))}</strong><div class="hint">${ACCOUNT_TYPES[a.type] || a.type}${b.anchor ? ` · balance of ${esc(b.anchor.date)} + ${b.lineCount ? 'logged lines since' : 'no lines since'}` : ` · ${b.lineCount} logged line${b.lineCount !== 1 ? 's' : ''}, net ${money$(b.net)}`}</div></td>
+      <td>${balStatus(b)}</td>
+      <td class="tabnum" style="text-align:right;font-weight:600;">${b.current == null ? '—' : money$(b.current)}</td>
+      <td style="width:1%;white-space:nowrap;"><button class="btn-secondary" style="font-size:11px;padding:3px 9px;" onclick="event.stopPropagation();openBalance('${a.id}')">Open</button></td></tr>`).join('');
+  const tables = groups.map(g => `<div class="section-header" style="margin-top:18px;"><h2>${profileLabel(g.o)}</h2><div class="tabnum" style="font-weight:700;color:#F0F4F8;">${money$(sum(g.items))}${unset(g.items) ? `<span class="hint" style="font-weight:400;"> · ${unset(g.items)} without a balance</span>` : ''}</div></div>
+      <div class="table-wrap" style="overflow-x:auto;"><table class="data-table"><tbody>${rowsFor(g)}</tbody></table></div>`).join('');
+  return `
+    <div class="chip-row" style="margin-bottom:14px;">${chip('family', 'Family')}${chip('marvin', 'Marvin')}${chip('wife', 'Caroline')}</div>
+    <div class="card-tile" style="margin-bottom:6px;">
+      <div class="hint">${scope === 'family' ? 'Family — all accounts &amp; wallets' : profileLabel(scope) + ' — accounts &amp; wallets'}</div>
+      <div style="font-size:30px;font-weight:700;color:#00C896;" class="tabnum">${money$(sum(shown))}</div>
+      <div class="hint">${groups.map(g => `${profileLabel(g.o)} ${money$(sum(g.items))}`).join(' · ')}${unset(shown) ? ` · <span class="text-amber">${unset(shown)} account${unset(shown) !== 1 ? 's' : ''} not counted yet (no balance set)</span>` : ''}</div>
+    </div>
+    <p class="hint" style="margin:8px 0 0;line-height:1.6;">A balance is the last known figure (a statement's closing balance, or one you type) plus every logged line after it. Tap an account to set a balance, see whether the lines add up between two balances, and find what's missing.${scope !== 'family' ? ' Joint accounts show under Family.' : ''}</p>
+    ${tables || `<div class="empty" style="margin-top:18px;">No bank accounts or wallets yet. Add them in Settings → Your accounts.</div>`}`;
+}
+function openBalance(id) {
+  const a = accountById(id); if (!a) return;
+  const b = FPEngine.accountBalance(a, data.transactions || []);
+  const inp = 'background:#0D1B2A;border:1px solid #2A4A6B;color:#F0F4F8;border-radius:7px;padding:8px 10px;font-size:13px;';
+  const segs = b.segments.slice().reverse().map(sg => `<tr><td class="tabnum" style="white-space:nowrap;">${esc(sg.from)} → ${esc(sg.to)}</td><td class="tabnum" style="text-align:right;">${money$(sg.opening)}</td><td class="tabnum" style="text-align:right;">${money$(sg.movement)}<div class="hint">${sg.lines} lines</div></td><td class="tabnum" style="text-align:right;">${money$(sg.actual)}</td>
+      <td>${Math.abs(sg.diff) < 0.01 ? '<span class="pill pill-green">✓</span>' : `<span class="pill pill-red">${money$(sg.diff)}</span>`}</td></tr>`).join('');
+  const checks = b.checks.slice().reverse().map(c => `<tr><td class="tabnum">${esc(c.date)}</td><td class="tabnum" style="text-align:right;">${money$(c.balance)}</td><td class="hint">${c.source === 'statement' ? 'statement' : 'typed in'}</td><td><button class="btn-danger" onclick="delBalanceCheck('${a.id}','${esc(c.date)}')">✕</button></td></tr>`).join('');
+  const lines = b.rows.slice(0, 40).map(r => `<tr><td class="tabnum" style="white-space:nowrap;">${esc(r.t.date.slice(5))}</td><td>${esc(r.t.merchant || r.t.rawDescription || '')}<div class="hint">${KIND_LABELS[FPEngine.kindOf(r.t)] || FPEngine.kindOf(r.t)}</div></td>
+      <td class="tabnum ${r.delta >= 0 ? 'text-green' : ''}" style="text-align:right;">${r.delta >= 0 ? '+' : ''}${fmtAmt(r.delta)}</td><td class="tabnum" style="text-align:right;color:#8AABBF;">${r.balance == null ? '' : money$(r.balance)}</td></tr>`).join('');
+  showModal(`<h3>${esc(acctLabel(a))}</h3>
+    <div style="display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;margin:-6px 0 12px;"><span class="tabnum" style="font-size:28px;font-weight:700;color:#00C896;">${b.current == null ? '—' : money$(b.current)}</span>${balStatus(b)}</div>
+    ${b.anchor ? `<div class="hint" style="margin-bottom:10px;">From ${money$(b.anchor.balance)} on ${esc(b.anchor.date)}, ${b.movement >= 0 ? '+' : '−'}$${fmtAmt(Math.abs(b.movement))} logged since.</div>` : `<div class="hint" style="margin-bottom:10px;">Type in what this account holds on a date (from the app or a statement) to start balancing it.</div>`}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:6px;">
+      <div class="form-row" style="margin:0;"><label>Balance on</label><input id="bc-date" type="date" value="${today()}" style="${inp}"/></div>
+      <div class="form-row" style="margin:0;"><label>Amount (S$)</label><input id="bc-amt" type="number" inputmode="decimal" step="0.01" placeholder="0.00" style="${inp}width:130px;"/></div>
+      <button class="btn-primary" onclick="addBalanceCheck('${a.id}')">Save balance</button></div>
+    ${segs ? `<div style="font-size:11.5px;font-weight:600;color:#4A6580;letter-spacing:.06em;margin:14px 0 4px;">DO THE LINES ADD UP BETWEEN BALANCES?</div><div class="table-wrap" style="max-height:20vh;overflow:auto;"><table class="data-table mini-table"><thead><tr><th>Period</th><th style="text-align:right;">Start</th><th style="text-align:right;">Logged</th><th style="text-align:right;">Actual end</th><th></th></tr></thead><tbody>${segs}</tbody></table></div><div class="hint">A red figure is money that moved but isn't logged here (or is logged twice).</div>` : ''}
+    ${checks ? `<div style="font-size:11.5px;font-weight:600;color:#4A6580;letter-spacing:.06em;margin:14px 0 4px;">BALANCES ON FILE</div><div class="table-wrap" style="max-height:16vh;overflow:auto;"><table class="data-table mini-table"><tbody>${checks}</tbody></table></div>` : ''}
+    ${lines ? `<div style="font-size:11.5px;font-weight:600;color:#4A6580;letter-spacing:.06em;margin:14px 0 4px;">LATEST LINES${b.rows.length > 40 ? ' (40 of ' + b.rows.length + ')' : ''}</div><div class="table-wrap" style="max-height:30vh;overflow:auto;"><table class="data-table mini-table"><tbody>${lines}</tbody></table></div>` : ''}
+    <div class="modal-footer"><button class="btn-secondary" onclick="closeModal()">Close</button></div>`);
+  document.querySelector('#modal-container .modal').classList.add('wide');
+}
+function addBalanceCheck(id) {
+  const d = document.getElementById('bc-date').value, v = document.getElementById('bc-amt').value;
+  if (!d || v === '' || !Number.isFinite(Number(v))) { toast('Enter a date and an amount'); return; }
+  recordBalanceCheck(id, d, v, 'manual'); saveToDrive(); render(); openBalance(id);
+}
+function delBalanceCheck(id, date) {
+  const a = accountById(id); if (!a) return;
+  a.balanceChecks = (a.balanceChecks || []).filter(c => c.date !== date); saveToDrive(); render(); openBalance(id);
+}
 
 /* =====================================================================
    ADVICE & GHOST TRACKER

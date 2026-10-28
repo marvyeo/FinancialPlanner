@@ -1769,8 +1769,35 @@
       && ['marvin', 'wife'].includes(payerOf(u.t)));
     return { rows: res, extra, last };
   }
+
+  /**
+   * Balance of one bank / wallet account: the latest balance you know (a statement closing balance or one you typed in)
+   * plus what the ledger moved after that date. Lines dated on the check date are assumed to be inside it.
+   * Between two known balances, `segments` says whether the logged lines explain the change (diff 0 = balanced).
+   */
+  function accountBalance(acct, ledger, asOf) {
+    const checks = ((acct && acct.balanceChecks) || []).filter((c) => c && c.date && Number.isFinite(Number(c.balance)))
+      .map((c) => ({ ...c, balance: r2(Number(c.balance)) })).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    const signed = (t) => (t.direction === 'in' || kindOf(t) === 'refund' ? 1 : -1) * num(t.amount);
+    const txns = (ledger || []).filter((t) => t.accountId === acct.id && t.date && (!asOf || t.date <= asOf))
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    const usable = checks.filter((c) => !asOf || c.date <= asOf);
+    const anchor = usable.length ? usable[usable.length - 1] : null;
+    const after = (from, to) => r2(txns.filter((t) => (!from || t.date > from) && (!to || t.date <= to)).reduce((x, t) => x + signed(t), 0));
+    const movement = after(anchor ? anchor.date : null, null);
+    const current = anchor ? r2(anchor.balance + movement) : null;
+    const segments = [];
+    for (let i = 1; i < usable.length; i++) {
+      const a = usable[i - 1], b = usable[i], mv = after(a.date, b.date), expected = r2(a.balance + mv);
+      segments.push({ from: a.date, to: b.date, opening: a.balance, movement: mv, expected, actual: b.balance, diff: r2(b.balance - expected), lines: txns.filter((t) => t.date > a.date && t.date <= b.date).length });
+    }
+    // running balance after each line, worked back from the current balance (newest first)
+    let run = current;
+    const rows = txns.slice().reverse().map((t) => { const row = { t, delta: r2(signed(t)), balance: run }; if (run != null) run = r2(run - signed(t)); return row; });
+    return { anchor, checks: usable, movement, current, noBalance: !anchor, lineCount: txns.length, segments, rows, net: after(null, null) };
+  }
   const api = {
-    ENGINE_VERSION, SCENARIOS, PROFILE_KEYS,
+    ENGINE_VERSION, accountBalance, SCENARIOS, PROFILE_KEYS,
     cycleFor, resolveDef, autoLink, matchDefByName, legacyToDef, optionValue,
     matchWhen, isExcluded, allocate, cycleState, cardStatus, candidateCards,
     recommend, analyseLedger, ledgerEarnings, strategy, bestProgramme, diffRules, validateRules,
