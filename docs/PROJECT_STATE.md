@@ -3,6 +3,14 @@
 > **Next chat name: `Financial Planner ver 4`**
 > Claude: your FIRST reply in a new chat must start with "Rename this chat to: **Financial Planner ver 4**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
 
+> ## ▶ RESUME HERE (paused 2026-10-29, after checkpoint 2 of 4, `main` @ pushed)
+> **Done:** items 1–4 (form layout, unticked rename boxes, owner-labelled pickers, Balances page + statement balance capture).
+> **Next, in order:**
+> 1. **Item 5 — map bank-account transactions in.** Needs Marvin's data: either the `fp-statements` JSON files for the bank/wallet accounts (both people), or a look at why existing imports left them unmapped (check `data.transactions` with `accountId` null/missing for bank statements; `guessSourceFor` matching; `data.accounts[].patterns`). Plan: confirm every bank/wallet account exists with owner + patterns → re-import statements via Month-end check (opening/closing balances now saved) → `pairTransfers` for A→B→C moves → Balances page should show "Balanced ✓" from 1 Nov 2026; earlier months best-effort (unidentified lines stay "Unknown merchant" in the review list).
+> 2. **Item 6 — merchant-name alignment tool.** Cluster near-identical `merchant` strings (normalise case/punctuation/store numbers, token similarity), show clusters in Merchants page with counts + categories, one tap to pick the canonical name → rewrite `merchant` on all lines (opt-in, never automatic), optional `merchantMappings` entry (also opt-in).
+> **First command:** `git pull && node tests/engine.test.js` (61 passing).
+> **Restart prompt:** "Continue Financial Planner ver 4 from RESUME HERE".
+
 **State version:** 2 (Session Rules added 2026-10-22 by the conductor chat "Life Plan Roadmap ver 3")
 **Where this lives:** `PROJECT_STATE.md` in the repo. New chats `git pull` and read it; no uploads needed.
 *Personal/household data is kept outside this public repo.*
