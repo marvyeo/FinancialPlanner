@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "rulesVersion": "2026-10-19",
-  "generatedAt": "2026-10-19T08:58:48+08:00",
+  "rulesVersion": "2026-11-02",
+  "generatedAt": "2026-11-02T09:00:00+08:00",
   "generatedBy": "Weekly scheduled refresh",
   "notes": "mpd = miles per S$ for the card's best airline programme, including the base rate. pct = total cashback % including base. Caps are in S$ of spend unless the cap group says cashback. Items with verify:true need a T&C check.",
   "sharedLists": {
@@ -1120,9 +1120,10 @@
       },
       "sources": [
         "https://milelion.com/2026/10/04/get-16000-bonus-miles-with-a-new-citi-rewards-card/",
-        "https://mainlymiles.com/2026/08/08/last-two-months-for-the-citi-rewards-visa-card/"
+        "https://mainlymiles.com/2026/08/08/last-two-months-for-the-citi-rewards-visa-card/",
+        "https://mainlymiles.com/2026/10/25/still-alive-my-citi-rewards-visa-card/"
       ],
-      "notes": "Citi Rewards Visa is discontinued on 15 Oct 2026; only the Mastercard remains."
+      "notes": "Citi Rewards Visa is being retired in batches: notified cardholders were moved to the Mastercard on 15 Oct 2026, but some unnotified Visas still earn 4 mpd (separate S$1,000 cap; end date unconfirmed, expected early 2027 at earliest). Once the Visa is gone the cap is S$1,000 on the Mastercard alone."
     },
     {
       "id": "hsbc-revolution",
@@ -1502,10 +1503,6 @@
     }
   ],
   "changeLog": [
-    "AMEX Platinum Credit: 10Xcelerator partner list now filled in from AMEX's official pages (41 merchants); partner participation runs to 31 Dec 2026. Verify flag removed. (americanexpress.com/en-sg, checked 19 Oct 2026)",
-    "UOB Preferred Visa: online 4 mpd MCC list replaced with UOB's official 54-code list. Adds e.g. 4816, 5262, 5441, 5462, 5912, 5942–5949, 5964–5970, 7278, 7841, 7991, 7998, 7999, 8012, 9751; drops 5722 and 7929 (not eligible). Verify flag removed. (UOB T&C v3.0, 10 Mar 2026; Mainly Miles, 22 Jul 2026)",
-    "UOB Preferred Visa: confirmed SimplyGo shares the S$600 mobile-contactless cap. No rate change; verify flag removed. (UOB T&C v3.0)",
-    "CIMB Visa Infinite: local cashback 0% → 1% unlimited (was a placeholder); FCY/travel below the S$2,000 minimum now earns 1% instead of 0%. Verify flag removed. (CIMB VI T&C)",
-    "CIMB Visa Signature: confirmed the S$800 minimum is total card spend, which the engine already used. Note updated, no rate change. (CIMB T&C)"
+    "Citi Rewards: Visa is being retired in batches, not all on 15 Oct. Notified cardholders were moved to the Mastercard (S$1,000/month 4 mpd cap); unnotified Visas still work and earn 4 mpd with their own S$1,000 cap, expected to last until early 2027 at least (end date unconfirmed). Note updated, no rate change. (Mainly Miles, 25 Oct 2026)"
   ]
 }

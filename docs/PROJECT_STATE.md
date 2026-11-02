@@ -1,7 +1,7 @@
 # Financial Planner — Project State
 
-> **Next chat name: `Financial Planner ver 4`**
-> Claude: your FIRST reply in a new chat must start with "Rename this chat to: **Financial Planner ver 4**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
+> **Next chat name: `Financial Planner ver 5`**
+> Claude: your FIRST reply in a new chat must start with "Rename this chat to: **Financial Planner ver 5**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
 
 > ## ▶ RESUME HERE (paused 2026-10-29, after checkpoint 2 of 4, `main` @ pushed)
 > **Done:** items 1–4 (form layout, unticked rename boxes, owner-labelled pickers, Balances page + statement balance capture).
@@ -85,3 +85,4 @@ recommend / analyseLedger / ledgerEarnings (card engine, caps, conditions, miles
 - 2026-10-23 (conductor, Sprints 13.4 + 13.3 + 13.2): shared `lp-sso` sign-in, no token revoke on sign out, iOS redirect fallback and hint, "← Life Plan" link, safe areas, theme tokens; `sw.js` cache `financialplanner-v3`. Not tested live.
 - 2026-10-29 (ver 3, checkpoint 1 of 4): add-expense form: merchant on its own row, amount + date side by side (no scrolling), recent-merchant chips removed from all spend forms. Rename (pen) dialog: 'remember' and 'update previous' now start unticked. Card/account pickers (Spending filter, Import statement, quick-add) grouped by owner via `sourceGroupsHtml` + `cardLabel` ("Marvin — cards", "Caroline — accounts & wallets"…); Spending source column shows owner. Remaining this session: (2) balances views, (3) map bank-statement lines into ledger from Nov, (4) merchant-name alignment tool.
 - 2026-10-29 (ver 3, checkpoint 2 of 4): **Balances page** (sidebar). Per account: latest known balance + logged lines since; per person and Family totals (chips). Tap an account → set a balance, see whether lines add up between two balances (red = unlogged money), balances on file, running balance per line. Data: `account.balanceChecks[{date,balance,source:'statement'|'manual'}]`. Statement imports (Month-end check → Prepare with Claude, accounts only) now save opening (day before periodFrom) and closing balances automatically. Not tested live; `mergeData` treats `balanceChecks` as part of the account object (last writer wins on a conflict).
+- 2026-11-02 (weekly rules refresh, ver 4 bump): `rules.json` rulesVersion 2026-11-02. Citi Rewards note corrected: Visa is retired in batches (unnotified cards still earn 4 mpd, own S$1,000 cap, end date unconfirmed). No rate changes; other cards checked, nothing new confirmed. Next chat name bumped to ver 5.
