@@ -2004,6 +2004,7 @@ function renderSettings() {
     <div class="section-header"><h2>Data management</h2></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
       <button class="btn-secondary" onclick="exportData()">↓ Export JSON</button>
+      <button class="btn-secondary" onclick="importLedgerPatch()">⇪ Import ledger patch</button>
       <button class="btn-secondary" onclick="triggerImport()">↑ Import JSON</button>
       <button class="btn-secondary" onclick="triggerMerchantsUpload()">↑ Upload merchants.json to Drive</button>
       <button class="btn-secondary" onclick="document.getElementById('file-txns').click()">↑ Import transactions file</button>
@@ -2044,6 +2045,47 @@ function deleteValuation(partner) {
   delete data.settings.mile_valuations[partner]; render();
 }
 
+/** Ledger cleanup from Claude: { format:'fp-ledger-patch', version:1, ops:[delete|update|add] }. Shows a dry run first; each op only applies if the entry still matches its `expect`. */
+let PENDING_PATCH = null;
+function importLedgerPatch() {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';
+  inp.onchange = async () => {
+    try {
+      const j = JSON.parse(await inp.files[0].text());
+      const pv = FPEngine.previewLedgerPatch(data.transactions || [], j);
+      if (pv.error) { alert(pv.error); return; }
+      PENDING_PATCH = j;
+      const a = pv.applied;
+      const skipRows = pv.skipped.slice(0, 15).map(x => `<li>#${x.index + 1} ${esc(x.op)} ${esc(x.id || '')}: ${esc(x.reason)}</li>`).join('');
+      showModal(`<h3 style="margin-top:0;">Import ledger patch</h3>
+        <div class="hint">${esc(j.description || '')}</div>
+        <div style="margin:12px 0;line-height:1.7;">
+          <div>Will delete: <strong>${a.delete}</strong></div>
+          <div>Will update: <strong>${a.update}</strong></div>
+          <div>Will add: <strong>${a.add}</strong></div>
+          <div>Skipped (entry changed or missing): <strong>${pv.skipped.length}</strong></div>
+          ${pv.unlinked.length ? `<div>Transfer links cleared: <strong>${pv.unlinked.length}</strong></div>` : ''}
+        </div>
+        ${skipRows ? `<ul style="font-size:12px;color:#94A3B8;margin:0 0 12px 18px;">${skipRows}${pv.skipped.length > 15 ? '<li>…</li>' : ''}</ul>` : ''}
+        <div class="hint" style="margin-bottom:12px;">Nothing changes until you tap Apply. Tip: export a backup first (Export JSON).</div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;">
+          <button class="btn-secondary" onclick="PENDING_PATCH=null;closeModal()">Cancel</button>
+          <button class="btn-primary" onclick="applyLedgerPatchNow()" ${a.delete + a.update + a.add ? '' : 'disabled'}>Apply</button>
+        </div>`);
+    } catch (e) { alert('Could not read that file: ' + e.message); }
+  };
+  inp.click();
+}
+function applyLedgerPatchNow() {
+  if (!PENDING_PATCH) return;
+  const r = FPEngine.applyLedgerPatch(data.transactions || [], PENDING_PATCH);
+  PENDING_PATCH = null;
+  if (r.error) { alert(r.error); return; }
+  data.transactions = r.ledger;
+  closeModal();
+  saveToDrive(); render();
+  toast(`Ledger patch: ${r.applied.delete} deleted, ${r.applied.update} updated, ${r.applied.add} added` + (r.skipped.length ? `, ${r.skipped.length} skipped` : ''), 7000);
+}
 function exportData() {
   computeUpcoming();
   const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});

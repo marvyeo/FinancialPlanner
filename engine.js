@@ -1237,6 +1237,55 @@
     return walk(base, local, remote);
   }
 
+  /* ---------------- ledger patch (fp-ledger-patch) ---------------- */
+  const PATCH_SET_FIELDS = ['merchant', 'category', 'forProfile', 'kind', 'note', 'transferPair', 'accountId', 'cardId', 'cardName', 'date', 'amount'];
+  const PATCH_ADD_REQUIRED = ['id', 'date', 'amount', 'direction', 'merchant'];
+  function patchExpectOk(t, expect) {
+    return Object.keys(expect || {}).every((k) => (k === 'amount' ? Math.abs(Number(t.amount) - Number(expect.amount)) < 0.005 : t[k] === expect[k]));
+  }
+  /**
+   * Dry-run or apply a ledger patch: { format:'fp-ledger-patch', version:1, ops:[delete|update|add] }.
+   * An op applies only if the entry exists and every `expect` field matches; otherwise it is skipped with a reason.
+   * `set` is whitelisted. After all ops, a transferPair pointing at a missing entry is cleared (and reported).
+   * Never mutates `ledger`. Returns { ledger, applied:{delete,update,add}, skipped:[{index,op,id,reason}], unlinked:[id], error? }.
+   */
+  function runLedgerPatch(ledger, patch) {
+    const res = { ledger: ledger, applied: { delete: 0, update: 0, add: 0 }, skipped: [], unlinked: [] };
+    if (!patch || patch.format !== 'fp-ledger-patch' || patch.version !== 1 || !Array.isArray(patch.ops)) { res.error = 'Not a fp-ledger-patch (version 1) file.'; return res; }
+    const list = clone(ledger || []);
+    const byId = new Map(list.map((t) => [t.id, t]));
+    const removed = new Set();
+    const touched = new Set();
+    patch.ops.forEach((op, index) => {
+      const skip = (reason) => res.skipped.push({ index, op: op && op.op, id: op && (op.id || (op.tx && op.tx.id)), reason });
+      if (!op || typeof op !== 'object') return skip('bad op');
+      if (op.op === 'add') {
+        const tx = op.tx;
+        if (!tx || PATCH_ADD_REQUIRED.some((k) => tx[k] === undefined || tx[k] === '')) return skip('missing required fields');
+        if (byId.has(tx.id)) return skip('id already exists');
+        const c = clone(tx); list.push(c); byId.set(c.id, c); res.applied.add++; touched.add(c.id); return;
+      }
+      if (op.op !== 'delete' && op.op !== 'update') return skip('unknown op');
+      const t = byId.get(op.id);
+      if (!t) return skip('entry not found');
+      if (!op.expect || !Object.keys(op.expect).length) return skip('no expect guard');
+      if (!patchExpectOk(t, op.expect)) return skip('entry changed since the patch was made');
+      if (op.op === 'delete') { removed.add(t.id); byId.delete(t.id); list.splice(list.indexOf(t), 1); res.applied.delete++; return; }
+      const set = op.set || {};
+      const bad = Object.keys(set).filter((k) => !PATCH_SET_FIELDS.includes(k));
+      if (!Object.keys(set).length || bad.length) return skip(bad.length ? 'field not allowed: ' + bad.join(', ') : 'nothing to set');
+      Object.keys(set).forEach((k) => { t[k] = set[k]; });
+      t.edited = true; res.applied.update++; touched.add(t.id);
+    });
+    list.forEach((t) => {
+      if (t.transferPair && !byId.has(t.transferPair)) { delete t.transferPair; res.unlinked.push(t.id); }
+    });
+    res.ledger = list;
+    return res;
+  }
+  const previewLedgerPatch = (ledger, patch) => { const r = runLedgerPatch(ledger, patch); return { applied: r.applied, skipped: r.skipped, unlinked: r.unlinked, error: r.error }; };
+  const applyLedgerPatch = (ledger, patch) => runLedgerPatch(ledger, patch);
+
   /* ---------------- advice & ghost tracking ---------------- */
   /** Price on or before a date from a series [{date, price}] (sorted or not). */
   function priceAt(series, date) {
@@ -1805,7 +1854,7 @@
     splitsOf, yourShare, openSplits, personMatches, matchRepayments, owedSummary, migrateContra,
     parseDigiPortfolio, classifyHolding, mergeInvestmentStatement, mergeInvestmentData, investFlows, investmentSummary, investmentInsights, xirr,
     categorise, categoryForMcc, parseStatementText, parseCSV, guessCsvMapping, csvToRows, txnFingerprint,
-    reconcileStatement, mergeData, priceAt, ghostResult, adviceSummary, matchSettledJoint, mappingPattern,
+    reconcileStatement, mergeData, previewLedgerPatch, applyLedgerPatch, priceAt, ghostResult, adviceSummary, matchSettledJoint, mappingPattern,
     util: { norm, mccIn, expandList, r2, ymd, parseYmd, daysUntil },
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

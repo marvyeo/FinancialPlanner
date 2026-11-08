@@ -557,6 +557,63 @@ test('mergeData keeps both people\'s edits', () => {
   assert.deepStrictEqual(m.transactions.map((t) => t.id + ':' + t.amount).sort(), ['1:10', '3:3', '4:4']);
   assert.deepStrictEqual(m.settings, { a: 2, b: 5 });
 });
+const PL = () => [
+  { id: 'a', date: '2026-10-05', amount: 10, merchant: 'Cafe X', category: 'Dining', transferPair: 'b' },
+  { id: 'b', date: '2026-10-05', amount: 10, merchant: 'Cafe X dup', category: 'Other', transferPair: 'a' },
+  { id: 'c', date: '2026-10-06', amount: 50, merchant: 'Card bill', kind: 'transfer' },
+  { id: 'd', date: '2026-10-07', amount: 5, merchant: 'Old name' },
+];
+const PATCH = (ops) => ({ format: 'fp-ledger-patch', version: 1, ops });
+test('ledger patch: delete, update, add apply when expect matches; input not mutated', () => {
+  const L = PL(), snap = JSON.stringify(L);
+  const p = PATCH([
+    { op: 'delete', id: 'b', expect: { date: '2026-10-05', amount: 10, merchant: 'Cafe X dup' } },
+    { op: 'update', id: 'd', expect: { date: '2026-10-07', amount: 5, merchant: 'Old name' }, set: { merchant: 'New name', category: 'Dining' } },
+    { op: 'add', tx: { id: 'n1', date: '2026-10-24', amount: 7, direction: 'in', merchant: 'Transfer from X' } },
+  ]);
+  const pv = E.previewLedgerPatch(L, p);
+  assert.deepStrictEqual(pv.applied, { delete: 1, update: 1, add: 1 });
+  const r = E.applyLedgerPatch(L, p);
+  assert.strictEqual(JSON.stringify(L), snap);
+  assert.deepStrictEqual(r.ledger.map((t) => t.id).sort(), ['a', 'c', 'd', 'n1']);
+  assert.strictEqual(r.ledger.find((t) => t.id === 'd').merchant, 'New name');
+});
+test('ledger patch: skips when entry changed, missing, unguarded, bad field or duplicate id', () => {
+  const r = E.applyLedgerPatch(PL(), PATCH([
+    { op: 'delete', id: 'b', expect: { amount: 11 } },
+    { op: 'delete', id: 'zzz', expect: { amount: 1 } },
+    { op: 'delete', id: 'c' },
+    { op: 'update', id: 'd', expect: { amount: 5 }, set: { id: 'hack' } },
+    { op: 'add', tx: { id: 'a', date: '2026-10-01', amount: 1, direction: 'in', merchant: 'x' } },
+    { op: 'add', tx: { id: 'q', amount: 1 } },
+  ]));
+  assert.deepStrictEqual(r.applied, { delete: 0, update: 0, add: 0 });
+  assert.strictEqual(r.skipped.length, 6);
+  assert.strictEqual(r.ledger.length, 4);
+});
+test('ledger patch: deleting an entry clears a dangling transferPair; re-pointed pairs survive', () => {
+  const r = E.applyLedgerPatch(PL(), PATCH([
+    { op: 'delete', id: 'b', expect: { amount: 10 } },
+    { op: 'update', id: 'c', expect: { amount: 50 }, set: { transferPair: 'n1' } },
+    { op: 'add', tx: { id: 'n1', date: '2026-10-24', amount: 50, direction: 'in', merchant: 'In', transferPair: 'c' } },
+  ]));
+  assert.deepStrictEqual(r.unlinked, ['a']);
+  assert.strictEqual(r.ledger.find((t) => t.id === 'a').transferPair, undefined);
+  assert.strictEqual(r.ledger.find((t) => t.id === 'c').transferPair, 'n1');
+});
+test('ledger patch: wrong format rejected', () => {
+  assert.ok(E.previewLedgerPatch(PL(), { format: 'other', ops: [] }).error);
+});
+test('mergeData keeps patch deletions when the other phone still has the old entries', () => {
+  const base = { transactions: PL() };
+  const local = { transactions: E.applyLedgerPatch(PL(), PATCH([{ op: 'delete', id: 'b', expect: { amount: 10 } }])).ledger };
+  const remote = { transactions: [...PL(), { id: 'e', date: '2026-10-09', amount: 3, merchant: 'Added on phone 2' }] };
+  const ids = (m) => m.transactions.map((t) => t.id).sort();
+  assert.deepStrictEqual(ids(E.mergeData(base, local, remote)), ['a', 'c', 'd', 'e']);
+  // phone 2 edited the deleted entry: that edit wins, nothing silently lost
+  const remote2 = { transactions: PL().map((t) => (t.id === 'b' ? { ...t, note: 'edited' } : t)) };
+  assert.ok(ids(E.mergeData(base, local, remote2)).includes('b'));
+});
 test('ghost tracking: position, rate and switch', () => {
   const prices = { VWRA: [{ date: '2026-10-16', price: 100 }, { date: '2027-01-16', price: 110 }], USDSGD: [{ date: '2026-10-16', price: 1.3 }, { date: '2027-01-16', price: 1.3 }], ES3: [{ date: '2026-10-16', price: 4 }, { date: '2027-01-16', price: 4.2 }] };
   const pos = E.ghostResult({ ghost: { kind: 'position', ticker: 'VWRA', ccy: 'USD', amountSgd: 13000, date: '2026-10-16' } }, prices, '2027-01-16');
