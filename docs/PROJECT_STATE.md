@@ -1,7 +1,17 @@
 # Financial Planner — Project State
 
-> **Next chat name: `Financial Planner ver 5`**
-> Claude: your FIRST reply in a new chat must start with "Rename this chat to: **Financial Planner ver 5**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
+> **Next chat name: `Financial Planner ver 6`**
+> Claude: your FIRST reply in a new chat must start with "Rename this chat to: **Financial Planner ver 6**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
+
+> ## ▶ RESUME HERE (paused 2026-11-08, ver 5, nothing built in the app yet; only this file changed)
+> **Why:** the Oct 2026 statement check found ~81 duplicate ledger entries (created by an in-app statement import) plus naming drift. The app has **no bulk edit/delete for transactions**, saves by full-file overwrite, and the Drive file is read-only for Claude, so fixes must go in through a new in-app import.
+> **Build `fp-ledger-patch` import** (size **M**, Sonnet). Format: `{format:'fp-ledger-patch',version:1,ops:[{op:'delete',id,expect:{date,amount,merchant}} | {op:'update',id,expect:{...},set:{field:value,...}} | {op:'add',tx:{...}}]}`.
+> - **CP1 (engine.js + tests):** pure `previewLedgerPatch(ledger,patch)` and `applyLedgerPatch(ledger,patch)`. An op applies only if the entry exists and `expect` matches; otherwise it is skipped and reported. `set` is whitelisted (merchant, category, forProfile, kind, note, transferPair, accountId, cardId, cardName, date, amount). Deleting an entry must not leave a dangling `transferPair`. Tests use **synthetic** data only. Also test that **`mergeData` keeps deletions** when the other phone still has the old entries (3-way merge with base) and does not resurrect them. Commit + update this file.
+> - **CP2 (index.html):** "Import ledger patch" button (Settings or Month-end check) → dry-run summary (will delete / update / add / skipped) → confirm → apply → one save. Like `importRecurringFile`. Commit + update this file + bump `sw.js` cache.
+> - **CP3:** user attaches the private patch file `fp-ledger-patch-2026-10.json` (150 ops, kept out of this public repo) and the Drive ledger copy; Claude applies it with the new function in Node to confirm results, then the user imports in-app.
+> **Then:** monthly maintenance = user uploads statements → Claude builds `fp-statements`, matches against the ledger (same account/card, same amount, ±4 days, one-to-one; same-date pairs are firm), and returns only exceptions as a patch. Naming conventions to agree in that cleanup: card payments `Card payment (<card>)`; transit `BUS/MRT`; own-account moves `Transfer to/from <account>`.
+> **First command:** `git pull && node tests/engine.test.js` (61 passing).
+> **Restart prompt:** "Continue Financial Planner ver 6 from RESUME HERE" (the patch file and a fresh Drive ledger copy will need re-attaching).
 
 > ## ▶ RESUME HERE (paused 2026-10-29, after checkpoint 2 of 4, `main` @ pushed)
 > **Done:** items 1–4 (form layout, unticked rename boxes, owner-labelled pickers, Balances page + statement balance capture).
@@ -60,6 +70,7 @@ recommend / analyseLedger / ledgerEarnings (card engine, caps, conditions, miles
 - `fp-investments` (Investments → Import): accounts/snapshots/activity; matched by `provider:key`; activity `paidOut:true` for coupons paid to bank.
 - `fp-statements` (Month-end check → Prepare with Claude): `{format:'fp-statements',statements:[{source,owner,institution,product,last4,statementDate,periodFrom,periodTo,openingBalance,closingBalance,lines:[{date,postDate,description,amount,credit,fcy}]}],checks:[{source,ok,note}]}`. The app copies the exact prompt (lists card/account names).
 - `fp-advice` (Advice → Import check-in file): `{format:'fp-advice',recommendations:[{id,date,area:'cash|invest|cards|other',title,detail,steps[],amountSgd,expectedPerYear,priority,ghost}],prices:{TICKER:[{date,price}],USDSGD:[…]}}`. Ghost kinds: `{kind:'rate',amountSgd,fromRate,toRate,date}` · `{kind:'position',ticker,ccy,amountSgd,date,price?,fx?}` · `{kind:'switch',from:{ticker,ccy},to:{ticker,ccy},amountSgd,date}`. Re-importing keeps the user's decisions; prices merge by date.
+- `fp-ledger-patch` (**planned**, see RESUME HERE): `{format,version:1,ops:[delete|update|add]}`, guarded by `expect`, dry-run first. Personal patch files stay out of the repo.
 - `fp-merchant` (Claude MCC lookup reply, pasted into the add-expense form).
 
 ### Household sign-in (built 2026-10-17, setup pending)
@@ -86,3 +97,4 @@ recommend / analyseLedger / ledgerEarnings (card engine, caps, conditions, miles
 - 2026-10-29 (ver 3, checkpoint 1 of 4): add-expense form: merchant on its own row, amount + date side by side (no scrolling), recent-merchant chips removed from all spend forms. Rename (pen) dialog: 'remember' and 'update previous' now start unticked. Card/account pickers (Spending filter, Import statement, quick-add) grouped by owner via `sourceGroupsHtml` + `cardLabel` ("Marvin — cards", "Caroline — accounts & wallets"…); Spending source column shows owner. Remaining this session: (2) balances views, (3) map bank-statement lines into ledger from Nov, (4) merchant-name alignment tool.
 - 2026-10-29 (ver 3, checkpoint 2 of 4): **Balances page** (sidebar). Per account: latest known balance + logged lines since; per person and Family totals (chips). Tap an account → set a balance, see whether lines add up between two balances (red = unlogged money), balances on file, running balance per line. Data: `account.balanceChecks[{date,balance,source:'statement'|'manual'}]`. Statement imports (Month-end check → Prepare with Claude, accounts only) now save opening (day before periodFrom) and closing balances automatically. Not tested live; `mergeData` treats `balanceChecks` as part of the account object (last writer wins on a conflict).
 - 2026-11-02 (weekly rules refresh, ver 4 bump): `rules.json` rulesVersion 2026-11-02. Citi Rewards note corrected: Visa is retired in batches (unnotified cards still earn 4 mpd, own S$1,000 cap, end date unconfirmed). No rate changes; other cards checked, nothing new confirmed. Next chat name bumped to ver 5.
+- 2026-11-08 (ver 5, docs only): Oct 2026 statements checked against the Drive ledger (15 accounts/cards, 185 lines, all statement balances reconcile). Found ~81 duplicate entries from an in-app import and inconsistent names; prepared a private `fp-ledger-patch` (150 ops). Planned the importer in RESUME HERE; no app code changed. Next chat name bumped to ver 6.
