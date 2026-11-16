@@ -1,7 +1,7 @@
 # Financial Planner — Project State
 
-> **Next chat name: `Financial Planner ver 7`**
-> Claude: your FIRST reply in a new chat must start with "Rename this chat to: **Financial Planner ver 7**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
+> **Next chat name: `Financial Planner ver 8`**
+> Claude: your FIRST reply in a new chat must start with "Rename this chat to: **Financial Planner ver 8**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
 
 > ## ▶ RESUME HERE (paused 2026-11-08, ver 6, patch importer built; waiting on the user)
 > **Done:** `previewLedgerPatch` / `applyLedgerPatch` in engine.js (66 tests passing, incl. `mergeData` keeping deletions). Settings → Data management → **⇪ Import ledger patch** (dry-run modal → Apply → one save). `sw.js` cache v4. Checked in Node against the user's real 150-op patch + Drive ledger copy: 81 deleted, 68 updated, 1 added, 0 skipped, no dangling or one-sided transfer pairs (2292 → 2212 entries). Not tested live in a browser.
@@ -55,7 +55,7 @@
 | Tests | `node tests/engine.test.js` → 66 passing |
 | Data | Google Drive `financialplanner-data.json` (+ `merchants.json`), scope `drive.file` |
 | OAuth client | `669494100250-gvromuq72r7j0djmkd4vdbdq5damncj7.apps.googleusercontent.com` (GCP project number 669494100250) |
-| Rules refresh | `RULES_REFRESH.md` weekly → `rules.json` (version 2026-10-14) → in-app banner |
+| Rules refresh | `RULES_REFRESH.md` weekly → `rules.json` (version 2026-11-16) → in-app banner |
 | Commit trailer | `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` + `Claude-Session: <session url>` |
 
 ### Pages
@@ -97,3 +97,4 @@ recommend / analyseLedger / ledgerEarnings (card engine, caps, conditions, miles
 - 2026-11-02 (weekly rules refresh, ver 4 bump): `rules.json` rulesVersion 2026-11-02. Citi Rewards note corrected: Visa is retired in batches (unnotified cards still earn 4 mpd, own S$1,000 cap, end date unconfirmed). No rate changes; other cards checked, nothing new confirmed. Next chat name bumped to ver 5.
 - 2026-11-08 (ver 5, docs only): Oct 2026 statements checked against the Drive ledger (15 accounts/cards, 185 lines, all statement balances reconcile). Found ~81 duplicate entries from an in-app import and inconsistent names; prepared a private `fp-ledger-patch` (150 ops). Planned the importer in RESUME HERE; no app code changed. Next chat name bumped to ver 6.
 - 2026-11-08 (ver 6, checkpoints 1+2): `fp-ledger-patch` importer. engine.js `previewLedgerPatch`/`applyLedgerPatch`; Settings → Import ledger patch (preview, then Apply, one save); +5 tests (66); `sw.js` cache v4. Verified in Node on the real patch (0 skipped). Not tested live. Next chat name bumped to ver 7.
+- 2026-11-16 (weekly rules refresh, ver 7 bump): `rules.json` rulesVersion 2026-11-16. AMEX KrisFlyer Credit Card base earn 1.1 → 1.3 mpd (local + FCY) from 1 Nov 2026; test expectation updated. Other cards checked, nothing else confirmed. Next chat name bumped to ver 8.

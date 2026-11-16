@@ -141,7 +141,7 @@ test('AMEX KrisFlyer: Grab capped at S$200/month', () => {
   const cards = household(); E.autoLink(cards, rules);
   const c = card(cards, 'AMEX KrisFlyer Credit Card');
   const ledger = [txn({ id: 'g', cardId: c.id, amount: 180, mcc: '4121', merchant: 'Grab', channel: 'online', date: '2026-10-05' })];
-  close(earn(cards, c.name, txn({ amount: 50, mcc: '4121', merchant: 'Grab', channel: 'online' }), ledger).miles, 20 * 2 + 30 * 1.1);
+  close(earn(cards, c.name, txn({ amount: 50, mcc: '4121', merchant: 'Grab', channel: 'online' }), ledger).miles, 20 * 2 + 30 * 1.3);
 });
 test('Insurance (6300) is excluded on every card', () => {
   const cards = household(); E.autoLink(cards, rules);
