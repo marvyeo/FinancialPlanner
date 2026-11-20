@@ -1,7 +1,17 @@
 # Financial Planner — Project State
 
-> **Next chat name: `Financial Planner ver 8`**
-> Claude: your FIRST reply in a new chat must start with "Rename this chat to: **Financial Planner ver 8**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
+> **Next chat name: `Financial Planner ver 9`**
+> Claude: your FIRST reply in a new chat must start with "Rename this chat to: **Financial Planner ver 9**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
+
+> ## ▶ RESUME HERE (ver 8, 2026-11-21, roadmap agreed, nothing built yet)
+> **Direction:** retire 2026Planning.xlsx by 2027-01-01. Capture in a Claude chat ("what, how much, where, which card, joint/personal"); "close day" outputs one `fp-entries` import; month-end statements verify them. Marvin and Caroline both capture; all dev goes through Marvin. Card bill payments ARE tracked; own-account transfers are not.
+> **Roadmap (S/M/L):**
+> 1. **M** `fp-entries` importer: stable-ID dedupe, `source:chat`, status `pending`, preview then Apply (reuse the ledger-patch preview pattern). Tests.
+> 2. **M** Statement matching: card + amount + date ±3 days; matched = verified; unmatched statement lines (bus/MRT grouped per day) go to a review queue; chat entries with no line are flagged.
+> 3. **S** Capture Project instructions for Marvin and Caroline + ~150-merchant alias table (from xlsx).
+> 4. **M** Caroline onboarding: PICKER_API_KEY, her cards and accounts (see Open app items), balanceChecks merge fix.
+> 5. **L (separate chat)** One-time 2026 xlsx history migration (1,611 rows; Contra to owed; scope prefix to scope + category); Dec parallel run; cut over 2027-01-01.
+> **First command:** `git pull && node tests/engine.test.js` (66 passing).
 
 > ## ▶ RESUME HERE (paused 2026-11-08, ver 6, patch importer built; waiting on the user)
 > **Done:** `previewLedgerPatch` / `applyLedgerPatch` in engine.js (66 tests passing, incl. `mergeData` keeping deletions). Settings → Data management → **⇪ Import ledger patch** (dry-run modal → Apply → one save). `sw.js` cache v4. Checked in Node against the user's real 150-op patch + Drive ledger copy: 81 deleted, 68 updated, 1 added, 0 skipped, no dangling or one-sided transfer pairs (2292 → 2212 entries). Not tested live in a browser.
@@ -98,3 +108,4 @@ recommend / analyseLedger / ledgerEarnings (card engine, caps, conditions, miles
 - 2026-11-08 (ver 5, docs only): Oct 2026 statements checked against the Drive ledger (15 accounts/cards, 185 lines, all statement balances reconcile). Found ~81 duplicate entries from an in-app import and inconsistent names; prepared a private `fp-ledger-patch` (150 ops). Planned the importer in RESUME HERE; no app code changed. Next chat name bumped to ver 6.
 - 2026-11-08 (ver 6, checkpoints 1+2): `fp-ledger-patch` importer. engine.js `previewLedgerPatch`/`applyLedgerPatch`; Settings → Import ledger patch (preview, then Apply, one save); +5 tests (66); `sw.js` cache v4. Verified in Node on the real patch (0 skipped). Not tested live. Next chat name bumped to ver 7.
 - 2026-11-16 (weekly rules refresh, ver 7 bump): `rules.json` rulesVersion 2026-11-16. AMEX KrisFlyer Credit Card base earn 1.1 → 1.3 mpd (local + FCY) from 1 Nov 2026; test expectation updated. Other cards checked, nothing else confirmed. Next chat name bumped to ver 8.
+- 2026-11-21 (ver 8, docs only): roadmap for retiring the xlsx agreed (RESUME HERE). Next chat name bumped to ver 9.
