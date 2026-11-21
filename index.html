@@ -1956,6 +1956,24 @@ function renderSettings() {
   const rs = data.rulesState || {};
   const hist = (rs.history||[]).slice(-6).reverse().map(h => `<tr><td class="tabnum">${esc(h.version)}</td><td class="tabnum">${esc(h.appliedAt)}</td><td>${h.changes ?? '—'} change${h.changes===1?'':'s'}</td></tr>`).join('');
   return `
+    <div class="section-header" style="margin-top:0;"><h2>Data management</h2></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn-secondary" onclick="exportData()">↓ Export JSON</button>
+      <button class="btn-secondary" onclick="importLedgerPatch()">⇪ Import ledger patch</button>
+      <button class="btn-secondary" onclick="importChatEntries()">⇪ Import chat entries</button>
+      <button class="btn-secondary" onclick="openCaptureSheet()">📋 Chat capture instructions</button>
+      <button class="btn-secondary" onclick="triggerImport()">↑ Import JSON</button>
+      <button class="btn-secondary" onclick="triggerMerchantsUpload()">↑ Upload merchants.json to Drive</button>
+      <button class="btn-secondary" onclick="document.getElementById('file-txns').click()">↑ Import transactions file</button>
+    </div>
+    <input type="file" id="file-txns" accept=".json" style="display:none" onchange="importTransactionsFile(event)">
+    <p style="font-size:12px;color:#4A6580;margin-top:10px;">
+      <strong style="color:#8AABBF;">merchants.json</strong> lives on Google Drive and is loaded at sign-in.
+      Download the latest version from the Merchants page, edit it, then re-upload here.
+      Currently loaded: <strong style="color:#F0F4F8;" id="merchants-db-count">${SG_MERCHANTS.length} merchants</strong>
+    </p>
+    <input type="file" id="file-import" accept=".json" style="display:none" onchange="handleImport(event)">
+    <input type="file" id="file-merchants-upload" accept=".json" style="display:none" onchange="handleMerchantsUpload(event)">
     ${rulesBanner()}
     ${householdSettingsHtml()}
     ${accountsSettingsHtml()}
@@ -2000,25 +2018,7 @@ function renderSettings() {
         <thead><tr><th>Partner</th><th>Value (¢/mile)</th><th></th></tr></thead>
         <tbody>${rows || `<tr><td colspan="3"><div class="empty">No valuations set</div></td></tr>`}</tbody>
       </table>
-    </div>
-    <div class="section-header"><h2>Data management</h2></div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;">
-      <button class="btn-secondary" onclick="exportData()">↓ Export JSON</button>
-      <button class="btn-secondary" onclick="importLedgerPatch()">⇪ Import ledger patch</button>
-      <button class="btn-secondary" onclick="importChatEntries()">⇪ Import chat entries</button>
-      <button class="btn-secondary" onclick="openCaptureSheet()">📋 Chat capture instructions</button>
-      <button class="btn-secondary" onclick="triggerImport()">↑ Import JSON</button>
-      <button class="btn-secondary" onclick="triggerMerchantsUpload()">↑ Upload merchants.json to Drive</button>
-      <button class="btn-secondary" onclick="document.getElementById('file-txns').click()">↑ Import transactions file</button>
-    </div>
-    <input type="file" id="file-txns" accept=".json" style="display:none" onchange="importTransactionsFile(event)">
-    <p style="font-size:12px;color:#4A6580;margin-top:10px;">
-      <strong style="color:#8AABBF;">merchants.json</strong> lives on Google Drive and is loaded at sign-in.
-      Download the latest version from the Merchants page, edit it, then re-upload here.
-      Currently loaded: <strong style="color:#F0F4F8;" id="merchants-db-count">${SG_MERCHANTS.length} merchants</strong>
-    </p>
-    <input type="file" id="file-import" accept=".json" style="display:none" onchange="handleImport(event)">
-    <input type="file" id="file-merchants-upload" accept=".json" style="display:none" onchange="handleMerchantsUpload(event)">`;
+    </div>`;
 }
 
 function openValuationModal(prefill) {
@@ -2092,32 +2092,42 @@ function applyLedgerPatchNow() {
 let PENDING_ENTRIES = null;
 function entriesCtx() { return { cards: data.cards || [], accounts: data.accounts || [], profileAliases: { caroline: 'wife' } }; }
 function importChatEntries() {
+  showModal(`<h3 style="margin-top:0;">Import chat entries</h3>
+    <div class="hint" style="margin-bottom:8px;">Paste the JSON your capture chat gave you (easiest on a phone), or choose a saved file.</div>
+    <textarea id="entries-paste" placeholder='{"format":"fp-entries","version":1,"entries":[...]}' style="width:100%;height:150px;font-size:12px;"></textarea>
+    <div style="display:flex;gap:10px;justify-content:space-between;margin-top:10px;flex-wrap:wrap;">
+      <button class="btn-secondary" onclick="chooseEntriesFile()">Choose file…</button>
+      <div style="display:flex;gap:10px;"><button class="btn-secondary" onclick="closeModal()">Cancel</button><button class="btn-primary" onclick="previewChatEntries(document.getElementById('entries-paste').value)">Preview</button></div>
+    </div>`);
+}
+function chooseEntriesFile() {
   const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';
-  inp.onchange = async () => {
-    try {
-      const j = JSON.parse(await inp.files[0].text());
-      const pv = FPEngine.previewEntries(data.transactions || [], j, entriesCtx());
-      if (pv.error) { alert(pv.error); return; }
-      PENDING_ENTRIES = j;
-      const total = pv.adds.reduce((n, t) => n + t.amount, 0);
-      const rows = pv.adds.slice(0, 12).map(t => `<li>${esc(t.date)} ${esc(t.merchant)} S$${t.amount.toFixed(2)} · ${esc(t.cardName)} · ${esc(t.forProfile)}</li>`).join('');
-      const skipRows = pv.skipped.slice(0, 10).map(x => `<li>#${x.index + 1}: ${esc(x.reason)}</li>`).join('');
-      showModal(`<h3 style="margin-top:0;">Import chat entries</h3>
-        <div style="margin:12px 0;line-height:1.7;">
-          <div>Will add: <strong>${pv.adds.length}</strong> (S$${total.toFixed(2)}), saved as pending</div>
-          <div>Already imported: <strong>${pv.duplicates}</strong></div>
-          <div>Skipped: <strong>${pv.skipped.length}</strong></div>
-        </div>
-        ${rows ? `<ul style="font-size:12px;margin:0 0 12px 18px;">${rows}${pv.adds.length > 12 ? '<li>…</li>' : ''}</ul>` : ''}
-        ${skipRows ? `<ul style="font-size:12px;color:#94A3B8;margin:0 0 12px 18px;">${skipRows}</ul>` : ''}
-        <div class="hint" style="margin-bottom:12px;">Nothing changes until you tap Apply.</div>
-        <div style="display:flex;gap:10px;justify-content:flex-end;">
-          <button class="btn-secondary" onclick="PENDING_ENTRIES=null;closeModal()">Cancel</button>
-          <button class="btn-primary" onclick="applyChatEntriesNow()" ${pv.adds.length ? '' : 'disabled'}>Apply</button>
-        </div>`);
-    } catch (e) { alert('Could not read that file: ' + e.message); }
-  };
+  inp.onchange = async () => { try { previewChatEntries(await inp.files[0].text()); } catch (e) { alert('Could not read that file: ' + e.message); } };
   inp.click();
+}
+function previewChatEntries(text) {
+  try {
+    const j = JSON.parse(String(text || '').replace(/^\s*```(?:json)?/i, '').replace(/```\s*$/, ''));
+    const pv = FPEngine.previewEntries(data.transactions || [], j, entriesCtx());
+    if (pv.error) { alert(pv.error); return; }
+    PENDING_ENTRIES = j;
+    const total = pv.adds.reduce((n, t) => n + t.amount, 0);
+    const rows = pv.adds.slice(0, 12).map(t => `<li>${esc(t.date)} ${esc(t.merchant)} S$${t.amount.toFixed(2)} · ${esc(t.cardName)} · ${esc(t.forProfile)}</li>`).join('');
+    const skipRows = pv.skipped.slice(0, 10).map(x => `<li>#${x.index + 1}: ${esc(x.reason)}</li>`).join('');
+    showModal(`<h3 style="margin-top:0;">Import chat entries</h3>
+      <div style="margin:12px 0;line-height:1.7;">
+        <div>Will add: <strong>${pv.adds.length}</strong> (S$${total.toFixed(2)}), saved as pending</div>
+        <div>Already imported: <strong>${pv.duplicates}</strong></div>
+        <div>Skipped: <strong>${pv.skipped.length}</strong></div>
+      </div>
+      ${rows ? `<ul style="font-size:12px;margin:0 0 12px 18px;">${rows}${pv.adds.length > 12 ? '<li>…</li>' : ''}</ul>` : ''}
+      ${skipRows ? `<ul style="font-size:12px;color:#94A3B8;margin:0 0 12px 18px;">${skipRows}</ul>` : ''}
+      <div class="hint" style="margin-bottom:12px;">Nothing changes until you tap Apply.</div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button class="btn-secondary" onclick="PENDING_ENTRIES=null;closeModal()">Cancel</button>
+        <button class="btn-primary" onclick="applyChatEntriesNow()" ${pv.adds.length ? '' : 'disabled'}>Apply</button>
+      </div>`);
+  } catch (e) { alert('Could not read that: ' + e.message); }
 }
 function applyChatEntriesNow() {
   if (!PENDING_ENTRIES) return;
@@ -2130,14 +2140,16 @@ function applyChatEntriesNow() {
   toast(`Chat entries: ${r.adds.length} added` + (r.duplicates ? `, ${r.duplicates} already there` : '') + (r.skipped.length ? `, ${r.skipped.length} skipped` : ''), 7000);
 }
 /** Project instructions for the daily capture chat, built from THIS household's live cards, accounts and merchants (nothing personal is stored in the repo). */
-function captureInstructions() {
+function captureInstructions(who) {
   const by = p => (data.cards || []).filter(c => !c.archived && (c.profile || 'marvin') === p).map(c => c.name);
   const names = a => a.length ? a.join('; ') : '(none)';
   const accts = (data.accounts || []).map(a => `${a.name} (${a.owner || 'joint'})`);
   const seen = new Set(), ms = [];
   merchantPool().forEach(m => { const k = (m.name || '').toLowerCase(); if (!k || seen.has(k)) return; seen.add(k); ms.push(`${m.name}${m.category ? ' = ' + m.category : ''}`); });
+  const me = who === 'wife' ? 'Caroline' : 'Marvin', meKey = who === 'wife' ? 'caroline' : 'marvin';
+  const whoLine = `\nYou are logging for ${me}. When ${me} says "me" or "mine", forProfile is "${meKey}"; set capturedBy to "${meKey}" on every entry. Joint or shared spend is "joint". Default to ${me}'s own cards unless told otherwise. Start each new chat by asking what was spent, or say "ready".\n`;
   return `You are my daily spending logger for the Financial Planner app. I type what I spent in plain words; you tidy it, ask only for what is missing, and at the end of the day ("close day") output ONE JSON file I import in the app (Settings → Import chat entries).
-
+${whoLine}
 Each entry needs: what (merchant), how much (SGD), where/which card or account, who it was for (marvin, caroline, joint, or cobae), and the date (default today). Ask in ONE short question if a card, amount or who-for is missing. Never invent a card. If I say "joint" or "shared" use joint. Own-account transfers are NOT logged; card bill payments ARE.
 Use the merchant's canonical name from the list below when it matches; add "category" from the list. Keep a running tally and show it when I ask "what do we have so far".
 On "close day" reply with a short summary (count, total, per card) and then ONLY this JSON in a code block:
@@ -2152,12 +2164,15 @@ ACCOUNTS / WALLETS: ${names(accts)}
 MERCHANTS (name = category): ${ms.join('; ')}
 `;
 }
-function openCaptureSheet() {
-  const txt = captureInstructions();
+function openCaptureSheet(who) {
+  who = who || 'marvin';
+  const txt = captureInstructions(who);
   window.__capTxt = txt;
+  const chip = (k, l) => `<span class="chip ${who === k ? 'on' : ''}" onclick="openCaptureSheet('${k}')">${l}</span>`;
   showModal(`<h3 style="margin-top:0;">Chat capture instructions</h3>
-    <div class="hint" style="margin-bottom:8px;">Paste into a Claude Project's instructions (one for you, one for Caroline). Built from your live cards, accounts and merchants, so tap again after adding new ones.</div>
-    <textarea readonly style="width:100%;height:260px;font-size:11px;" onclick="this.select()">${esc(txt)}</textarea>
+    <div class="chip-row" style="margin-bottom:10px;">${chip('marvin', 'For Marvin')}${chip('wife', 'For Caroline')}</div>
+    <div class="hint" style="margin-bottom:8px;">Paste into a Claude Project's instructions: one Project per person. Built from your live cards, accounts and merchants, so tap again after adding new ones.</div>
+    <textarea readonly style="width:100%;height:240px;font-size:11px;" onclick="this.select()">${esc(txt)}</textarea>
     <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px;"><button class="btn-secondary" onclick="closeModal()">Close</button><button class="btn-primary" onclick="navigator.clipboard.writeText(window.__capTxt).then(()=>toast('Copied'))">Copy</button></div>`);
 }
 function exportData() {
@@ -4360,6 +4375,51 @@ function reconProgress(person, month) {
   const done = items.filter(it => { const st = reconState(month, it.key); return st && (st.status === 'done' || st.status === 'skipped'); }).length;
   return { items: items.length, done };
 }
+/** Which statements have been read, by person and month: green = read, blue = no statement, red = outstanding, grey = not issued yet. */
+function statementCoverageHtml() {
+  const t0 = today(), ym0 = t0.slice(0, 7);
+  const recMonths = Object.keys(data.recon || {}).sort();
+  const first = recMonths[0] || ym0;
+  const months = []; { let [y, m] = first.split('-').map(Number); const [ey, em] = ym0.split('-').map(Number); while (y < ey || (y === ey && m <= em)) { months.push(`${y}-${String(m).padStart(2, '0')}`); m++; if (m > 12) { m = 1; y++; } } }
+  const ml = x => new Date(Date.UTC(+x.slice(0, 4), +x.slice(5) - 1, 1)).toLocaleString('en-SG', { month: 'short', timeZone: 'UTC' });
+  const issued = (it, mo) => { // has this statement been issued by today?
+    const [y, m] = mo.split('-').map(Number);
+    const day = !it.key.startsWith('acct:') ? Math.min(parseInt(it.statementDay) || 28, new Date(Date.UTC(y, m, 0)).getUTCDate()) : new Date(Date.UTC(y, m, 0)).getUTCDate();
+    return `${mo}-${String(day).padStart(2, '0')}` < t0 || (it.kind !== 'card' && false);
+  };
+  const cell = (p, it, mo) => {
+    const st = reconState(mo, it.key);
+    const go = `reconPerson='${p}';reconMonth='${mo}';render()`;
+    const S = (bg, fg, txt, tip) => `<td onclick="${go}" title="${esc(tip)}" style="cursor:pointer;text-align:center;background:${bg};color:${fg};font-size:11px;padding:6px 4px;border:1px solid #0D1B2A;min-width:46px;">${txt}</td>`;
+    if (st && (st.status === 'done' || st.status === 'imported')) return S('#14532D', '#BBF7D0', '✓' + (st.counts ? ' ' + st.counts.lines : ''), `${it.name} ${mo}: read ${st.at || ''}`);
+    if (st && st.status === 'skipped') return S('#1E3A5F', '#93C5FD', '–', `${it.name} ${mo}: no statement / not used`);
+    if (!issued(it, mo)) return S('#1F2937', '#6B7280', '·', `${it.name} ${mo}: not issued yet`);
+    return S('#7F1D1D', '#FECACA', '●', `${it.name} ${mo}: outstanding`);
+  };
+  const panel = p => {
+    const items = reconItems(p);
+    let done = 0, due = 0;
+    months.forEach(mo => items.forEach(it => { if (issued(it, mo)) { due++; const st = reconState(mo, it.key); if (st && ['done', 'imported', 'skipped'].includes(st.status)) done++; } }));
+    const head = months.map(mo => `<th style="font-size:11px;font-weight:600;padding:4px;text-align:center;">${ml(mo)}</th>`).join('');
+    const cards = items.filter(it => !it.key.startsWith('acct:')), accts = items.filter(it => it.key.startsWith('acct:'));
+    const nm = s => `<td style="font-size:12px;padding:4px 8px 4px 0;white-space:nowrap;max-width:190px;overflow:hidden;text-overflow:ellipsis;">${s}</td>`;
+    const acctCell = mo => {   // all bank accounts for the month in one square
+      const go = `reconPerson='${p}';reconMonth='${mo}';render()`;
+      const S = (bg, fg, txt, tip) => `<td onclick="${go}" title="${esc(tip)}" style="cursor:pointer;text-align:center;background:${bg};color:${fg};font-size:11px;padding:6px 4px;border:1px solid #0D1B2A;min-width:46px;">${txt}</td>`;
+      const due = accts.filter(it => issued(it, mo));
+      if (!due.length) return S('#1F2937', '#6B7280', '·', 'not issued yet');
+      const ok = due.filter(it => { const st = reconState(mo, it.key); return st && ['done', 'imported', 'skipped'].includes(st.status); }).length;
+      return ok === due.length ? S('#14532D', '#BBF7D0', '✓', 'all read') : ok ? S('#78350F', '#FDE68A', `${ok}/${due.length}`, 'some read') : S('#7F1D1D', '#FECACA', '●', `${due.length} outstanding`);
+    };
+    const body = cards.map(it => `<tr>${nm(esc(it.name))}${months.map(mo => cell(p, it, mo)).join('')}</tr>`).join('') +
+      (accts.length ? `<tr>${nm(`Bank accounts (${accts.length})`)}${months.map(acctCell).join('')}</tr>` : '');
+    return `<div style="flex:1;min-width:300px;"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;"><strong>${profileLabel(p)}</strong><span class="hint">${done} of ${due} due statements read${due - done ? ` · <span class="text-red">${due - done} outstanding</span>` : ''}</span></div>
+      <div style="overflow-x:auto;"><table style="border-collapse:collapse;width:100%;"><thead><tr><th></th>${head}</tr></thead><tbody>${body || '<tr><td class="hint">No cards or accounts</td></tr>'}</tbody></table></div></div>`;
+  };
+  return `<div class="smart-spend-box" style="margin-bottom:14px;"><div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;margin-bottom:10px;"><strong>Statement coverage</strong><span class="hint">as of ${esc(t0)} · tap a square to open that month</span></div>
+    <div style="display:flex;gap:22px;flex-wrap:wrap;">${panel('marvin')}${panel('wife')}</div>
+    <div class="hint" style="margin-top:10px;"><span style="color:#BBF7D0;">■</span> read &nbsp;<span style="color:#93C5FD;">■</span> no statement &nbsp;<span style="color:#FECACA;">■</span> outstanding &nbsp;<span style="color:#6B7280;">■</span> not issued yet &nbsp;<span style="color:#FDE68A;">■</span> some of the accounts. Cards: statement day. Bank accounts: month-end, shown as one row.</div></div>`;
+}
 let reconViewSeen = null;
 function renderRecon() {
   if ((VIEW === 'marvin' || VIEW === 'wife') && reconViewSeen !== VIEW) { reconPerson = VIEW; reconMonth = null; }
@@ -4387,6 +4447,7 @@ function renderRecon() {
   }).join('');
   const unloggedOpen = (data.transactions || []).filter(t => t.notLogged && !t.reviewed && (t.paidBy === reconPerson || t.forProfile === reconPerson));
   return `
+    ${statementCoverageHtml()}
     <div class="tabs-scroll" style="margin-bottom:14px;"><div class="chip-row">
       ${['marvin','wife'].map(p => `<span class="chip ${reconPerson===p?'on':''}" onclick="setView('${p}')">${profileLabel(p)}</span>`).join('')}
       <select onchange="reconMonth=this.value;render()" style="background:#0D1B2A;border:1px solid #2A4A6B;color:#F0F4F8;border-radius:20px;padding:5px 10px;font-size:12.5px;">${months.map(x => `<option value="${x}" ${x===reconMonth?'selected':''}>${x}</option>`).join('')}</select>
