@@ -679,5 +679,26 @@ test('accountBalance: anchor + movement, segments, running balance', () => {
   const n = E.accountBalance({ id: 'a2' }, L);
   assert.strictEqual(n.noBalance, true); assert.strictEqual(n.current, null);
 });
+
+test('fp-entries: chat entries import as pending, dedupe by stable id, resolve cards', () => {
+  const ctx = { cards: [{ id: 'c1', name: 'UOB Preferred Visa', profile: 'marvin' }], accounts: [{ id: 'a1', name: 'DBS Multiplier', owner: 'wife' }], profileAliases: { caroline: 'wife' } };
+  const f = { format: 'fp-entries', version: 1, entries: [
+    { date: '2026-11-21', amount: 4.5, merchant: 'Kopi C', card: 'uob preferred', forProfile: 'Marvin' },
+    { date: '2026-11-21', amount: 4.5, merchant: 'Kopi C', card: 'uob preferred', forProfile: 'marvin' },   // second identical coffee: own id
+    { date: '2026-11-21', amount: 12, merchant: 'Lunch', account: 'DBS Multiplier', forProfile: 'caroline' },
+    { date: '2026-11-21', amount: 5, merchant: 'X', card: 'No such card' },
+    { date: 'bad', amount: 5, merchant: 'Y' },
+  ] };
+  const pv = E.previewEntries([], f, ctx);
+  assert.strictEqual(pv.adds.length, 3); assert.strictEqual(pv.skipped.length, 2); assert.strictEqual(pv.duplicates, 0);
+  const r = E.applyEntries([], f, ctx);
+  assert.strictEqual(r.ledger.length, 3);
+  assert.ok(r.ledger.every((t) => t.status === 'pending' && t.source === 'chat'));
+  assert.strictEqual(r.ledger[0].cardId, 'c1'); assert.strictEqual(r.ledger[2].forProfile, 'wife'); assert.strictEqual(r.ledger[2].accountId, 'a1');
+  assert.strictEqual(new Set(r.ledger.map((t) => t.id)).size, 3);
+  const again = E.applyEntries(r.ledger, f, ctx);   // re-import the same file
+  assert.strictEqual(again.ledger.length, 3); assert.strictEqual(again.duplicates, 3); assert.strictEqual(again.adds.length, 0);
+  assert.ok(E.previewEntries([], { format: 'x' }, ctx).error);
+});
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

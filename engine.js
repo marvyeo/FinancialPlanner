@@ -1283,6 +1283,57 @@
     res.ledger = list;
     return res;
   }
+  /* ---------------- chat entries (fp-entries) ---------------- */
+  const ENTRY_PROFILES = ['marvin', 'wife', 'joint', 'cobae'];
+  const entryHash = (str) => { let h = 5381; for (let i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0; return h.toString(36); };
+  const entryKey = (s) => String(s || '').trim().toLowerCase();
+  /**
+   * Turn a chat "close day" file into ledger entries: { format:'fp-entries', version:1, entries:[{date, amount, merchant, card?, account?, forProfile?, category?, note?, capturedBy?}] }.
+   * ctx = { cards:[{id,name,profile}], accounts:[{id,name,owner}], profileAliases?:{caroline:'wife'} }.
+   * IDs are stable (hash of date|amount|merchant|card|profile + occurrence number within the file), so re-importing a file adds nothing.
+   * Entries land as status 'pending', source 'chat', to be verified by a statement. Never mutates `ledger`.
+   * Returns { ledger, adds:[tx], duplicates:n, skipped:[{index,reason}], error? }.
+   */
+  function runEntries(ledger, payload, ctx) {
+    const res = { ledger: ledger, adds: [], duplicates: 0, skipped: [] };
+    if (!payload || payload.format !== 'fp-entries' || payload.version !== 1 || !Array.isArray(payload.entries)) { res.error = 'Not a fp-entries (version 1) file.'; return res; }
+    ctx = ctx || {};
+    const cards = ctx.cards || [], accounts = ctx.accounts || [], alias = ctx.profileAliases || {};
+    const seen = {};
+    const ops = [];
+    payload.entries.forEach((e, index) => {
+      const skip = (reason) => res.skipped.push({ index, reason });
+      if (!e || typeof e !== 'object') return skip('bad entry');
+      const amount = Math.round(Number(e.amount) * 100) / 100;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(e.date || '') || !(amount > 0) || !String(e.merchant || '').trim()) return skip('needs date (YYYY-MM-DD), amount > 0 and merchant');
+      let profile = entryKey(e.forProfile || 'joint'); profile = alias[profile] || profile;
+      if (!ENTRY_PROFILES.includes(profile)) return skip('unknown forProfile: ' + e.forProfile);
+      const want = entryKey(e.card || e.account);
+      let card = null, acct = null;
+      if (want) {
+        card = cards.find((c) => entryKey(c.name) === want) || cards.find((c) => entryKey(c.name).includes(want));
+        if (!card) acct = accounts.find((a) => entryKey(a.name) === want) || accounts.find((a) => entryKey(a.name).includes(want));
+        if (!card && !acct) return skip('card/account not found: ' + (e.card || e.account));
+      }
+      const merchant = String(e.merchant).trim();
+      const base = [e.date, amount.toFixed(2), entryKey(merchant), want, profile].join('|');
+      const nth = (seen[base] = (seen[base] || 0) + 1);
+      const id = 'ch_' + entryHash(base) + (nth > 1 ? '_' + nth : '');
+      ops.push({ op: 'add', tx: {
+        id, date: e.date, amount, merchant, category: e.category || undefined, forProfile: profile, direction: 'out', kind: 'spend',
+        cardId: card ? card.id : null, accountId: acct ? acct.id : null, cardName: card ? card.name : acct ? acct.name : 'Cash / non-card',
+        paidBy: card ? card.profile : acct ? (acct.owner || profile) : profile,
+        note: e.note || '', source: 'chat', status: 'pending', capturedBy: e.capturedBy || undefined, review: [], reviewed: false, createdAt: new Date().toISOString(),
+      } });
+    });
+    const r = runLedgerPatch(ledger, { format: 'fp-ledger-patch', version: 1, ops });
+    r.skipped.forEach((x) => { if (x.reason === 'id already exists') res.duplicates++; else res.skipped.push({ index: x.index, reason: x.reason }); });
+    res.ledger = r.ledger;
+    res.adds = ops.map((o) => o.tx).filter((t) => r.ledger.some((l) => l.id === t.id) && !(ledger || []).some((l) => l.id === t.id));
+    return res;
+  }
+  const previewEntries = (ledger, payload, ctx) => { const r = runEntries(ledger, payload, ctx); return { adds: r.adds, duplicates: r.duplicates, skipped: r.skipped, error: r.error }; };
+  const applyEntries = (ledger, payload, ctx) => runEntries(ledger, payload, ctx);
   const previewLedgerPatch = (ledger, patch) => { const r = runLedgerPatch(ledger, patch); return { applied: r.applied, skipped: r.skipped, unlinked: r.unlinked, error: r.error }; };
   const applyLedgerPatch = (ledger, patch) => runLedgerPatch(ledger, patch);
 
@@ -1854,7 +1905,7 @@
     splitsOf, yourShare, openSplits, personMatches, matchRepayments, owedSummary, migrateContra,
     parseDigiPortfolio, classifyHolding, mergeInvestmentStatement, mergeInvestmentData, investFlows, investmentSummary, investmentInsights, xirr,
     categorise, categoryForMcc, parseStatementText, parseCSV, guessCsvMapping, csvToRows, txnFingerprint,
-    reconcileStatement, mergeData, previewLedgerPatch, applyLedgerPatch, priceAt, ghostResult, adviceSummary, matchSettledJoint, mappingPattern,
+    reconcileStatement, mergeData, previewLedgerPatch, applyLedgerPatch, previewEntries, applyEntries, priceAt, ghostResult, adviceSummary, matchSettledJoint, mappingPattern,
     util: { norm, mccIn, expandList, r2, ymd, parseYmd, daysUntil },
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

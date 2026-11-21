@@ -1,9 +1,13 @@
 # Financial Planner — Project State
 
-> **Next chat name: `Financial Planner ver 9`**
-> Claude: your FIRST reply in a new chat must start with "Rename this chat to: **Financial Planner ver 9**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
+> **Next chat name: `Financial Planner ver 10`**
+> Claude: your FIRST reply in a new chat must start with "Rename this chat to: **Financial Planner ver 10**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
 
-> ## ▶ RESUME HERE (ver 8, 2026-11-21, roadmap agreed, nothing built yet)
+> ## ▶ RESUME HERE (ver 9, 2026-11-21, roadmap item 1 built; item 2 next)
+> **Done in ver 9:** item 1 `fp-entries` importer (engine `previewEntries`/`applyEntries`, Settings → Import chat entries, 67 tests). Not tested live. **Next:** item 2 statement matching, then 3–5 below. **First command:** `git pull && node tests/engine.test.js` (67 passing).
+> Format: `{format:'fp-entries',version:1,entries:[{date,amount,merchant,card?|account?,forProfile?,category?,note?,capturedBy?}]}`; ids stable by date|amount|merchant|card|profile (+ occurrence), `status:'pending'`, `source:'chat'`.
+
+> ## (ver 8 block; item 1 below is now done)
 > **Done in ver 8:** 122 xlsx rows (1–20 Nov) imported via a private `fp-ledger-patch` (dry-run 122 add / 0 skipped). 102 older xlsx rows left out on purpose (mostly Dining/Contra splits the statement-checked ledger holds as one line; 68 truly absent, to review only if wanted). Card usage read from `engine.cardStatus` after import. Private files (xlsx, exports, patches) live outside the repo.
 > **Direction:** retire 2026Planning.xlsx by 2027-01-01. Capture in a Claude chat ("what, how much, where, which card, joint/personal"); "close day" outputs one `fp-entries` import; month-end statements verify them. Marvin and Caroline both capture; all dev goes through Marvin. Card bill payments ARE tracked; own-account transfers are not.
 > **Roadmap (S/M/L):**
@@ -63,7 +67,7 @@
 | Repo | `marvyeo/FinancialPlanner` (**public**), branch `main` — never commit personal data |
 | Live URL | https://marvyeo.github.io/FinancialPlanner/ |
 | Stack | Static `index.html` (vanilla JS + Tailwind CDN) + `engine.js` (pure, Node-testable) + `rules.json` + `merchants-sg.json` |
-| Tests | `node tests/engine.test.js` → 66 passing |
+| Tests | `node tests/engine.test.js` → 67 passing |
 | Data | Google Drive `financialplanner-data.json` (+ `merchants.json`), scope `drive.file` |
 | OAuth client | `669494100250-gvromuq72r7j0djmkd4vdbdq5damncj7.apps.googleusercontent.com` (GCP project number 669494100250) |
 | Rules refresh | `RULES_REFRESH.md` weekly → `rules.json` (version 2026-11-16) → in-app banner |
@@ -80,6 +84,7 @@ recommend / analyseLedger / ledgerEarnings (card engine, caps, conditions, miles
 - `fp-statements` (Month-end check → Prepare with Claude): `{format:'fp-statements',statements:[{source,owner,institution,product,last4,statementDate,periodFrom,periodTo,openingBalance,closingBalance,lines:[{date,postDate,description,amount,credit,fcy}]}],checks:[{source,ok,note}]}`. The app copies the exact prompt (lists card/account names).
 - `fp-advice` (Advice → Import check-in file): `{format:'fp-advice',recommendations:[{id,date,area:'cash|invest|cards|other',title,detail,steps[],amountSgd,expectedPerYear,priority,ghost}],prices:{TICKER:[{date,price}],USDSGD:[…]}}`. Ghost kinds: `{kind:'rate',amountSgd,fromRate,toRate,date}` · `{kind:'position',ticker,ccy,amountSgd,date,price?,fx?}` · `{kind:'switch',from:{ticker,ccy},to:{ticker,ccy},amountSgd,date}`. Re-importing keeps the user's decisions; prices merge by date.
 - `fp-ledger-patch` (Settings → Import ledger patch): `{format,version:1,ops:[{op:'delete',id,expect}|{op:'update',id,expect,set}|{op:'add',tx}]}`. An op applies only if the entry exists and every `expect` field matches; `set` is whitelisted (merchant, category, forProfile, kind, note, transferPair, accountId, cardId, cardName, date, amount); dangling `transferPair`s are cleared; dry-run first. Personal patch files stay out of the repo.
+- `fp-entries` (Settings → Import chat entries): `{format,version:1,entries:[{date,amount,merchant,card|account,forProfile,category,note,capturedBy}]}`. Preview then Apply; stable ids make re-import a no-op; saved pending until a statement verifies them. `card`/`account` match by name (exact, then contains); unknown names are skipped with a reason.
 - `fp-merchant` (Claude MCC lookup reply, pasted into the add-expense form).
 
 ### Household sign-in (built 2026-10-17, setup pending)
@@ -111,3 +116,4 @@ recommend / analyseLedger / ledgerEarnings (card engine, caps, conditions, miles
 - 2026-11-16 (weekly rules refresh, ver 7 bump): `rules.json` rulesVersion 2026-11-16. AMEX KrisFlyer Credit Card base earn 1.1 → 1.3 mpd (local + FCY) from 1 Nov 2026; test expectation updated. Other cards checked, nothing else confirmed. Next chat name bumped to ver 8.
 - 2026-11-21 (ver 8, docs only): roadmap for retiring the xlsx agreed (RESUME HERE). Next chat name bumped to ver 9.
 - 2026-11-21 (ver 8, no app change): Nov 1–20 xlsx rows imported as a ledger patch; card cap usage checked with cardStatus (UOB PPV contactless S$27 left, OCBC 6 mpd S$126 left). 48 new merchants lack MCC history; fix in Merchants.
+- 2026-11-21 (ver 9): roadmap item 1 built: `fp-entries` importer (engine `previewEntries`/`applyEntries` reusing the ledger-patch add path; Settings → Import chat entries with preview). +1 test (67); `sw.js` cache v5. Not tested live. Next chat name bumped to ver 10.

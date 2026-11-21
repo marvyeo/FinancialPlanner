@@ -2005,6 +2005,7 @@ function renderSettings() {
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
       <button class="btn-secondary" onclick="exportData()">↓ Export JSON</button>
       <button class="btn-secondary" onclick="importLedgerPatch()">⇪ Import ledger patch</button>
+      <button class="btn-secondary" onclick="importChatEntries()">⇪ Import chat entries</button>
       <button class="btn-secondary" onclick="triggerImport()">↑ Import JSON</button>
       <button class="btn-secondary" onclick="triggerMerchantsUpload()">↑ Upload merchants.json to Drive</button>
       <button class="btn-secondary" onclick="document.getElementById('file-txns').click()">↑ Import transactions file</button>
@@ -2085,6 +2086,47 @@ function applyLedgerPatchNow() {
   closeModal();
   saveToDrive(); render();
   toast(`Ledger patch: ${r.applied.delete} deleted, ${r.applied.update} updated, ${r.applied.add} added` + (r.skipped.length ? `, ${r.skipped.length} skipped` : ''), 7000);
+}
+/** Daily capture from a Claude chat: { format:'fp-entries', version:1, entries:[…] }. Preview first; re-importing the same file adds nothing. Entries are saved as pending until a statement verifies them. */
+let PENDING_ENTRIES = null;
+function entriesCtx() { return { cards: data.cards || [], accounts: data.accounts || [], profileAliases: { caroline: 'wife' } }; }
+function importChatEntries() {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';
+  inp.onchange = async () => {
+    try {
+      const j = JSON.parse(await inp.files[0].text());
+      const pv = FPEngine.previewEntries(data.transactions || [], j, entriesCtx());
+      if (pv.error) { alert(pv.error); return; }
+      PENDING_ENTRIES = j;
+      const total = pv.adds.reduce((n, t) => n + t.amount, 0);
+      const rows = pv.adds.slice(0, 12).map(t => `<li>${esc(t.date)} ${esc(t.merchant)} S$${t.amount.toFixed(2)} · ${esc(t.cardName)} · ${esc(t.forProfile)}</li>`).join('');
+      const skipRows = pv.skipped.slice(0, 10).map(x => `<li>#${x.index + 1}: ${esc(x.reason)}</li>`).join('');
+      showModal(`<h3 style="margin-top:0;">Import chat entries</h3>
+        <div style="margin:12px 0;line-height:1.7;">
+          <div>Will add: <strong>${pv.adds.length}</strong> (S$${total.toFixed(2)}), saved as pending</div>
+          <div>Already imported: <strong>${pv.duplicates}</strong></div>
+          <div>Skipped: <strong>${pv.skipped.length}</strong></div>
+        </div>
+        ${rows ? `<ul style="font-size:12px;margin:0 0 12px 18px;">${rows}${pv.adds.length > 12 ? '<li>…</li>' : ''}</ul>` : ''}
+        ${skipRows ? `<ul style="font-size:12px;color:#94A3B8;margin:0 0 12px 18px;">${skipRows}</ul>` : ''}
+        <div class="hint" style="margin-bottom:12px;">Nothing changes until you tap Apply.</div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;">
+          <button class="btn-secondary" onclick="PENDING_ENTRIES=null;closeModal()">Cancel</button>
+          <button class="btn-primary" onclick="applyChatEntriesNow()" ${pv.adds.length ? '' : 'disabled'}>Apply</button>
+        </div>`);
+    } catch (e) { alert('Could not read that file: ' + e.message); }
+  };
+  inp.click();
+}
+function applyChatEntriesNow() {
+  if (!PENDING_ENTRIES) return;
+  const r = FPEngine.applyEntries(data.transactions || [], PENDING_ENTRIES, entriesCtx());
+  PENDING_ENTRIES = null;
+  if (r.error) { alert(r.error); return; }
+  data.transactions = r.ledger;
+  closeModal();
+  saveToDrive(); render();
+  toast(`Chat entries: ${r.adds.length} added` + (r.duplicates ? `, ${r.duplicates} already there` : '') + (r.skipped.length ? `, ${r.skipped.length} skipped` : ''), 7000);
 }
 function exportData() {
   computeUpcoming();
