@@ -4356,13 +4356,31 @@ function reconMonthFor(person, d) {
   const prev = (() => { const [y, m] = ym.split('-').map(Number); return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`; })();
   return day >= (when === 'mid' ? 12 : 25) ? ym : prev;
 }
-function reconItems(person) {
+function reconItems(person, all) {
   const jointBy = (data.settings.household || {}).jointReconciler || 'marvin';
   const cards = data.cards.filter(c => !c.archived && (c.profile === person || (c.profile === 'joint' && person === jointBy)))
     .map(c => ({ key: c.id, name: c.name, kind: 'card', statementDay: c.cycleDate }));
   const accts = (data.accounts || []).filter(a => !a.archived && ((a.owner || 'marvin') === person || (a.owner === 'joint' && person === jointBy)))
     .map(a => ({ key: 'acct:' + a.id, name: acctLabel(a), kind: a.type || 'bank' }));
-  return cards.concat(accts);
+  const off = (data.settings || {}).noStatement || {};
+  return cards.concat(accts).filter(it => all || !off[it.key]);
+}
+function setNoStatement(key, on) {
+  data.settings = data.settings || {}; data.settings.noStatement = Object.assign({}, data.settings.noStatement || {});
+  if (on) data.settings.noStatement[key] = true; else delete data.settings.noStatement[key];
+  closeModal(); saveToDrive(); render();
+}
+function coverageCellMenu(p, key, mo) {
+  const it = reconItems(p, true).find(x => x.key === key); if (!it) return;
+  const st = reconState(mo, key);
+  showModal(`<h3 style="margin-top:0;">${esc(it.name)} · ${esc(mo)}</h3>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button class="btn-primary" onclick="closeModal();reconPerson='${p}';reconMonth='${mo}';render()">Open this month</button>
+      ${st && st.status === 'skipped' ? `<button class="btn-secondary" onclick="data.recon['${mo}']['${key}']=undefined;delete data.recon['${mo}']['${key}'];closeModal();saveToDrive();render()">Undo "no statement" for ${esc(mo)}</button>`
+        : `<button class="btn-secondary" onclick="closeModal();setReconStatus('${mo}','${key}','skipped')">No statement this month</button>`}
+      <button class="btn-secondary" onclick="setNoStatement('${key}',true)">Never expect statements for this (stop tracking)</button>
+    </div>
+    <div class="hint" style="margin-top:10px;">"Never expect" removes it from the grid and the Month-end list. You can restore it from the footer of the grid.</div>`);
 }
 function reconState(month, key) { return ((data.recon || {})[month] || {})[key] || null; }
 function setReconStatus(month, key, status) {
@@ -4389,7 +4407,7 @@ function statementCoverageHtml() {
   };
   const cell = (p, it, mo) => {
     const st = reconState(mo, it.key);
-    const go = `reconPerson='${p}';reconMonth='${mo}';render()`;
+    const go = `coverageCellMenu('${p}','${it.key}','${mo}')`;
     const S = (bg, fg, txt, tip) => `<td onclick="${go}" title="${esc(tip)}" style="cursor:pointer;text-align:center;background:${bg};color:${fg};font-size:11px;padding:6px 4px;border:1px solid #0D1B2A;min-width:46px;">${txt}</td>`;
     if (st && (st.status === 'done' || st.status === 'imported')) return S('#14532D', '#BBF7D0', '✓' + (st.counts ? ' ' + st.counts.lines : ''), `${it.name} ${mo}: read ${st.at || ''}`);
     if (st && st.status === 'skipped') return S('#1E3A5F', '#93C5FD', '–', `${it.name} ${mo}: no statement / not used`);
@@ -4403,22 +4421,16 @@ function statementCoverageHtml() {
     const head = months.map(mo => `<th style="font-size:11px;font-weight:600;padding:4px;text-align:center;">${ml(mo)}</th>`).join('');
     const cards = items.filter(it => !it.key.startsWith('acct:')), accts = items.filter(it => it.key.startsWith('acct:'));
     const nm = s => `<td style="font-size:12px;padding:4px 8px 4px 0;white-space:nowrap;max-width:190px;overflow:hidden;text-overflow:ellipsis;">${s}</td>`;
-    const acctCell = mo => {   // all bank accounts for the month in one square
-      const go = `reconPerson='${p}';reconMonth='${mo}';render()`;
-      const S = (bg, fg, txt, tip) => `<td onclick="${go}" title="${esc(tip)}" style="cursor:pointer;text-align:center;background:${bg};color:${fg};font-size:11px;padding:6px 4px;border:1px solid #0D1B2A;min-width:46px;">${txt}</td>`;
-      const due = accts.filter(it => issued(it, mo));
-      if (!due.length) return S('#1F2937', '#6B7280', '·', 'not issued yet');
-      const ok = due.filter(it => { const st = reconState(mo, it.key); return st && ['done', 'imported', 'skipped'].includes(st.status); }).length;
-      return ok === due.length ? S('#14532D', '#BBF7D0', '✓', 'all read') : ok ? S('#78350F', '#FDE68A', `${ok}/${due.length}`, 'some read') : S('#7F1D1D', '#FECACA', '●', `${due.length} outstanding`);
-    };
     const body = cards.map(it => `<tr>${nm(esc(it.name))}${months.map(mo => cell(p, it, mo)).join('')}</tr>`).join('') +
-      (accts.length ? `<tr>${nm(`Bank accounts (${accts.length})`)}${months.map(acctCell).join('')}</tr>` : '');
+      (accts.length ? `<tr><td colspan="${months.length + 1}" class="hint" style="padding:10px 0 2px;">Bank accounts &amp; wallets (statement at month-end)</td></tr>` + accts.map(it => `<tr>${nm(esc(it.name))}${months.map(mo => cell(p, it, mo)).join('')}</tr>`).join('') : '');
+    const offItems = reconItems(p, true).filter(it => ((data.settings || {}).noStatement || {})[it.key]);
+    const offHtml = offItems.length ? `<div class="hint" style="margin-top:8px;">Not tracked (no statements expected): ${offItems.map(it => `${esc(it.name)} <a href="#" onclick="setNoStatement('${it.key}',false);return false;">restore</a>`).join(' · ')}</div>` : '';
     return `<div style="flex:1;min-width:300px;"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;"><strong>${profileLabel(p)}</strong><span class="hint">${done} of ${due} due statements read${due - done ? ` · <span class="text-red">${due - done} outstanding</span>` : ''}</span></div>
-      <div style="overflow-x:auto;"><table style="border-collapse:collapse;width:100%;"><thead><tr><th></th>${head}</tr></thead><tbody>${body || '<tr><td class="hint">No cards or accounts</td></tr>'}</tbody></table></div></div>`;
+      <div style="overflow-x:auto;"><table style="border-collapse:collapse;width:100%;"><thead><tr><th></th>${head}</tr></thead><tbody>${body || '<tr><td class="hint">No cards or accounts</td></tr>'}</tbody></table></div>${offHtml}</div>`;
   };
-  return `<div class="smart-spend-box" style="margin-bottom:14px;"><div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;margin-bottom:10px;"><strong>Statement coverage</strong><span class="hint">as of ${esc(t0)} · tap a square to open that month</span></div>
+  return `<div class="smart-spend-box" style="margin-bottom:14px;"><div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;margin-bottom:10px;"><strong>Statement coverage</strong><span class="hint">as of ${esc(t0)} · tap a square for options (open, no statement, stop tracking)</span></div>
     <div style="display:flex;gap:22px;flex-wrap:wrap;">${panel('marvin')}${panel('wife')}</div>
-    <div class="hint" style="margin-top:10px;"><span style="color:#BBF7D0;">■</span> read &nbsp;<span style="color:#93C5FD;">■</span> no statement &nbsp;<span style="color:#FECACA;">■</span> outstanding &nbsp;<span style="color:#6B7280;">■</span> not issued yet &nbsp;<span style="color:#FDE68A;">■</span> some of the accounts. Cards: statement day. Bank accounts: month-end, shown as one row.</div></div>`;
+    <div class="hint" style="margin-top:10px;"><span style="color:#BBF7D0;">■</span> read &nbsp;<span style="color:#93C5FD;">■</span> no statement &nbsp;<span style="color:#FECACA;">■</span> outstanding &nbsp;<span style="color:#6B7280;">■</span> not issued yet. Cards: statement day. Bank accounts: month-end.</div></div>`;
 }
 let reconViewSeen = null;
 function renderRecon() {
