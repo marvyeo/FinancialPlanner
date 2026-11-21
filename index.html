@@ -2006,6 +2006,7 @@ function renderSettings() {
       <button class="btn-secondary" onclick="exportData()">↓ Export JSON</button>
       <button class="btn-secondary" onclick="importLedgerPatch()">⇪ Import ledger patch</button>
       <button class="btn-secondary" onclick="importChatEntries()">⇪ Import chat entries</button>
+      <button class="btn-secondary" onclick="openCaptureSheet()">📋 Chat capture instructions</button>
       <button class="btn-secondary" onclick="triggerImport()">↑ Import JSON</button>
       <button class="btn-secondary" onclick="triggerMerchantsUpload()">↑ Upload merchants.json to Drive</button>
       <button class="btn-secondary" onclick="document.getElementById('file-txns').click()">↑ Import transactions file</button>
@@ -2127,6 +2128,37 @@ function applyChatEntriesNow() {
   closeModal();
   saveToDrive(); render();
   toast(`Chat entries: ${r.adds.length} added` + (r.duplicates ? `, ${r.duplicates} already there` : '') + (r.skipped.length ? `, ${r.skipped.length} skipped` : ''), 7000);
+}
+/** Project instructions for the daily capture chat, built from THIS household's live cards, accounts and merchants (nothing personal is stored in the repo). */
+function captureInstructions() {
+  const by = p => (data.cards || []).filter(c => !c.archived && (c.profile || 'marvin') === p).map(c => c.name);
+  const names = a => a.length ? a.join('; ') : '(none)';
+  const accts = (data.accounts || []).map(a => `${a.name} (${a.owner || 'joint'})`);
+  const seen = new Set(), ms = [];
+  merchantPool().forEach(m => { const k = (m.name || '').toLowerCase(); if (!k || seen.has(k)) return; seen.add(k); ms.push(`${m.name}${m.category ? ' = ' + m.category : ''}`); });
+  return `You are my daily spending logger for the Financial Planner app. I type what I spent in plain words; you tidy it, ask only for what is missing, and at the end of the day ("close day") output ONE JSON file I import in the app (Settings → Import chat entries).
+
+Each entry needs: what (merchant), how much (SGD), where/which card or account, who it was for (marvin, caroline, joint, or cobae), and the date (default today). Ask in ONE short question if a card, amount or who-for is missing. Never invent a card. If I say "joint" or "shared" use joint. Own-account transfers are NOT logged; card bill payments ARE.
+Use the merchant's canonical name from the list below when it matches; add "category" from the list. Keep a running tally and show it when I ask "what do we have so far".
+On "close day" reply with a short summary (count, total, per card) and then ONLY this JSON in a code block:
+{"format":"fp-entries","version":1,"entries":[{"date":"YYYY-MM-DD","amount":12.50,"merchant":"Name","card":"exact card name below","forProfile":"marvin|caroline|joint|cobae","category":"optional","note":"optional","capturedBy":"marvin|caroline"}]}
+Use "account" instead of "card" for bank/wallet/cash spends. Same file imported twice adds nothing, so re-sending is safe.
+
+MARVIN'S CARDS: ${names(by('marvin'))}
+CAROLINE'S CARDS: ${names(by('wife'))}
+JOINT CARDS: ${names(by('joint'))}
+ACCOUNTS / WALLETS: ${names(accts)}
+
+MERCHANTS (name = category): ${ms.join('; ')}
+`;
+}
+function openCaptureSheet() {
+  const txt = captureInstructions();
+  window.__capTxt = txt;
+  showModal(`<h3 style="margin-top:0;">Chat capture instructions</h3>
+    <div class="hint" style="margin-bottom:8px;">Paste into a Claude Project's instructions (one for you, one for Caroline). Built from your live cards, accounts and merchants, so tap again after adding new ones.</div>
+    <textarea readonly style="width:100%;height:260px;font-size:11px;" onclick="this.select()">${esc(txt)}</textarea>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px;"><button class="btn-secondary" onclick="closeModal()">Close</button><button class="btn-primary" onclick="navigator.clipboard.writeText(window.__capTxt).then(()=>toast('Copied'))">Copy</button></div>`);
 }
 function exportData() {
   computeUpcoming();
