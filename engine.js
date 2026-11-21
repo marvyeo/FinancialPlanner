@@ -1254,7 +1254,7 @@
   }
 
   /* ---------------- ledger patch (fp-ledger-patch) ---------------- */
-  const PATCH_SET_FIELDS = ['merchant', 'category', 'forProfile', 'kind', 'note', 'transferPair', 'accountId', 'cardId', 'cardName', 'date', 'amount'];
+  const PATCH_SET_FIELDS = ['merchant', 'category', 'forProfile', 'kind', 'note', 'transferPair', 'accountId', 'cardId', 'cardName', 'date', 'amount', 'splits', 'repays'];
   const PATCH_ADD_REQUIRED = ['id', 'date', 'amount', 'direction', 'merchant'];
   function patchExpectOk(t, expect) {
     return Object.keys(expect || {}).every((k) => (k === 'amount' ? Math.abs(Number(t.amount) - Number(expect.amount)) < 0.005 : t[k] === expect[k]));

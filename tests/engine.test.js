@@ -562,6 +562,16 @@ test('groupTransitRows: un-logged taps collapse to one row per day', () => {
   close(g[0].amount, 3.6); assert.strictEqual(g[0].grouped, 2);
   assert.strictEqual(g.filter((r) => r.recon === 'matched').length, 1);
 });
+test('ledger patch: update can set splits and repays (collections linked to a bill)', () => {
+  const ledger = [{ id: 'b', date: '2026-05-08', amount: 188, direction: 'out', merchant: 'Gift', splits: [{ id: 's0', person: 'Unassigned', amount: 141, status: 'assumed' }] }, { id: 'c', date: '2026-05-07', amount: 141, direction: 'in', merchant: 'Collect from X', kind: 'repayment' }];
+  const patch = { format: 'fp-ledger-patch', version: 1, ops: [
+    { op: 'update', id: 'b', expect: { amount: 188 }, set: { splits: [{ id: 's1', person: 'X', amount: 141, status: 'collected', repaymentId: 'c' }] } },
+    { op: 'update', id: 'c', expect: { amount: 141 }, set: { repays: [{ txnId: 'b', splitId: 's1', amount: 141 }] } }] };
+  const r = E.applyLedgerPatch(ledger, patch);
+  assert.deepStrictEqual(r.applied, { delete: 0, update: 2, add: 0 });
+  assert.strictEqual(r.ledger.find((x) => x.id === 'b').splits[0].status, 'collected');
+  assert.strictEqual(r.ledger.find((x) => x.id === 'c').repays[0].splitId, 's1');
+});
 test('mergeData keeps both people\'s edits', () => {
   const base = { transactions: [{ id: '1', amount: 1 }, { id: '2', amount: 2 }], settings: { a: 1, b: 1 } };
   const local = { transactions: [{ id: '1', amount: 10 }, { id: '3', amount: 3 }], settings: { a: 2, b: 1 } };          // edit 1, delete 2, add 3, change a
