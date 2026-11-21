@@ -4,6 +4,7 @@
 > Claude: your FIRST reply in a new chat must start with "Rename this chat to: **Financial Planner ver 9**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
 
 > ## ▶ RESUME HERE (ver 8, 2026-11-21, roadmap agreed, nothing built yet)
+> **Done in ver 8:** 122 xlsx rows (1–20 Nov) imported via a private `fp-ledger-patch` (dry-run 122 add / 0 skipped). 102 older xlsx rows left out on purpose (mostly Dining/Contra splits the statement-checked ledger holds as one line; 68 truly absent, to review only if wanted). Card usage read from `engine.cardStatus` after import. Private files (xlsx, exports, patches) live outside the repo.
 > **Direction:** retire 2026Planning.xlsx by 2027-01-01. Capture in a Claude chat ("what, how much, where, which card, joint/personal"); "close day" outputs one `fp-entries` import; month-end statements verify them. Marvin and Caroline both capture; all dev goes through Marvin. Card bill payments ARE tracked; own-account transfers are not.
 > **Roadmap (S/M/L):**
 > 1. **M** `fp-entries` importer: stable-ID dedupe, `source:chat`, status `pending`, preview then Apply (reuse the ledger-patch preview pattern). Tests.
@@ -109,3 +110,4 @@ recommend / analyseLedger / ledgerEarnings (card engine, caps, conditions, miles
 - 2026-11-08 (ver 6, checkpoints 1+2): `fp-ledger-patch` importer. engine.js `previewLedgerPatch`/`applyLedgerPatch`; Settings → Import ledger patch (preview, then Apply, one save); +5 tests (66); `sw.js` cache v4. Verified in Node on the real patch (0 skipped). Not tested live. Next chat name bumped to ver 7.
 - 2026-11-16 (weekly rules refresh, ver 7 bump): `rules.json` rulesVersion 2026-11-16. AMEX KrisFlyer Credit Card base earn 1.1 → 1.3 mpd (local + FCY) from 1 Nov 2026; test expectation updated. Other cards checked, nothing else confirmed. Next chat name bumped to ver 8.
 - 2026-11-21 (ver 8, docs only): roadmap for retiring the xlsx agreed (RESUME HERE). Next chat name bumped to ver 9.
+- 2026-11-21 (ver 8, no app change): Nov 1–20 xlsx rows imported as a ledger patch; card cap usage checked with cardStatus (UOB PPV contactless S$27 left, OCBC 6 mpd S$126 left). 48 new merchants lack MCC history; fix in Merchants.
