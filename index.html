@@ -3265,7 +3265,8 @@ function buildReview(srcVal, parsed, recon, queue) {
   // lines that aren't spending (card payments, transfers you never log) don't need asking about
   rows.forEach(r => { if (r.recon === 'new' && !['expense', 'paid_for_others', 'refund', 'income'].includes(r.kind)) r.recon = 'other'; });
   const missing = rc.missing.map(id => ({ id, action: 'keep' }));
-  return { src, srcVal, batch: 'imp_' + uid() + Math.random().toString(36).slice(2, 6), rows, missing, period: { from: rc.from, to: rc.to }, recon: recon || null, queue: queue || [], showMatched: false };
+  const rowsG = FPEngine.groupTransitRows(rows);   // un-logged bus/MRT taps: one row per day
+  return { src, srcVal, batch: 'imp_' + uid() + Math.random().toString(36).slice(2, 6), rows: rowsG, missing, period: { from: rc.from, to: rc.to }, recon: recon || null, queue: queue || [], showMatched: false };
 }
 function renderImportPreview() {
   const src = IMPORT.src;
@@ -3297,7 +3298,7 @@ function renderImportPreview() {
     <td style="width:104px;">${editable && r.kind === 'expense' ? `<select style="${sel}" onchange="IMPORT.rows[${i}].forProfile=this.value">${PROFILES.map(p => `<option value="${p}" ${r.forProfile===p?'selected':''}>${profileLabel(p)}</option>`).join('')}</select>` : ''}</td>
     <td class="tabnum" style="text-align:right;white-space:nowrap;">${r.direction==='in'?'+':''}$${fmtAmt(r.amount)}${r.fcy ? '<div class="hint">FCY</div>' : ''}</td>
   </tr>`; }).join('');
-  const miss = IMPORT.missing.map((m, k) => { const t = txnById(m.id); if (!t) return ''; return `<tr><td class="tabnum">${esc(t.date.slice(5))}</td><td>${esc(t.merchant)}${t.note ? `<div class="hint">${esc(t.note)}</div>` : ''}</td><td class="tabnum" style="text-align:right;">$${fmtAmt(t.amount)}</td>
+  const miss = IMPORT.missing.map((m, k) => { const t = txnById(m.id); if (!t) return ''; return `<tr><td class="tabnum">${esc(t.date.slice(5))}</td><td>${esc(t.merchant)}${t.status === 'pending' && t.source === 'chat' ? '<div class="hint text-amber">⚑ chat entry, no statement line yet</div>' : ''}${t.note ? `<div class="hint">${esc(t.note)}</div>` : ''}</td><td class="tabnum" style="text-align:right;">$${fmtAmt(t.amount)}</td>
     <td><select style="${sel}" onchange="IMPORT.missing[${k}].action=this.value">${[['keep', 'Keep — not posted yet'], ['other', 'Wrong card — fix later'], ['delete', 'Delete — didn\'t happen']].map(([v, l]) => `<option value="${v}" ${m.action===v?'selected':''}>${l}</option>`).join('')}</select></td></tr>`; }).join('');
   const nNew = IMPORT.rows.filter(r => r.recon === 'new' && r.include).length;
   showModal(`
@@ -3358,6 +3359,7 @@ function commitReview(IMPORT) {
     r.matchIds.forEach(id => {
       const t = data.transactions.find(x => x.id === id); if (!t) return;
       t.reconciled = true; t.stmtLine = IMPORT.batch; t.postDate = t.postDate || r.postDate || null;
+      if (t.status === 'pending') { t.status = 'verified'; t.verifiedOn = now; }   // chat entry confirmed by a statement line
       if (!t.rawDescription) t.rawDescription = r.description;
       if (r.recon === 'differs' && r.useStatement) { t.amount = Math.round(r.amount * 100) / 100; t.edited = true; fixed++; }
       if (r.matchIds.length === 1 && applyHintToLogged(t, r)) relabelled++;

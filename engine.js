@@ -1190,6 +1190,22 @@
     return res;
   }
 
+  /**
+   * Collapse same-day bus/MRT tap lines that nobody logged into one row per day, so the review queue isn't flooded.
+   * rows: preview rows [{date, amount, merchant, description, recon, direction, include}]. Returns a new array; other rows untouched.
+   */
+  function groupTransitRows(rows) {
+    const isT = (r) => r.recon === 'new' && r.direction !== 'in' && /^(bus\/mrt|bus|mrt|simplygo|transitlink)/i.test(String(r.merchant || '').trim());
+    const out = [], byDay = new Map();
+    (rows || []).forEach((r) => {
+      if (!isT(r)) { out.push(r); return; }
+      const g = byDay.get(r.date);
+      if (!g) { const c = Object.assign({}, r, { amount: r2(num(r.amount)), grouped: 1 }); byDay.set(r.date, c); out.push(c); return; }
+      g.amount = r2(g.amount + num(r.amount)); g.grouped++; g.description = g.grouped + ' transit taps';
+    });
+    return out;
+  }
+
   /* ---------------- two people, one data file ---------------- */
   const itemKey = (x) => (x && typeof x === 'object' ? (x.id || x.key || (x.name ? 'n:' + x.name + '|' + (x.service || '') : null)) : null);
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -1905,7 +1921,7 @@
     splitsOf, yourShare, openSplits, personMatches, matchRepayments, owedSummary, migrateContra,
     parseDigiPortfolio, classifyHolding, mergeInvestmentStatement, mergeInvestmentData, investFlows, investmentSummary, investmentInsights, xirr,
     categorise, categoryForMcc, parseStatementText, parseCSV, guessCsvMapping, csvToRows, txnFingerprint,
-    reconcileStatement, mergeData, previewLedgerPatch, applyLedgerPatch, previewEntries, applyEntries, priceAt, ghostResult, adviceSummary, matchSettledJoint, mappingPattern,
+    reconcileStatement, groupTransitRows, mergeData, previewLedgerPatch, applyLedgerPatch, previewEntries, applyEntries, priceAt, ghostResult, adviceSummary, matchSettledJoint, mappingPattern,
     util: { norm, mccIn, expandList, r2, ymd, parseYmd, daysUntil },
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

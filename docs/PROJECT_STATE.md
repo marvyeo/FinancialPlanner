@@ -3,9 +3,10 @@
 > **Next chat name: `Financial Planner ver 11`**
 > Claude: your FIRST reply in a new chat must start with "Rename this chat to: **Financial Planner ver 11**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
 
-> ## ▶ RESUME HERE (ver 9, 2026-11-21, roadmap item 1 built; item 2 next)
-> **Done in ver 9:** item 1 `fp-entries` importer (engine `previewEntries`/`applyEntries`, Settings → Import chat entries, 67 tests). Live-tested in ver 10 (headless Chromium, stubbed Drive: preview 2 add / 1 skipped unknown card, Apply saved 2 pending `source:chat`, no JS errors). **Next:** item 2 statement matching, then 3–5 below. **First command:** `git pull && node tests/engine.test.js` (67 passing).
-> Format: `{format:'fp-entries',version:1,entries:[{date,amount,merchant,card?|account?,forProfile?,category?,note?,capturedBy?}]}`; ids stable by date|amount|merchant|card|profile (+ occurrence), `status:'pending'`, `source:'chat'`.
+> ## ▶ RESUME HERE (ver 10, 2026-11-21, roadmap items 1–2 done)
+> **Done in ver 10:** importer live-tested; item 2 finished: `reconcileStatement` already did card+amount+date±4, splits and grouped lines; added `groupTransitRows` (un-logged bus/MRT taps → one row per day), matched chat entries flip `pending` → `verified` on statement commit, unmatched chat entries are flagged "chat entry, no statement line yet" in Month-end check. 68 tests; `sw.js` v6. Not run against a real statement in-browser.
+> **Decisions (Marvin):** only Marvin develops this app. Caroline's data is already in the app via Marvin's login, and she uses the same app/data via her own Gmail (PICKER_API_KEY is already set in index.html), so item 4 is mostly done: remaining is just verifying her cards have `profile:'wife'`. Don't make Marvin switch chats every prompt: keep working in one chat, checkpoint-commit, and only suggest a fresh chat when context is genuinely large.
+> **Next:** item 3 (Capture Project instructions; alias table needs the private xlsx → ask Marvin), item 5 (separate chat). **First command:** `git pull && node tests/engine.test.js` (68 passing).
 
 > ## (ver 8 block; item 1 below is now done)
 > **Done in ver 8:** 122 xlsx rows (1–20 Nov) imported via a private `fp-ledger-patch` (dry-run 122 add / 0 skipped). 102 older xlsx rows left out on purpose (mostly Dining/Contra splits the statement-checked ledger holds as one line; 68 truly absent, to review only if wanted). Card usage read from `engine.cardStatus` after import. Private files (xlsx, exports, patches) live outside the repo.
@@ -71,7 +72,7 @@
 | Data | Google Drive `financialplanner-data.json` (+ `merchants.json`), scope `drive.file` |
 | OAuth client | `669494100250-gvromuq72r7j0djmkd4vdbdq5damncj7.apps.googleusercontent.com` (GCP project number 669494100250) |
 | Rules refresh | `RULES_REFRESH.md` weekly → `rules.json` (version 2026-11-16) → in-app banner |
-| Commit trailer | `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` + `Claude-Session: <session url>` |
+| Commit trailer | `Co-Authored-By: <model> <noreply@anthropic.com>` (model named in the session's attribution reminder) + `Claude-Session: <session url>` |
 
 ### Pages
 Dashboard (phone quick buttons; month-end reminder) · Spending · Investments · Month-end check · Advice · Owed to me · Profiles · Which card? · Strategy · Cards · Merchants · Settings (Household, accounts, policy, rules, valuations).
@@ -118,3 +119,4 @@ recommend / analyseLedger / ledgerEarnings (card engine, caps, conditions, miles
 - 2026-11-21 (ver 8, no app change): Nov 1–20 xlsx rows imported as a ledger patch; card cap usage checked with cardStatus (UOB PPV contactless S$27 left, OCBC 6 mpd S$126 left). 48 new merchants lack MCC history; fix in Merchants.
 - 2026-11-21 (ver 9): roadmap item 1 built: `fp-entries` importer (engine `previewEntries`/`applyEntries` reusing the ledger-patch add path; Settings → Import chat entries with preview). +1 test (67); `sw.js` cache v5. Not tested live. Next chat name bumped to ver 10.
 - 2026-11-21 (ver 10, docs only): fp-entries importer live-tested in headless Chromium (Drive stubbed): preview 2 add / 1 skipped (unknown card), Apply saved 2 pending source:chat, no JS errors. Confirmed profile key `wife` = Caroline everywhere (label, alias caroline→wife). Next chat name bumped to ver 11.
+- 2026-11-21 (ver 10): roadmap item 2: `groupTransitRows`, pending→verified on statement match, chat-entry flag in missing list; +1 test (68); `sw.js` v6. Recorded decisions: Marvin sole developer; Caroline already mapped and uses same app via her Gmail.

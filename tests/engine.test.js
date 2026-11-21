@@ -549,6 +549,19 @@ test('reconcileStatement: matches logged lines, splits, near-misses, not-logged 
   const r2 = E.reconcileStatement(lines, ledger, { cardId: 'C', to: '2026-10-10' });
   assert.deepStrictEqual(r2.missing, ['e']);
 });
+test('groupTransitRows: un-logged taps collapse to one row per day', () => {
+  const rows = [
+    { date: '2026-10-02', amount: 1.5, merchant: 'BUS/MRT', recon: 'new', description: 'a' },
+    { date: '2026-10-02', amount: 2.1, merchant: 'BUS/MRT', recon: 'new', description: 'b' },
+    { date: '2026-10-03', amount: 1.5, merchant: 'BUS/MRT', recon: 'new', description: 'c' },
+    { date: '2026-10-02', amount: 9, merchant: 'Kopi', recon: 'new' },
+    { date: '2026-10-02', amount: 1.5, merchant: 'BUS/MRT', recon: 'matched' },
+  ];
+  const g = E.groupTransitRows(rows);
+  assert.strictEqual(g.length, 4);
+  close(g[0].amount, 3.6); assert.strictEqual(g[0].grouped, 2);
+  assert.strictEqual(g.filter((r) => r.recon === 'matched').length, 1);
+});
 test('mergeData keeps both people\'s edits', () => {
   const base = { transactions: [{ id: '1', amount: 1 }, { id: '2', amount: 2 }], settings: { a: 1, b: 1 } };
   const local = { transactions: [{ id: '1', amount: 10 }, { id: '3', amount: 3 }], settings: { a: 2, b: 1 } };          // edit 1, delete 2, add 3, change a
