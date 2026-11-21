@@ -1,10 +1,10 @@
 # Financial Planner — Project State
 
-> **Next chat name: `Financial Planner ver 10`**
-> Claude: your FIRST reply in a new chat must start with "Rename this chat to: **Financial Planner ver 10**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
+> **Next chat name: `Financial Planner ver 11`**
+> Claude: your FIRST reply in a new chat must start with "Rename this chat to: **Financial Planner ver 11**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
 
 > ## ▶ RESUME HERE (ver 9, 2026-11-21, roadmap item 1 built; item 2 next)
-> **Done in ver 9:** item 1 `fp-entries` importer (engine `previewEntries`/`applyEntries`, Settings → Import chat entries, 67 tests). Not tested live. **Next:** item 2 statement matching, then 3–5 below. **First command:** `git pull && node tests/engine.test.js` (67 passing).
+> **Done in ver 9:** item 1 `fp-entries` importer (engine `previewEntries`/`applyEntries`, Settings → Import chat entries, 67 tests). Live-tested in ver 10 (headless Chromium, stubbed Drive: preview 2 add / 1 skipped unknown card, Apply saved 2 pending `source:chat`, no JS errors). **Next:** item 2 statement matching, then 3–5 below. **First command:** `git pull && node tests/engine.test.js` (67 passing).
 > Format: `{format:'fp-entries',version:1,entries:[{date,amount,merchant,card?|account?,forProfile?,category?,note?,capturedBy?}]}`; ids stable by date|amount|merchant|card|profile (+ occurrence), `status:'pending'`, `source:'chat'`.
 
 > ## (ver 8 block; item 1 below is now done)
@@ -117,3 +117,4 @@ recommend / analyseLedger / ledgerEarnings (card engine, caps, conditions, miles
 - 2026-11-21 (ver 8, docs only): roadmap for retiring the xlsx agreed (RESUME HERE). Next chat name bumped to ver 9.
 - 2026-11-21 (ver 8, no app change): Nov 1–20 xlsx rows imported as a ledger patch; card cap usage checked with cardStatus (UOB PPV contactless S$27 left, OCBC 6 mpd S$126 left). 48 new merchants lack MCC history; fix in Merchants.
 - 2026-11-21 (ver 9): roadmap item 1 built: `fp-entries` importer (engine `previewEntries`/`applyEntries` reusing the ledger-patch add path; Settings → Import chat entries with preview). +1 test (67); `sw.js` cache v5. Not tested live. Next chat name bumped to ver 10.
+- 2026-11-21 (ver 10, docs only): fp-entries importer live-tested in headless Chromium (Drive stubbed): preview 2 add / 1 skipped (unknown card), Apply saved 2 pending source:chat, no JS errors. Confirmed profile key `wife` = Caroline everywhere (label, alias caroline→wife). Next chat name bumped to ver 11.
