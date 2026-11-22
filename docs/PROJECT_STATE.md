@@ -1,17 +1,18 @@
 # Financial Planner — Project State
 
-> **Next chat name: `Financial Planner ver 11`**
-> Claude: your FIRST reply in a new chat must start with "Rename this chat to: **Financial Planner ver 11**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
+> **Next chat name: `Financial Planner ver 12`**
+> Claude: your FIRST reply in a new chat must start with "Rename this chat to: **Financial Planner ver 12**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
 
-> ## ▶ RESUME HERE (ver 10 → 11, 2026-11-22, handoff)
-> **Done in ver 10:** roadmap 1–3 and 5 (importer, statement matching, capture instructions per person, history migration: Marvin's and Caroline's trackers both fully in the ledger through 15 Nov). Statement coverage grid (Month-end check), Data management ribbon at top of Settings, paste-JSON chat import, per-card "no statements expected" option. Live on `main`, `sw.js` v10, 69 tests.
+> ## ▶ RESUME HERE (ver 11 → 12, 2026-11-22)
+> **Done in ver 11 (docs only):** outstanding list reviewed with Marvin; December checklist drafted in `docs/DECEMBER_CHECKLIST.md`.
 > **Outstanding (details are private; Marvin pastes them in the restart prompt):**
 > 1. Medical reimbursement check (Marvin, Monday).
-> 2. Statements: Caroline Oct + Nov (cards and accounts), Marvin Nov (cards out now; three more after 25–28 Nov) and bank accounts for both; use the coverage grid as the to-do. Mark cards that never get statements via the grid.
-> 3. Caroline sheet leftovers: two transfer pairs whose other side is missing, one duplicate CIMB FastSaver account to delete.
-> 4. Marvin and Caroline each run their capture Project daily; December parallel run with the xlsx, cutover 2027-01-01 (draft the December checklist).
-> 5. Optional: 48 new merchants lacking MCC history (Merchants page).
-> **First command:** `git pull && node tests/engine.test.js` (69 passing). **Restart prompt:** "Continue Financial Planner ver 11 from RESUME HERE".
+> 2. Statements: Caroline Oct + Nov, Marvin Nov (more land 25–28 Nov), bank accounts for both; coverage grid is the to-do. Mark never-statement cards via the grid.
+> 3. Caroline sheet leftovers: transfer pairs on 15 Oct/15 Nov (monthly standing transfer or date typo; resolve from her Oct statements), one transfer with no receiving row (resolves when that account's Nov statement is imported), duplicate CIMB FastSaver account to delete.
+> 4. Both capture Projects in daily use; December parallel run per the checklist; cutover 2027-01-01.
+> 5. Optional: 48 merchants lacking MCC history (Merchants page).
+> 6. Left as notes on purpose: two collections (no action).
+> **First command:** `git pull && node tests/engine.test.js` (69 passing). **Restart prompt:** "Continue Financial Planner ver 12 from RESUME HERE".
 
 > ## (ver 8 block; item 1 below is now done)
 > **Done in ver 8:** 122 xlsx rows (1–20 Nov) imported via a private `fp-ledger-patch` (dry-run 122 add / 0 skipped). 102 older xlsx rows left out on purpose (mostly Dining/Contra splits the statement-checked ledger holds as one line; 68 truly absent, to review only if wanted). Card usage read from `engine.cardStatus` after import. Private files (xlsx, exports, patches) live outside the repo.
@@ -131,3 +132,4 @@ recommend / analyseLedger / ledgerEarnings (card engine, caps, conditions, miles
 - 2026-11-21 (ver 10): Month-end check now opens with a Statement coverage grid (Marvin | Caroline, cards by month, bank accounts as one row; read / no statement / outstanding / not issued yet; tap a square to open that month). Settings: Data management ribbon moved to the top. Import chat entries accepts pasted JSON (phone-friendly) as well as a file. Capture instructions are per person (For Marvin / For Caroline). `sw.js` v9.
 - 2026-11-21 (ver 10): coverage grid lists every bank account as its own row; tap a square for options (open, no statement this month, stop tracking = `settings.noStatement`, restorable from the grid footer). `sw.js` v10.
 - 2026-11-22 (ver 10, docs only): handoff block for ver 11; Caroline's Oct–Nov tracker rows imported by Marvin (61 adds).
+- 2026-11-22 (ver 11, docs only): outstanding items reviewed; `docs/DECEMBER_CHECKLIST.md` drafted (parallel run, go/no-go, cutover). Next chat name bumped to ver 12.
